@@ -45,26 +45,41 @@ let selectedMode = 'dm';
 let botsEnabled = true;
 let isGameStarted = false;
 
+// Multiplayer State
+let peer = null;
+let connections = []; // List of all active data connections
+let networkPlayers = {}; // peerId -> humanoid model
+let isHost = false;
+let lobbyCode = "";
+let playerName = "Player";
+let playerKills = 0;
+let networkScores = {}; // peerId -> { name, kills }
+
 // Settings State (with defaults)
 let settings = {
     fov: 75,
     sensitivity: 1.0,
-    viewDistance: 800
+    viewDistance: 800,
+    playerName: "Noob"
 };
 
 function loadSettings() {
     const saved = localStorage.getItem('bs_settings');
     if (saved) {
         settings = JSON.parse(saved);
+        playerName = settings.playerName || "Noob";
     }
 }
 
 function saveSettings() {
+    settings.playerName = playerName;
     localStorage.setItem('bs_settings', JSON.stringify(settings));
 }
 
 const healthUI = document.getElementById('health');
 const ammoUI = document.getElementById('ammo');
+const killStatsUI = document.getElementById('kill-stats');
+const aliveCountUI = document.getElementById('alive-count');
 const damageFlash = document.getElementById('damage-flash');
 
 // Global one-time initialization
@@ -174,6 +189,194 @@ function setupMenu() {
     const mapOptions = document.querySelectorAll('#map-select .option');
     const modeOptions = document.querySelectorAll('#mode-select .option');
     const botOptions = document.querySelectorAll('#bot-select .option');
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const tabContents = document.querySelectorAll('.menu-tab-content');
+    const hostBtn = document.getElementById('host-btn');
+    const joinBtn = document.getElementById('join-btn');
+    const joinInput = document.getElementById('join-code');
+    const statusText = document.getElementById('mp-status');
+    const mpInitialChoice = document.getElementById('mp-initial-choice');
+    const mpHostView = document.getElementById('mp-host-view');
+    const mpJoinView = document.getElementById('mp-join-view');
+    const showHostViewBtn = document.getElementById('show-host-view-btn');
+    const showJoinViewBtn = document.getElementById('show-join-view-btn');
+    const backBtns = document.querySelectorAll('.mp-back-btn');
+    const mpLobbyHostControls = document.getElementById('mp-lobby-host-controls');
+    const mpMapOptions = document.querySelectorAll('#mp-map-select .option');
+    const mpModeOptions = document.querySelectorAll('#mp-mode-select .option');
+
+    // Pre-fill and sync usernames
+    const usernameInputs = document.querySelectorAll('.username-input');
+    usernameInputs.forEach(input => {
+        input.value = playerName;
+        input.addEventListener('input', (e) => {
+            // Sanitize: allow only letters, numbers, spaces, - and _
+            let clean = e.target.value.replace(/[^a-zA-Z0-9 _-]/g, '');
+            if (clean.length > 12) clean = clean.substring(0, 12);
+            e.target.value = clean;
+            
+            playerName = clean.trim() || "Noob";
+            // Sync other inputs but don't overwrite the one being typed in to avoid cursor jumps
+            usernameInputs.forEach(i => {
+                if (i !== e.target) i.value = playerName;
+            });
+            saveSettings();
+        });
+    });
+
+    const getActiveUsername = () => {
+        const inputs = document.querySelectorAll('.username-input');
+        let name = "Noob";
+        inputs.forEach(input => {
+            // Check if this input is in a visible parent view
+            if (input.closest('div').style.display !== 'none' && input.value.trim() !== "") {
+                name = input.value.trim();
+            }
+        });
+        return name;
+    };
+
+    // MP View Toggling
+    showHostViewBtn.addEventListener('click', () => {
+        mpInitialChoice.style.display = 'none';
+        mpHostView.style.display = 'flex';
+    });
+
+    showJoinViewBtn.addEventListener('click', () => {
+        mpInitialChoice.style.display = 'none';
+        mpJoinView.style.display = 'flex';
+    });
+
+    backBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            mpHostView.style.display = 'none';
+            mpJoinView.style.display = 'none';
+            mpInitialChoice.style.display = 'flex';
+            statusText.innerText = "";
+        });
+    });
+
+    // MP Host Lobby Settings
+    mpMapOptions.forEach(opt => {
+        opt.addEventListener('click', () => {
+            if (opt.dataset.value !== 'dust2') return; 
+            mpMapOptions.forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            selectedMap = opt.dataset.value;
+            broadcastLobbySettings();
+        });
+    });
+
+    mpModeOptions.forEach(opt => {
+        opt.addEventListener('click', () => {
+            mpModeOptions.forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            selectedMode = opt.dataset.value;
+            broadcastLobbySettings();
+        });
+    });
+
+    function broadcastLobbySettings() {
+        if (isHost && connections.length > 0) {
+            const data = {
+                type: 'lobby-settings',
+                map: selectedMap,
+                mode: selectedMode
+            };
+            connections.forEach(conn => {
+                if (conn.open) conn.send(data);
+            });
+        }
+    }
+
+    // Tab switching
+    tabButtons.forEach(btn => {
+        // Initial state check for start button
+        if (btn.classList.contains('active') && btn.dataset.tab === 'multiplayer') {
+            startButton.style.visibility = 'hidden';
+        }
+
+        btn.addEventListener('click', () => {
+            tabButtons.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+            
+            btn.classList.add('active');
+            document.getElementById(`${btn.dataset.tab}-settings`).classList.add('active');
+            
+            // Hide start button if multiplayer is selected (unless hosting)
+            if (btn.dataset.tab === 'multiplayer' && !isHost) {
+                startButton.style.visibility = 'hidden';
+            } else {
+                startButton.style.visibility = 'visible';
+            }
+        });
+    });
+
+    hostBtn.addEventListener('click', () => {
+        playerName = getActiveUsername();
+        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        lobbyCode = code;
+        isHost = true;
+        
+        peer = new Peer(`BS-${code}`);
+        
+        peer.on('open', (id) => {
+            statusText.innerText = `LOBBY CREATED: ${code}`;
+            hostBtn.style.display = 'none'; // Hide create button
+            // Hide back buttons once lobby is live
+            document.querySelectorAll('.mp-back-btn').forEach(b => b.style.display = 'none');
+            startButton.style.visibility = 'visible';
+            
+            peer.on('connection', (conn) => {
+                connections.push(conn);
+                setupDataConnection(conn);
+                console.log("Player joined lobby");
+                // Send current settings to the new player immediately
+                setTimeout(() => {
+                    if (conn.open) {
+                        conn.send({
+                            type: 'lobby-settings',
+                            map: selectedMap,
+                            mode: selectedMode
+                        });
+                    }
+                }, 500);
+            });
+        });
+
+        peer.on('error', (err) => {
+            console.error(err);
+            statusText.innerText = "Error creating lobby. Try again.";
+        });
+    });
+
+    joinBtn.addEventListener('click', () => {
+        playerName = getActiveUsername();
+        const code = joinInput.value.toUpperCase();
+        if (code.length !== 6) return;
+
+        peer = new Peer(); // Random ID for client
+        
+        peer.on('open', (id) => {
+            const conn = peer.connect(`BS-${code}`);
+            conn.on('open', () => {
+                isHost = false;
+                lobbyCode = code;
+                connections.push(conn);
+                setupDataConnection(conn);
+                statusText.innerText = "CONNECTED TO LOBBY!";
+                
+                // For clients, we start game when host says so or manually
+                startButton.style.visibility = 'visible';
+                startButton.innerText = "JOIN MATCH";
+            });
+        });
+
+        peer.on('error', (err) => {
+            console.error(err);
+            statusText.innerText = "Lobby not found.";
+        });
+    });
 
     mapOptions.forEach(opt => {
         opt.addEventListener('click', () => {
@@ -216,6 +419,102 @@ function setupMenu() {
             controls.lock();
         }, 100);
     });
+}
+
+function broadcastScore() {
+    if (connections.length > 0) {
+        const data = {
+            type: 'score-update',
+            name: playerName,
+            kills: playerKills
+        };
+        connections.forEach(conn => {
+            if (conn.open) conn.send(data);
+        });
+    }
+}
+
+function setupDataConnection(conn) {
+    conn.on('data', (data) => {
+        // Basic Validation
+        if (!data || typeof data !== 'object') return;
+
+        if (data.type === 'transform') {
+            if (data.pos && typeof data.pos.x === 'number' && typeof data.pos.y === 'number' && typeof data.pos.z === 'number' &&
+                data.rot && typeof data.rot.y === 'number') {
+                updateNetworkPlayer(conn.peer, data);
+            }
+        } else if (data.type === 'shoot') {
+            showNetworkShot(conn.peer, data);
+        } else if (data.type === 'lobby-settings') {
+            if (typeof data.map === 'string' && typeof data.mode === 'string') {
+                selectedMap = data.map;
+                selectedMode = data.mode;
+                const statusText = document.getElementById('mp-status');
+                if (statusText) statusText.innerText = `CONNECTED! (${selectedMap.toUpperCase()} - ${selectedMode.toUpperCase()})`;
+            }
+        } else if (data.type === 'score-update') {
+            if (typeof data.name === 'string' && typeof data.kills === 'number') {
+                // Sanitize remote name just in case
+                const safeName = data.name.replace(/[^a-zA-Z0-9 _-]/g, '').substring(0, 12);
+                networkScores[conn.peer] = {
+                    name: safeName || "Player",
+                    kills: data.kills
+                };
+                if (document.getElementById('scoreboard').style.display === 'block') {
+                    updateScoreboard();
+                }
+            }
+        }
+    });
+
+    conn.on('close', () => {
+        removeNetworkPlayer(conn.peer);
+    });
+}
+
+function updateNetworkPlayer(id, data) {
+    if (!networkPlayers[id]) {
+        // Spawn new model for this player
+        const model = createHumanoidModel(0x0000ff, 0xdbac82); // Blue for remote players
+        scene.add(model);
+        networkPlayers[id] = model;
+
+        // Simple Nametag
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 256;
+        canvas.height = 64;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.fillRect(0, 0, 256, 64);
+        ctx.font = 'bold 32px Arial';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.fillText(data.name || "Player", 128, 45);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMat = new THREE.SpriteMaterial({ map: texture });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.scale.set(10, 2.5, 1);
+        sprite.position.y = 25; // Above head
+        model.add(sprite);
+    }
+    
+    const model = networkPlayers[id];
+    model.position.set(data.pos.x, data.pos.y, data.pos.z);
+    model.rotation.set(0, data.rot.y, 0); // Only sync horizontal rotation for the body
+}
+
+function removeNetworkPlayer(id) {
+    if (networkPlayers[id]) {
+        scene.remove(networkPlayers[id]);
+        delete networkPlayers[id];
+    }
+}
+
+function showNetworkShot(id, data) {
+    // Show visual tracer or muzzle flash from the remote player's model
+    console.log("Remote player shot");
 }
 
 function createGunModel(isViewModel = false) {
@@ -494,6 +793,11 @@ function init() {
                 case 'ControlLeft':
                     isCrouching = true;
                     break;
+                case 'Tab':
+                    event.preventDefault();
+                    document.getElementById('scoreboard').style.display = 'block';
+                    updateScoreboard();
+                    break;
             }
         };
 
@@ -517,6 +821,9 @@ function init() {
                     break;
                 case 'ControlLeft':
                     isCrouching = false;
+                    break;
+                case 'Tab':
+                    document.getElementById('scoreboard').style.display = 'none';
                     break;
             }
         };
@@ -650,7 +957,7 @@ function init() {
         }
 
         // Enemies
-        if (botsEnabled) {
+        if (botsEnabled && !peer) { // Only spawn bots if enabled AND not in a network session
             for (let i = 0; i < 30; i++) {
                 const enemy = new THREE.Group();
                 const humanoid = createHumanoidModel(0x556b2f, 0xdbac82);
@@ -828,9 +1135,56 @@ function takeDamage(amount) {
     }
 }
 
+function updateScoreboard() {
+    const scoreList = document.getElementById('score-list');
+    if (!scoreList) return;
+
+    // Preserve header
+    scoreList.innerHTML = `
+        <div class="score-header">
+            <span>PLAYER</span>
+            <span>KILLS</span>
+        </div>
+    `;
+
+    // Helper for safe row creation
+    const createRow = (name, kills, isLocal) => {
+        const row = document.createElement('div');
+        row.className = isLocal ? 'score-row local' : 'score-row';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = name; // SAFE
+        
+        const killsSpan = document.createElement('span');
+        killsSpan.textContent = kills; // SAFE
+        
+        row.appendChild(nameSpan);
+        row.appendChild(killsSpan);
+        return row;
+    };
+
+    // Add local player
+    scoreList.appendChild(createRow(`${playerName} (YOU)`, playerKills, true));
+
+    // Add network players
+    for (const id in networkScores) {
+        const player = networkScores[id];
+        scoreList.appendChild(createRow(player.name, player.kills, false));
+    }
+}
+
 function updateUI() {
     if (healthUI) healthUI.innerText = `${Math.ceil(health)} HP`;
     if (ammoUI) ammoUI.innerText = `${ammoInClip} / ${ammoTotal}`;
+    
+    // Only show bot counter in Solo Deathmatch
+    if (selectedMode === 'dm' && !peer && killStatsUI && aliveCountUI) {
+        killStatsUI.style.display = 'block';
+        const count = enemies.filter(e => e.userData.alive).length;
+        aliveCountUI.innerText = count;
+    } else if (killStatsUI) {
+        killStatsUI.style.display = 'none';
+    }
 }
 
 function reload() {
@@ -1031,6 +1385,11 @@ function killEnemy(enemy) {
         }
     });
     
+    updateUI(); // Refresh count
+    
+    // Score update
+    playerKills++;
+    broadcastScore();
     console.log("Enemy eliminated");
 
     // Despawn after 5 seconds
@@ -1379,6 +1738,21 @@ function animate() {
     }
 
     renderer.render(scene, camera);
+    
+    // Broadcast position to others
+    if (connections.length > 0 && isGameStarted) {
+        const transformData = {
+            type: 'transform',
+            name: playerName,
+            pos: camera.position,
+            rot: {
+                y: camera.rotation.y
+            }
+        };
+        connections.forEach(conn => {
+            if (conn.open) conn.send(transformData);
+        });
+    }
     
     // Restore rotation so it doesn't drift permanently
     camera.rotation.x = originalRotationX;
