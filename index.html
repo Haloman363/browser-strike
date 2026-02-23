@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browser Strike</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div id="ui">
+        <div id="main-menu">
+            <h1>BROWSER STRIKE</h1>
+            <div class="menu-section">
+                <h3>Select Map</h3>
+                <div class="options" id="map-select">
+                    <button class="option active" data-value="dust2">Dust 2</button>
+                    <button class="option" data-value="mirage">Mirage (Coming Soon)</button>
+                </div>
+            </div>
+            <div class="menu-section">
+                <h3>Select Gamemode</h3>
+                <div class="options" id="mode-select">
+                    <button class="option active" data-value="dm">Deathmatch</button>
+                    <button class="option" data-value="practice">Target Practice</button>
+                </div>
+            </div>
+            <div class="menu-section">
+                <h3>Bots</h3>
+                <div class="options" id="bot-select">
+                    <button class="option active" data-value="true">Enabled</button>
+                    <button class="option" data-value="false">Disabled</button>
+                </div>
+            </div>
+            <button id="start-button">START GAME</button>
+        </div>
+
+        <div id="damage-flash"></div>
+        <div id="crosshair" style="display: none;"></div>
+        <div id="stats" style="display: none;">
+            <div id="health">100 HP</div>
+            <div id="ammo">30 / 90</div>
+        </div>
+        <div id="pause-overlay" style="display: none;">
+            <h1>PAUSED</h1>
+            <div class="pause-options">
+                <button id="resume-button" class="menu-btn">RESUME</button>
+                <button id="settings-button" class="menu-btn">SETTINGS</button>
+                <button id="help-button" class="menu-btn">HELP</button>
+                <button id="quit-button" class="menu-btn">MAIN MENU</button>
+            </div>
+        </div>
+
+        <div id="settings-modal" style="display: none;">
+            <div class="settings-content">
+                <h2>SETTINGS</h2>
+                <div class="setting-item">
+                    <label>FOV: <span id="fov-val">75</span></label>
+                    <input type="range" id="fov-slider" min="60" max="110" value="75">
+                </div>
+                <div class="setting-item">
+                    <label>Sensitivity: <span id="sens-val">1.0</span></label>
+                    <input type="range" id="sens-slider" min="0.1" max="3.0" step="0.1" value="1.0">
+                </div>
+                <div class="setting-item">
+                    <label>View Distance: <span id="dist-val">500</span></label>
+                    <input type="range" id="dist-slider" min="200" max="2000" step="100" value="500">
+                </div>
+                <div style="display: flex; gap: 10px; width: 100%;">
+                    <button id="reset-settings" class="menu-btn" style="flex: 1; border-color: #555;">RESET DEFAULTS</button>
+                    <button id="close-settings" class="menu-btn" style="flex: 1;">SAVE & CLOSE</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="help-modal" style="display: none;">
+            <div class="help-content">
+                <h2>HOW TO PLAY</h2>
+                <p><strong>W, A, S, D</strong> - Move</p>
+                <p><strong>SPACE</strong> - Jump</p>
+                <p><strong>CTRL</strong> - Crouch</p>
+                <p><strong>1</strong> - Knife | <strong>2</strong> - Gun</p>
+                <p><strong>R</strong> - Reload</p>
+                <p><strong>MOUSE</strong> - Look</p>
+                <p><strong>LEFT CLICK</strong> - Attack</p>
+                <p><strong>RIGHT CLICK</strong> - ADS (Gun only)</p>
+                <p><strong>ESC</strong> - Pause</p>
+                <button id="close-help" class="menu-btn">CLOSE</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="./main.js"></script>
+</body>
+</html>
