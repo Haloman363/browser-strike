@@ -15,6 +15,8 @@ export const GameState = {
     cash: 800,
     ammoInClip: 20,
     ammoTotal: 120,
+    grenadeCount: 2,
+    maxGrenades: 4,
     isReloading: false,
     currentWeapon: 'gun',
     currentSlot: 2,

@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { COLORS, PHYSICS, WEAPON_SETTINGS } from './src/Constants.js';
 import { createHumanoidModel, createGunModel, createKnifeModel, createGrenadeModel, createWall, createCrate } from './src/Factory.js';
+import { TextureGenerator } from './src/TextureGenerator.js';
 import { GameState } from './src/GameState.js';
 import { UI } from './src/UI.js';
 import { checkCollisionAt } from './src/Physics.js';
 import { createBloodSplatter } from './src/Weapon.js';
 import { updateBotAI, updateRagdoll } from './src/AI.js';
+import { soundEngine } from './src/SoundEngine.js';
 
 console.log("Script starting...");
 
@@ -41,8 +43,18 @@ const inventory = {
     4: { type: 'grenade', model: null },
     5: { type: 'special', model: null }
 };
+
+// Animation States
 let recoil = 0;
+let recoilRotation = 0;
 let cameraRecoilX = 0;
+let swayX = 0;
+let swayY = 0;
+let bobCounter = 0;
+let lastBobCounter = 0;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
 const restPos = new THREE.Vector3(0.25, -0.3, -0.5);
 const adsPos = new THREE.Vector3(0, -0.125, -0.4); // Perfectly centered on X
 let isAiming = false;
@@ -53,6 +65,8 @@ const crosshair = document.getElementById('crosshair');
 let health = 100;
 let ammoInClip = 20;
 let ammoTotal = 120;
+let grenadeCount = 2;
+const MAX_GRENADES = 4;
 let isReloading = false;
 let reloadStartTime = 0;
 let reloadOffset = 0;
@@ -66,6 +80,7 @@ let isGameStarted = false;
 let gameTimeLeft = 600; // 10 minutes in seconds
 let gameTimerInterval = null;
 let isPlayerDead = false;
+let wasInAir = false;
 
 // Grenade Interaction
 let isGrenadeCooking = false;
@@ -113,6 +128,15 @@ controls = new PointerLockControls(camera, renderer.domElement);
 setupMenu();
 
 function setupMenu() {
+    // Initialize sound engine on first interaction
+    const initSound = () => {
+        soundEngine.init();
+        window.removeEventListener('click', initSound);
+        window.removeEventListener('keydown', initSound);
+    };
+    window.addEventListener('click', initSound);
+    window.addEventListener('keydown', initSound);
+
     const startButton = document.getElementById('start-button');
     const mainMenu = document.getElementById('main-menu');
     const mapOptions = document.querySelectorAll('#map-select .option');
@@ -140,6 +164,7 @@ function setupMenu() {
     // Teams Toggle
     teamsToggles.forEach(opt => {
         opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
             const val = opt.dataset.value === 'true';
             // Sync all team toggles
             teamsToggles.forEach(o => {
@@ -151,11 +176,13 @@ function setupMenu() {
             teamSelectors.forEach(s => s.style.display = teamsEnabled ? 'block' : 'none');
             broadcastLobbySettings();
         });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     // Team Selection
     teamSelectOptions.forEach(opt => {
         opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
             const team = opt.dataset.value;
             // Sync all team selections for the user (Solo, Host, or Join)
             teamSelectOptions.forEach(o => {
@@ -165,6 +192,7 @@ function setupMenu() {
             playerTeam = team;
             // No need to broadcast here, we send team with transform or score
         });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     // Pre-fill and sync usernames
@@ -172,6 +200,7 @@ function setupMenu() {
     usernameInputs.forEach(input => {
         input.value = playerName;
         input.addEventListener('input', (e) => {
+            soundEngine.playUIHover();
             // Sanitize: allow only letters, numbers, spaces, - and _
             let clean = e.target.value.replace(/[^a-zA-Z0-9 _-]/g, '');
             if (clean.length > 12) clean = clean.substring(0, 12);
@@ -200,42 +229,52 @@ function setupMenu() {
 
     // MP View Toggling
     showHostViewBtn.addEventListener('click', () => {
+        soundEngine.playUIClick();
         mpInitialChoice.style.display = 'none';
         mpHostView.style.display = 'flex';
     });
+    showHostViewBtn.addEventListener('mouseenter', () => soundEngine.playUIHover());
 
     showJoinViewBtn.addEventListener('click', () => {
+        soundEngine.playUIClick();
         mpInitialChoice.style.display = 'none';
         mpJoinView.style.display = 'flex';
     });
+    showJoinViewBtn.addEventListener('mouseenter', () => soundEngine.playUIHover());
 
     backBtns.forEach(btn => {
         btn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             mpHostView.style.display = 'none';
             mpJoinView.style.display = 'none';
             mpInitialChoice.style.display = 'flex';
             statusText.innerText = "";
         });
+        btn.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     // MP Host Lobby Settings
     mpMapOptions.forEach(opt => {
         opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
             if (opt.dataset.value !== 'dust2') return; 
             mpMapOptions.forEach(o => o.classList.remove('active'));
             opt.classList.add('active');
             selectedMap = opt.dataset.value;
             broadcastLobbySettings();
         });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     mpModeOptions.forEach(opt => {
         opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
             mpModeOptions.forEach(o => o.classList.remove('active'));
             opt.classList.add('active');
             selectedMode = opt.dataset.value;
             broadcastLobbySettings();
         });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     function broadcastLobbySettings() {
@@ -260,6 +299,7 @@ function setupMenu() {
         }
 
         btn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             tabButtons.forEach(b => b.classList.remove('active'));
             tabContents.forEach(c => c.classList.remove('active'));
             
@@ -273,9 +313,11 @@ function setupMenu() {
                 startButton.style.visibility = 'visible';
             }
         });
+        btn.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     hostBtn.addEventListener('click', () => {
+        soundEngine.playUIClick();
         playerName = getActiveUsername();
         const code = Math.random().toString(36).substring(2, 8).toUpperCase();
         lobbyCode = code;
@@ -312,8 +354,10 @@ function setupMenu() {
             statusText.innerText = "Error creating lobby. Try again.";
         });
     });
+    hostBtn.addEventListener('mouseenter', () => soundEngine.playUIHover());
 
     joinBtn.addEventListener('click', () => {
+        soundEngine.playUIClick();
         playerName = getActiveUsername();
         const code = joinInput.value.toUpperCase();
         if (code.length !== 6) return;
@@ -340,33 +384,41 @@ function setupMenu() {
             statusText.innerText = "Lobby not found.";
         });
     });
+    joinBtn.addEventListener('mouseenter', () => soundEngine.playUIHover());
 
     mapOptions.forEach(opt => {
         opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
             if (opt.dataset.value !== 'dust2') return; // Only Dust 2 is active for now
             mapOptions.forEach(o => o.classList.remove('active'));
             opt.classList.add('active');
             selectedMap = opt.dataset.value;
         });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     modeOptions.forEach(opt => {
         opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
             modeOptions.forEach(o => o.classList.remove('active'));
             opt.classList.add('active');
             selectedMode = opt.dataset.value;
         });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     botOptions.forEach(opt => {
         opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
             botOptions.forEach(o => o.classList.remove('active'));
             opt.classList.add('active');
             botsEnabled = opt.dataset.value === 'true';
         });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
     });
 
     startButton.addEventListener('click', () => {
+        soundEngine.playUIClick();
         mainMenu.style.display = 'none';
         document.getElementById('crosshair').style.display = 'block';
         document.getElementById('stats').style.display = 'flex';
@@ -386,6 +438,7 @@ function setupMenu() {
             controls.lock();
         }, 100);
     });
+    startButton.addEventListener('mouseenter', () => soundEngine.playUIHover());
 }
 
 function broadcastScore() {
@@ -567,7 +620,14 @@ function switchWeapon(slot) {
     currentSlot = slot;
     currentWeapon = inventory[slot].type;
     const item = inventory[slot];
-    if (item.model) item.model.visible = true;
+    if (item.model) {
+        // Only show grenade if we have some left
+        if (item.type === 'grenade' && grenadeCount <= 0) {
+            item.model.visible = false;
+        } else {
+            item.model.visible = true;
+        }
+    }
 
     // Update UI
     document.querySelectorAll('.inventory-slot').forEach(s => s.classList.remove('active'));
@@ -592,6 +652,7 @@ function init() {
     health = 100;
     ammoInClip = 20;
     ammoTotal = 120;
+    grenadeCount = 2;
     isPlayerDead = false;
     
     try {
@@ -599,8 +660,16 @@ function init() {
         camera.position.set(0, 18, 100); 
 
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0xadd8e6); // Dust 2 Sky
-        scene.fog = new THREE.Fog(0xadd8e6, 0, 500);
+        
+        // --- SKYDOME ---
+        const skyGeo = new THREE.SphereGeometry(1500, 32, 32);
+        const skyTex = TextureGenerator.createSkyTexture();
+        const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
+        const skydome = new THREE.Mesh(skyGeo, skyMat);
+        scene.add(skydome);
+
+        // Dust 2 Fog (match horizon haze)
+        scene.fog = new THREE.Fog(0xe1f5fe, 100, 1500);
 
         const light = new THREE.HemisphereLight(0xeeeeff, 0x777788, 0.7);
         light.position.set(0.5, 1, 0.75);
@@ -668,25 +737,33 @@ function init() {
             scene.fog.far = settings.viewDistance;
         }
 
-        resumeBtn.addEventListener('click', () => controls.lock());
+        resumeBtn.addEventListener('click', () => {
+            soundEngine.playUIClick();
+            controls.lock();
+        });
         
         helpBtn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             helpModal.style.display = 'flex';
         });
 
         settingsBtn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             settingsModal.style.display = 'flex';
         });
 
         closeHelpBtn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             helpModal.style.display = 'none';
         });
 
         closeSettingsBtn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             settingsModal.style.display = 'none';
         });
 
         resetSettingsBtn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             settings = { fov: 75, sensitivity: 1.0, viewDistance: 800, showKillFeed: true };
             fovSlider.value = 75; fovVal.innerText = 75;
             sensSlider.value = 1.0; sensVal.innerText = "1.0";
@@ -701,6 +778,7 @@ function init() {
 
         // Settings listeners
         fovSlider.addEventListener('input', (e) => {
+            soundEngine.playUIHover();
             const val = parseInt(e.target.value);
             fovVal.innerText = val;
             settings.fov = val;
@@ -710,6 +788,7 @@ function init() {
         });
 
         sensSlider.addEventListener('input', (e) => {
+            soundEngine.playUIHover();
             const val = parseFloat(e.target.value);
             sensVal.innerText = val.toFixed(1);
             settings.sensitivity = val;
@@ -717,6 +796,7 @@ function init() {
         });
 
         distSlider.addEventListener('input', (e) => {
+            soundEngine.playUIHover();
             const val = parseInt(e.target.value);
             distVal.innerText = val;
             settings.viewDistance = val;
@@ -728,6 +808,7 @@ function init() {
 
         killfeedOpts.forEach(opt => {
             opt.addEventListener('click', () => {
+                soundEngine.playUIClick();
                 const val = opt.dataset.value === 'true';
                 settings.showKillFeed = val;
                 killfeedOpts.forEach(o => o.classList.toggle('active', o === opt));
@@ -736,16 +817,19 @@ function init() {
         });
 
         quitBtn.addEventListener('click', () => {
+            soundEngine.playUIClick();
             window.location.reload(); // Simple and clean reset for now
         });
 
         document.getElementById('respawn-overlay').addEventListener('click', () => {
             if (isPlayerDead) {
+                soundEngine.playUIClick();
                 respawnPlayer();
             }
         });
 
         document.getElementById('game-over-quit').addEventListener('click', () => {
+            soundEngine.playUIClick();
             window.location.reload();
         });
 
@@ -770,18 +854,23 @@ function init() {
             switch (event.code) {
                 case 'Digit1':
                     switchWeapon(1);
+                    soundEngine.playUIClick();
                     break;
                 case 'Digit2':
                     switchWeapon(2);
+                    soundEngine.playUIClick();
                     break;
                 case 'Digit3':
                     switchWeapon(3);
+                    soundEngine.playUIClick();
                     break;
                 case 'Digit4':
                     switchWeapon(4);
+                    soundEngine.playUIClick();
                     break;
                 case 'Digit5':
                     switchWeapon(5);
+                    soundEngine.playUIClick();
                     break;
                 case 'ArrowUp':
                 case 'KeyW':
@@ -800,7 +889,10 @@ function init() {
                     moveRight = true;
                     break;
                 case 'Space':
-                    if (canJump === true) velocity.y += PHYSICS.JUMP_FORCE;
+                    if (canJump === true) {
+                        velocity.y += PHYSICS.JUMP_FORCE;
+                        soundEngine.playJump();
+                    }
                     canJump = false;
                     break;
                 case 'KeyR':
@@ -852,7 +944,9 @@ function init() {
         // Floor (The Sand)
         const floorGeometry = new THREE.PlaneGeometry(4000, 4000);
         floorGeometry.rotateX(-Math.PI / 2);
-        const floorMaterial = new THREE.MeshPhongMaterial({ color: 0xedc9af });
+        const sandTex = TextureGenerator.createSandTexture();
+        sandTex.repeat.set(100, 100);
+        const floorMaterial = new THREE.MeshPhongMaterial({ map: sandTex });
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.receiveShadow = true;
         scene.add(floor);
@@ -1071,7 +1165,8 @@ function init() {
                             ammoInClip--;
                             updateUI();
                             
-                            recoil = isAiming ? 0.05 : 0.1; // Reduced recoil while aiming
+                            recoil = isAiming ? 0.04 : 0.08; 
+                            recoilRotation = isAiming ? 0.02 : 0.05;
                             cameraRecoilX = 0.02;
                             
                             muzzleFlash.visible = true;
@@ -1106,6 +1201,22 @@ function init() {
             }
         });
 
+        // Weapon Sway Mouse Movement
+        document.addEventListener('mousemove', (e) => {
+            if (controls.isLocked) {
+                const movementX = e.movementX || 0;
+                const movementY = e.movementY || 0;
+                
+                swayX -= movementX * 0.0005;
+                swayY += movementY * 0.0005;
+                
+                // Clamp sway
+                const maxSway = 0.05;
+                swayX = THREE.MathUtils.clamp(swayX, -maxSway, maxSway);
+                swayY = THREE.MathUtils.clamp(swayY, -maxSway, maxSway);
+            }
+        });
+
         // Prevent context menu on right click
         document.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -1123,6 +1234,8 @@ function takeDamage(amount, killer = "Bot", weapon = "Gun", killerTeam = null) {
     if (health < 0) health = 0;
     updateUI();
     
+    soundEngine.playHit();
+
     if (damageFlash) {
         damageFlash.classList.add('active');
         setTimeout(() => damageFlash.classList.remove('active'), 100);
@@ -1226,6 +1339,7 @@ function respawnPlayer() {
     health = 100;
     ammoInClip = 20;
     ammoTotal = 120;
+    grenadeCount = 2;
     isReloading = false;
     
     // Reset position to a "spawn point" (could be random or fixed)
@@ -1241,6 +1355,7 @@ function respawnPlayer() {
 
 function playerDie(killer = "Bot", weapon = "Gun", killerTeam = null) {
     isPlayerDead = true;
+    soundEngine.playDeath();
     controls.unlock();
     document.getElementById('respawn-overlay').style.display = 'flex';
     document.getElementById('crosshair').style.display = 'none';
@@ -1258,6 +1373,7 @@ function reload() {
     if (isReloading || ammoInClip === 20 || ammoTotal === 0) return;
 
     console.log("Reloading...");
+    soundEngine.playReload();
     isReloading = true;
     reloadStartTime = performance.now();
     ammoUI.innerText = "RELOADING...";
@@ -1290,6 +1406,7 @@ let isKnifeAttacking = false;
 function knifeAttack() {
     if (isKnifeAttacking) return;
     
+    soundEngine.playKnife();
     isKnifeAttacking = true;
     knifeAttackProgress = 0;
 
@@ -1320,6 +1437,7 @@ function knifeAttack() {
 }
 
 function shoot() {
+    soundEngine.playShoot();
     const shootRaycaster = new THREE.Raycaster();
     shootRaycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
@@ -1406,11 +1524,10 @@ function broadcastKill(killer, victim, weapon, team) {
 }
 
 function startGrenadeCook() {
-    if (isGrenadeCooking) return;
+    if (isGrenadeCooking || grenadeCount <= 0) return;
     isGrenadeCooking = true;
     grenadeCookStartTime = performance.now();
     console.log("Pin pulled!");
-    // You could play a sound here or add a visual pin drop
 }
 
 function throwGrenade() {
@@ -1427,7 +1544,7 @@ function throwGrenade() {
     } else {
         // Create the thrown grenade entity
         const thrownNade = createGrenadeModel(false); // Reuse the model (no arms)
-        thrownNade.scale.set(3, 3, 3); // Smaller scale
+        thrownNade.scale.set(30, 30, 30); // Large for visibility in the air
         thrownNade.position.copy(camera.position);
         
         // Add velocity
@@ -1450,17 +1567,28 @@ function throwGrenade() {
         activeGrenades.push(thrownNade);
     }
 
+    grenadeCount--;
+    if (grenadeCount < 0) grenadeCount = 0;
+    
+    // Explicitly sync to GameState
+    GameState.grenadeCount = grenadeCount;
+    
     isGrenadeCooking = false;
-    // Visually hide viewmodel grenade temporarily (re-equipping logic)
+    
+    // Visually hide viewmodel grenade temporarily
     if (grenade) grenade.visible = false;
     
-    // Auto-switch back to primary or knife after a delay if you want, 
-    // or just let the player switch manually.
+    // Update UI
+    updateUI();
+
+    // Auto-switch if empty
     setTimeout(() => {
-        if (currentWeapon === 'grenade') {
+        if (grenadeCount <= 0 && currentWeapon === 'grenade') {
+            switchWeapon(2); // Switch to gun
+        } else if (currentWeapon === 'grenade' && grenadeCount > 0) {
             if (grenade) grenade.visible = true;
         }
-    }, 1000);
+    }, 500);
 }
 
 function updateGrenades(delta) {
@@ -1487,6 +1615,7 @@ function updateGrenades(delta) {
         let bounced = false;
         if (nextPos.y < 1) {
             nextPos.y = 1;
+            if (Math.abs(data.velocity.y) > 2) soundEngine.playBounce();
             data.velocity.y *= -0.4; // Bounce
             data.velocity.x *= 0.8; // Friction
             data.velocity.z *= 0.8;
@@ -1505,6 +1634,7 @@ function updateGrenades(delta) {
                 // Reflect velocity based on normal
                 const normal = hit.face.normal.clone().applyQuaternion(hit.object.quaternion);
                 data.velocity.reflect(normal).multiplyScalar(0.5);
+                soundEngine.playBounce();
                 bounced = true;
             }
         }
@@ -1521,6 +1651,7 @@ function updateGrenades(delta) {
 
 function explode(position, killerName = playerName, killerTeam = playerTeam) {
     console.log("BOOM!");
+    soundEngine.playExplosion();
 
     // 1. Visual Effect (Expanding sphere + flash)
     const explosionGroup = new THREE.Group();
@@ -1749,6 +1880,12 @@ function animate() {
 
     if (!renderer || !scene || !camera) return;
 
+    // Make sky follow camera
+    const skydome = scene.children.find(c => c.geometry instanceof THREE.SphereGeometry && c.material.side === THREE.BackSide);
+    if (skydome) {
+        skydome.position.copy(camera.position);
+    }
+
     const time = performance.now();
     const delta = Math.min((time - prevTime) / 1000, 0.05);
 
@@ -1775,10 +1912,17 @@ function animate() {
 
         // Ground detection
         if (onObject && velocity.y <= 0) {
+            if (wasInAir) {
+                soundEngine.playLand();
+                wasInAir = false;
+            }
             velocity.y = 0;
             canJump = true;
         } else {
             canJump = false;
+            if (velocity.y > 0 || !onObject) {
+                wasInAir = true;
+            }
         }
 
         // --- COLLISION DETECTION (SLIDING) ---
@@ -1815,24 +1959,81 @@ function animate() {
             }
         }
 
-        // Gun animations
-        if (gun) {
+        // --- REFINED WEAPON ANIMATIONS ---
+        const activeModel = currentWeapon === 'gun' ? gun : (currentWeapon === 'knife' ? knife : grenade);
+        
+        if (activeModel) {
+            // 1. Recoil Recovery
             recoil = THREE.MathUtils.lerp(recoil, 0, 0.1);
+            recoilRotation = THREE.MathUtils.lerp(recoilRotation, 0, 0.1);
             
+            // 2. Sway Recovery (return to center)
+            swayX = THREE.MathUtils.lerp(swayX, 0, 0.1);
+            swayY = THREE.MathUtils.lerp(swayY, 0, 0.1);
+            
+            // 3. ADS Transitions
             const adsSpeed = 0.15;
-            if (isAiming && !isReloading) {
+            if (isAiming && !isReloading && currentWeapon === 'gun') {
                 adsProgress = THREE.MathUtils.lerp(adsProgress, 1, adsSpeed);
             } else {
                 adsProgress = THREE.MathUtils.lerp(adsProgress, 0, adsSpeed);
             }
 
-            const currentTargetPos = new THREE.Vector3().lerpVectors(restPos, adsPos, adsProgress);
-            gun.position.copy(currentTargetPos);
-            
-            gun.position.z += recoil;
-            gun.position.y += (recoil * 0.5);
+            // 4. Movement Bobbing
+            const isMoving = (moveForward || moveBackward || moveLeft || moveRight) && canJump;
+            if (isMoving) {
+                const speed = isCrouching ? 4 : 8;
+                bobCounter += delta * speed;
+                
+                // Play footstep at specific points in the cycle
+                if (Math.sin(bobCounter) < 0 && Math.sin(lastBobCounter) >= 0) {
+                    soundEngine.playFootstep();
+                }
+                lastBobCounter = bobCounter;
+            } else {
+                bobCounter = THREE.MathUtils.lerp(bobCounter, Math.PI * 2, 0.1);
+                if (bobCounter >= Math.PI * 2) bobCounter = 0;
+            }
 
-            if (isReloading) {
+            const bobX = Math.cos(bobCounter) * (isCrouching ? 0.005 : 0.01);
+            const bobY = Math.abs(Math.sin(bobCounter)) * (isCrouching ? 0.005 : 0.01);
+            
+            // 5. Position Calculation
+            const targetRestPos = currentWeapon === 'gun' ? restPos : new THREE.Vector3(0.3, -0.4, -0.4);
+            const currentBasePos = new THREE.Vector3().lerpVectors(targetRestPos, adsPos, adsProgress);
+            
+            activeModel.position.copy(currentBasePos);
+            
+            // Apply Bobbing (Reduced in ADS)
+            const bobScale = 1 - (adsProgress * 0.8);
+            activeModel.position.x += bobX * bobScale;
+            activeModel.position.y += bobY * bobScale;
+            
+            // Apply Sway
+            activeModel.position.x += swayX * bobScale;
+            activeModel.position.y += swayY * bobScale;
+            
+            // Apply Recoil (Z kick)
+            activeModel.position.z += recoil;
+            
+            // 6. Rotation Calculation
+            // Reset rotation first
+            activeModel.rotation.set(0, 0, 0);
+            if (currentWeapon === 'gun') {
+                activeModel.rotation.x = -recoilRotation; // Recoil Kick
+                activeModel.rotation.y = swayX * 0.5;    // Horizontal Sway
+                activeModel.rotation.z = swayX * 0.2;    // Slight tilt when turning
+            } else if (currentWeapon === 'knife' && isKnifeAttacking) {
+                // Knife stab animation logic
+                knifeAttackProgress += delta * 15;
+                if (knifeAttackProgress > Math.PI) knifeAttackProgress = Math.PI;
+                const stabDepth = Math.sin(knifeAttackProgress) * 0.4;
+                activeModel.position.z -= stabDepth;
+                activeModel.rotation.x = Math.sin(knifeAttackProgress) * 0.5;
+            }
+
+            // 7. Reload Offset
+            if (isReloading && currentWeapon === 'gun') {
                 const duration = 2300;
                 const elapsed = time - reloadStartTime;
                 const progress = elapsed / duration;
@@ -1848,43 +2049,15 @@ function animate() {
             } else {
                 reloadOffset = THREE.MathUtils.lerp(reloadOffset, 0, 0.1);
             }
-            gun.position.y += reloadOffset;
+            activeModel.position.y += reloadOffset;
 
+            // 8. Camera Effects
             camera.fov = settings.fov - (adsProgress * 15);
             camera.updateProjectionMatrix();
 
             if (crosshair) {
                 crosshair.style.opacity = 1 - (adsProgress * 0.8);
             }
-        }
-
-        // Apply temporary recoil for render only
-        const originalRotationX = camera.rotation.x;
-        if (cameraRecoilX > 0.001) {
-            cameraRecoilX = THREE.MathUtils.lerp(cameraRecoilX, 0, 0.15);
-            camera.rotation.x += cameraRecoilX;
-        }
-
-        // Render with recoil
-        renderer.render(scene, camera);
-
-        // Restore rotation so it doesn't drift permanently
-        camera.rotation.x = originalRotationX;
-
-        // Knife animation
-        if (knife && currentWeapon === 'knife') {
-            if (isKnifeAttacking) {
-                knifeAttackProgress += 0.2;
-                if (knifeAttackProgress > Math.PI) knifeAttackProgress = Math.PI;
-                const stabDepth = Math.sin(knifeAttackProgress) * 0.4;
-                knife.position.set(0.1, -0.4, -0.4 - stabDepth);
-            } else {
-                knife.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
-            }
-        }
-
-        if (grenade && currentWeapon === 'grenade') {
-            grenade.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
         }
 
         updateGrenades(delta);
@@ -1935,6 +2108,18 @@ function animate() {
                 if (conn.open) conn.send(transformData);
             });
         }
+
+        // Apply temporary camera recoil for render only
+        const originalRotationX = camera.rotation.x;
+        if (cameraRecoilX > 0.001) {
+            cameraRecoilX = THREE.MathUtils.lerp(cameraRecoilX, 0, 0.15);
+            camera.rotation.x += cameraRecoilX;
+        }
+
+        renderer.render(scene, camera);
+
+        // Restore rotation so it doesn't drift permanently
+        camera.rotation.x = originalRotationX;
     } else {
         // Menu or unlocked: just render normally
         renderer.render(scene, camera);

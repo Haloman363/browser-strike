@@ -32,6 +32,9 @@ export const UI = {
             if (GameState.currentWeapon === 'gun') {
                 this.ammo.style.visibility = 'visible';
                 this.ammo.innerText = GameState.isReloading ? "RELOADING..." : `${GameState.ammoInClip} / ${GameState.ammoTotal}`;
+            } else if (GameState.currentWeapon === 'grenade') {
+                this.ammo.style.visibility = 'visible';
+                this.ammo.innerText = `${GameState.grenadeCount} / ${GameState.maxGrenades} Nades`;
             } else {
                 this.ammo.style.visibility = 'hidden';
             }
