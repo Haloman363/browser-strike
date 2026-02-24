@@ -44,7 +44,7 @@ const inventory = {
 let recoil = 0;
 let cameraRecoilX = 0;
 const restPos = new THREE.Vector3(0.25, -0.3, -0.5);
-const adsPos = new THREE.Vector3(0, -0.125, -0.3); // Perfectly centered on X
+const adsPos = new THREE.Vector3(0, -0.125, -0.4); // Perfectly centered on X
 let isAiming = false;
 let adsProgress = 0; // 0 to 1
 const crosshair = document.getElementById('crosshair');
@@ -105,7 +105,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 2000);
 controls = new PointerLockControls(camera, renderer.domElement);
 
 setupMenu();
