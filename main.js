@@ -110,9 +110,6 @@ controls = new PointerLockControls(camera, renderer.domElement);
 
 setupMenu();
 
-// Player Stats (Now using GameState)
-let health = 100; // Still keeping local for now to avoid massive refactor in one go, but will migrate
-
 function setupMenu() {
     const startButton = document.getElementById('start-button');
     const mainMenu = document.getElementById('main-menu');
@@ -1767,12 +1764,6 @@ function animate() {
             updateBotAI(enemy, camera, objects, delta);
         } else if (enemy.userData.isRagdoll) {
             updateRagdoll(enemy);
-        }
-    });
-                        }
-                    }
-                });
-            }
         }
     });
 
