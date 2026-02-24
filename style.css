@@ -329,24 +329,72 @@ input[type=range]::-webkit-slider-thumb {
     position: absolute;
     bottom: 20px;
     left: 20px;
-    right: 20px;
     display: flex;
-    justify-content: space-between;
+    gap: 15px;
     font-size: 24px;
     font-weight: bold;
     color: #0f0; /* Classic HUD green */
     text-shadow: 2px 2px 0px #000;
 }
 
-#health, #ammo, #kill-stats {
+#health, #ammo, #kill-stats, #timer {
     background: rgba(0, 0, 0, 0.4);
     padding: 10px 20px;
     border: 2px solid #0f0;
 }
 
+#timer {
+    border-color: #fff;
+    color: #fff;
+    font-family: monospace;
+}
+
 #kill-stats {
     border-color: #ff9d00;
     color: #ff9d00;
+}
+
+#inventory {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 10px;
+}
+
+.inventory-slot {
+    width: 80px;
+    height: 50px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 2px solid #555;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: bold;
+    color: #888;
+    transition: all 0.2s;
+    pointer-events: none;
+}
+
+.inventory-slot::after {
+    content: attr(data-label);
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+.inventory-slot.active {
+    border-color: #ff9d00;
+    color: #ff9d00;
+    background: rgba(255, 157, 0, 0.1);
+    transform: scale(1.1) translateX(-10px);
+}
+
+.inventory-slot.occupied {
+    color: #ccc;
+    border-color: #888;
 }
 
 #damage-flash {

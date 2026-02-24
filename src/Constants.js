@@ -1,0 +1,35 @@
+export const COLORS = {
+    TEAM_A: 0x0000ff,
+    TEAM_B: 0xff0000,
+    TEAM_A_LIGHT: '#8888ff',
+    TEAM_B_LIGHT: '#ff8888',
+    SKIN: 0xdbac82,
+    CLOTH_DEFAULT: 0x556b2f,
+    GUN_BODY: 0x222222,
+    GUN_SLIDE: 0x333333,
+    GUN_IRON: 0x111111,
+    BLADE: 0xaaaaaa,
+    HANDLE: 0x222222,
+    NADE_BODY: 0x4b5320,
+    CRATE: 0x8b4513,
+    WALL_DEFAULT: 0xc2b280,
+    SKY: 0xadd8e6,
+    SAND: 0xedc9af
+};
+
+export const PHYSICS = {
+    GRAVITY: 9.8 * 100.0,
+    STANDING_HEIGHT: 18,
+    CROUCHING_HEIGHT: 10,
+    PLAYER_RADIUS: 4.0,
+    MOVE_SPEED: 400.0,
+    CROUCH_SPEED: 200.0,
+    JUMP_FORCE: 350.0
+};
+
+export const WEAPON_SETTINGS = {
+    GLOCK_AMMO: 20,
+    GLOCK_RELOAD_TIME: 2300,
+    GRENADE_FUSE: 3000,
+    BLAST_RADIUS: 50
+};

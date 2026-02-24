@@ -29,7 +29,21 @@
 
                     <div id="mp-host-view" style="display: none; flex-direction: column; align-items: center; gap: 15px;">
                         <input type="text" class="username-input" value="Noob" placeholder="USERNAME" maxlength="12" style="margin-bottom: 10px;">
+                        <div class="menu-section team-selector" style="display: none; margin-bottom: 10px;">
+                            <h3>Select Team</h3>
+                            <div class="options" id="mp-host-team-select">
+                                <button class="option active" data-value="A" style="color: #4444ff; border-color: #4444ff;">Team A</button>
+                                <button class="option" data-value="B" style="color: #ff4444; border-color: #ff4444;">Team B</button>
+                            </div>
+                        </div>
                         <div id="mp-lobby-host-controls" style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                            <div class="menu-section">
+                                <h3>Teams</h3>
+                                <div class="options" id="mp-teams-toggle">
+                                    <button class="option active" data-value="false">Disabled</button>
+                                    <button class="option" data-value="true">Enabled</button>
+                                </div>
+                            </div>
                             <div class="menu-section">
                                 <h3>Select Map</h3>
                                 <div class="options" id="mp-map-select">
@@ -51,6 +65,13 @@
 
                     <div id="mp-join-view" style="display: none; flex-direction: column; align-items: center; gap: 15px;">
                         <input type="text" class="username-input" value="Noob" placeholder="USERNAME" maxlength="12" style="margin-bottom: 10px;">
+                        <div class="menu-section team-selector" style="display: none; margin-bottom: 10px;">
+                            <h3>Select Team</h3>
+                            <div class="options" id="mp-join-team-select">
+                                <button class="option active" data-value="A" style="color: #4444ff; border-color: #4444ff;">Team A</button>
+                                <button class="option" data-value="B" style="color: #ff4444; border-color: #ff4444;">Team B</button>
+                            </div>
+                        </div>
                         <div class="join-area">
                             <input type="text" id="join-code" placeholder="ENTER CODE" maxlength="6">
                             <button id="join-btn" class="option">Join</button>
@@ -63,6 +84,20 @@
             </div>
 
             <div id="solo-settings" class="menu-tab-content">
+                <div class="menu-section">
+                    <h3>Teams</h3>
+                    <div class="options" id="teams-toggle">
+                        <button class="option active" data-value="false">Disabled</button>
+                        <button class="option" data-value="true">Enabled</button>
+                    </div>
+                </div>
+                <div class="menu-section team-selector" style="display: none;">
+                    <h3>Select Team</h3>
+                    <div class="options" id="solo-team-select">
+                        <button class="option active" data-value="A" style="color: #4444ff; border-color: #4444ff;">Team A</button>
+                        <button class="option" data-value="B" style="color: #ff4444; border-color: #ff4444;">Team B</button>
+                    </div>
+                </div>
                 <div class="menu-section">
                     <h3>Select Map</h3>
                     <div class="options" id="map-select">
@@ -92,25 +127,52 @@
         <div id="damage-flash"></div>
         <div id="crosshair" style="display: none;"></div>
                 <div id="stats" style="display: none;">
-                    <div id="health">100 HP</div>
-                    <div id="kill-stats" style="display: none;">Enemies: <span id="alive-count">0</span></div>
-                    <div id="ammo">30 / 90</div>
-                </div>
+            <div id="health">100 HP</div>
+            <div id="kill-stats" style="display: none;">Enemies: <span id="alive-count">0</span></div>
+            <div id="timer" style="display: none;">10:00</div>
+            <div id="ammo">30 / 90</div>
+        </div>
+
+        <div id="respawn-overlay" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; z-index: 1100;">
+            <h1 style="color: #ff4444; font-size: 64px;">YOU DIED</h1>
+            <p style="color: #fff; font-size: 24px;">CLICK TO RESPAWN</p>
+        </div>
+
+        <div id="inventory" style="display: none;">
+            <div class="inventory-slot occupied" id="slot-1" data-label="KNIFE">1</div>
+            <div class="inventory-slot active occupied" id="slot-2" data-label="GUN">2</div>
+            <div class="inventory-slot" id="slot-3" data-label="EMPTY">3</div>
+            <div class="inventory-slot occupied" id="slot-4" data-label="NADE">4</div>
+            <div class="inventory-slot" id="slot-5" data-label="SPEC">5</div>
+        </div>
         
-                <div id="scoreboard" style="display: none;">
-                    <div class="scoreboard-content">
-                        <h2>SCOREBOARD</h2>
-                        <div id="score-list">
-                            <div class="score-header">
-                                <span>PLAYER</span>
-                                <span>KILLS</span>
-                            </div>
-                            <!-- Scores will be injected here -->
-                        </div>
+        <div id="scoreboard" style="display: none;">
+            <div class="scoreboard-content">
+                <h2>SCOREBOARD</h2>
+                <div id="score-list">
+                    <div class="score-header">
+                        <span>PLAYER</span>
+                        <span>KILLS</span>
                     </div>
+                    <!-- Scores will be injected here -->
                 </div>
-        
-                <div id="pause-overlay" style="display: none;">
+            </div>
+        </div>
+
+        <div id="game-over-screen" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 15, 0.98); flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; z-index: 2000;">
+            <h1 style="color: #ff9d00; font-size: 72px; margin-bottom: 10px; letter-spacing: 10px;">MATCH ENDED</h1>
+            <div id="winner-announcement" style="color: #fff; font-size: 32px; margin-bottom: 30px; border-bottom: 2px solid #ff9d00; padding-bottom: 10px;">
+                WINNER: <span id="winner-name" style="color: #0f0; font-weight: bold;">PLAYER</span>
+            </div>
+            
+            <div id="final-scoreboard" style="width: 600px; background: rgba(0, 0, 0, 0.5); border: 1px solid #444; margin-bottom: 40px; pointer-events: auto;">
+                <div id="final-score-list"></div>
+            </div>
+
+            <button id="game-over-quit" class="option" style="width: 300px; background: #ff9d00; color: #000; font-weight: bold; font-size: 24px;">BACK TO MENU</button>
+        </div>
+
+        <div id="pause-overlay" style="display: none;">
             <h1>PAUSED</h1>
             <div class="pause-options">
                 <button id="resume-button" class="menu-btn">RESUME</button>
@@ -148,7 +210,7 @@
                 <p><strong>W, A, S, D</strong> - Move</p>
                 <p><strong>SPACE</strong> - Jump</p>
                 <p><strong>CTRL</strong> - Crouch</p>
-                <p><strong>1</strong> - Knife | <strong>2</strong> - Gun</p>
+                <p><strong>1</strong> - Knife | <strong>2,3</strong> - Weapons | <strong>4</strong> - Nade | <strong>5</strong> - Special</p>
                 <p><strong>R</strong> - Reload</p>
                 <p><strong>MOUSE</strong> - Look</p>
                 <p><strong>LEFT CLICK</strong> - Attack</p>
