@@ -24,8 +24,8 @@ let moveLeft = false;
 let moveRight = false;
 let canJump = false;
 let isCrouching = false;
-const standingHeight = 18;
-const crouchingHeight = 10;
+const standingHeight = PHYSICS.STANDING_HEIGHT;
+const crouchingHeight = PHYSICS.CROUCHING_HEIGHT;
 
 let prevTime = performance.now();
 const velocity = new THREE.Vector3();
@@ -80,6 +80,7 @@ let isHost = false;
 let lobbyCode = "";
 let playerName = "Player";
 let playerKills = 0;
+let playerCash = 800;
 let networkScores = {}; // peerId -> { name, kills }
 
 // Settings State (with defaults)
@@ -87,7 +88,8 @@ let settings = {
     fov: 75,
     sensitivity: 1.0,
     viewDistance: 800,
-    playerName: "Noob"
+    playerName: "Noob",
+    showKillFeed: true
 };
 
 // Settings managed by UI.js
@@ -440,7 +442,17 @@ function setupDataConnection(conn) {
         } else if (data.type === 'player-hit') {
             // Check if WE were the one hit
             if (data.targetId === peer.id) {
-                takeDamage(data.damage);
+                takeDamage(data.damage, data.attackerName || "Player", data.weapon || "Gun", data.attackerTeam);
+            }
+        } else if (data.type === 'kill-event') {
+            addKillFeedEntry(data.killer, data.victim, data.weapon, data.team);
+            if (data.killer === playerName && data.victim !== playerName) {
+                playerKills++;
+                let reward = 300;
+                if (data.weapon === 'knife') reward = 1500;
+                playerCash += reward;
+                updateUI();
+                broadcastScore();
             }
         }
     });
@@ -575,6 +587,7 @@ function init() {
     
     // Reset Game State
     playerKills = 0;
+    playerCash = 800;
     networkScores = {};
     health = 100;
     ammoInClip = 20;
@@ -626,10 +639,11 @@ function init() {
         const fovVal = document.getElementById('fov-val');
         const sensVal = document.getElementById('sens-val');
         const distVal = document.getElementById('dist-val');
+        const killfeedOpts = document.querySelectorAll('#killfeed-toggle .option');
 
         const loaded = UI.loadSettings();
         if (loaded) {
-            settings = loaded;
+            settings = { ...settings, ...loaded };
             playerName = settings.playerName || "Noob";
         }
 
@@ -640,6 +654,10 @@ function init() {
         sensVal.innerText = settings.sensitivity.toFixed(1);
         distSlider.value = settings.viewDistance;
         distVal.innerText = settings.viewDistance;
+        
+        killfeedOpts.forEach(opt => {
+            opt.classList.toggle('active', opt.dataset.value === String(settings.showKillFeed));
+        });
 
         // Apply settings to game objects
         camera.fov = settings.fov;
@@ -669,10 +687,13 @@ function init() {
         });
 
         resetSettingsBtn.addEventListener('click', () => {
-            settings = { fov: 75, sensitivity: 1.0, viewDistance: 800 };
+            settings = { fov: 75, sensitivity: 1.0, viewDistance: 800, showKillFeed: true };
             fovSlider.value = 75; fovVal.innerText = 75;
             sensSlider.value = 1.0; sensVal.innerText = "1.0";
             distSlider.value = 800; distVal.innerText = 800;
+            killfeedOpts.forEach(opt => {
+                opt.classList.toggle('active', opt.dataset.value === 'true');
+            });
             camera.fov = 75; camera.far = 1300; camera.updateProjectionMatrix();
             if (scene.fog) scene.fog.far = 800;
             UI.saveSettings(settings);
@@ -699,10 +720,19 @@ function init() {
             const val = parseInt(e.target.value);
             distVal.innerText = val;
             settings.viewDistance = val;
-            scene.fog.far = val;
+            if (scene.fog) scene.fog.far = val;
             camera.far = val + 500;
             camera.updateProjectionMatrix();
             saveSettings();
+        });
+
+        killfeedOpts.forEach(opt => {
+            opt.addEventListener('click', () => {
+                const val = opt.dataset.value === 'true';
+                settings.showKillFeed = val;
+                killfeedOpts.forEach(o => o.classList.toggle('active', o === opt));
+                saveSettings();
+            });
         });
 
         quitBtn.addEventListener('click', () => {
@@ -770,13 +800,13 @@ function init() {
                     moveRight = true;
                     break;
                 case 'Space':
-                    if (canJump === true) velocity.y += 200;
+                    if (canJump === true) velocity.y += PHYSICS.JUMP_FORCE;
                     canJump = false;
                     break;
                 case 'KeyR':
                     reload();
                     break;
-                case 'ControlLeft':
+                case 'KeyC':
                     isCrouching = true;
                     break;
                 case 'Tab':
@@ -805,7 +835,7 @@ function init() {
                 case 'KeyD':
                     moveRight = false;
                     break;
-                case 'ControlLeft':
+                case 'KeyC':
                     isCrouching = false;
                     break;
                 case 'Tab':
@@ -1087,7 +1117,7 @@ function init() {
     }
 }
 
-function takeDamage(amount) {
+function takeDamage(amount, killer = "Bot", weapon = "Gun", killerTeam = null) {
     if (health <= 0 || isPlayerDead) return;
     health -= amount;
     if (health < 0) health = 0;
@@ -1099,13 +1129,14 @@ function takeDamage(amount) {
     }
     
     if (health === 0) {
-        playerDie();
+        playerDie(killer, weapon, killerTeam);
     }
 }
 
 function updateUI() {
     // Sync to GameState for UI.js
     GameState.health = health;
+    GameState.cash = playerCash;
     GameState.ammoInClip = ammoInClip;
     GameState.ammoTotal = ammoTotal;
     GameState.isReloading = isReloading;
@@ -1123,6 +1154,49 @@ function updateUI() {
     GameState.isHost = isHost;
 
     UI.updateUI(enemies);
+}
+
+function addKillFeedEntry(killer, victim, weapon, killerTeam = null) {
+    if (!settings.showKillFeed) return;
+
+    const killFeed = document.getElementById('kill-feed');
+    if (!killFeed) return;
+
+    const entry = document.createElement('div');
+    entry.className = 'kill-entry';
+    if (killerTeam === 'A') entry.classList.add('team-a-kill');
+    if (killerTeam === 'B') entry.classList.add('team-b-kill');
+
+    const killerSpan = document.createElement('span');
+    killerSpan.className = 'killer';
+    killerSpan.innerText = killer;
+
+    const victimSpan = document.createElement('span');
+    victimSpan.className = 'victim';
+    victimSpan.innerText = victim;
+
+    const weaponSpan = document.createElement('span');
+    weaponSpan.className = 'weapon';
+    weaponSpan.innerText = `[${weapon.toUpperCase()}]`;
+
+    entry.appendChild(killerSpan);
+    entry.appendChild(weaponSpan);
+    entry.appendChild(victimSpan);
+
+    killFeed.appendChild(entry);
+
+    // Remove after 5 seconds
+    setTimeout(() => {
+        entry.style.opacity = '0';
+        entry.style.transform = 'translateX(20px)';
+        entry.style.transition = 'all 0.5s ease-out';
+        setTimeout(() => entry.remove(), 500);
+    }, 5000);
+
+    // Keep only last 5 entries
+    while (killFeed.children.length > 5) {
+        killFeed.removeChild(killFeed.firstChild);
+    }
 }
 
 function startTimer() {
@@ -1165,13 +1239,19 @@ function respawnPlayer() {
     controls.lock();
 }
 
-function playerDie() {
+function playerDie(killer = "Bot", weapon = "Gun", killerTeam = null) {
     isPlayerDead = true;
     controls.unlock();
     document.getElementById('respawn-overlay').style.display = 'flex';
     document.getElementById('crosshair').style.display = 'none';
     
-    // If in multiplayer, broadcast death if needed (optional for now)
+    // Kill Feed Entry
+    addKillFeedEntry(killer, playerName, weapon, killerTeam);
+    
+    // Broadcast death to others
+    if (connections.length > 0) {
+        broadcastKill(killer, playerName, weapon, killerTeam);
+    }
 }
 
 function reload() {
@@ -1299,7 +1379,25 @@ function broadcastHit(targetId, damage) {
         const data = {
             type: 'player-hit',
             targetId: targetId,
-            damage: damage
+            damage: damage,
+            attackerName: playerName,
+            attackerTeam: playerTeam,
+            weapon: currentWeapon
+        };
+        connections.forEach(conn => {
+            if (conn.open) conn.send(data);
+        });
+    }
+}
+
+function broadcastKill(killer, victim, weapon, team) {
+    if (connections.length > 0) {
+        const data = {
+            type: 'kill-event',
+            killer: killer,
+            victim: victim,
+            weapon: weapon,
+            team: team
         };
         connections.forEach(conn => {
             if (conn.open) conn.send(data);
@@ -1343,7 +1441,9 @@ function throwGrenade() {
         thrownNade.userData = {
             velocity: velocity,
             fuse: remainingFuse,
-            isThrown: true
+            isThrown: true,
+            ownerName: playerName,
+            ownerTeam: playerTeam
         };
 
         scene.add(thrownNade);
@@ -1371,7 +1471,7 @@ function updateGrenades(delta) {
         // Fuse
         data.fuse -= delta * 1000;
         if (data.fuse <= 0) {
-            explode(nade.position.clone());
+            explode(nade.position.clone(), data.ownerName, data.ownerTeam);
             scene.remove(nade);
             activeGrenades.splice(i, 1);
             continue;
@@ -1419,7 +1519,7 @@ function updateGrenades(delta) {
     }
 }
 
-function explode(position) {
+function explode(position, killerName = playerName, killerTeam = playerTeam) {
     console.log("BOOM!");
 
     // 1. Visual Effect (Expanding sphere + flash)
@@ -1463,13 +1563,13 @@ function explode(position) {
     enemies.forEach(enemy => {
         if (enemy.userData.alive) {
             // Friendly Fire Check
-            if (teamsEnabled && enemy.userData.team === playerTeam) return;
+            if (teamsEnabled && enemy.userData.team === killerTeam) return;
 
             const dist = enemy.position.distanceTo(position);
             if (dist < blastRadius) {
                 const damage = (1 - (dist / blastRadius)) * 150; // Falloff damage
                 enemy.userData.health -= damage;
-                if (enemy.userData.health <= 0) killEnemy(enemy);
+                if (enemy.userData.health <= 0) killEnemy(enemy, killerName, 'grenade', killerTeam);
             }
         }
     });
@@ -1478,12 +1578,31 @@ function explode(position) {
     const distToPlayer = camera.position.distanceTo(position);
     if (distToPlayer < blastRadius) {
         const damage = (1 - (distToPlayer / blastRadius)) * 100;
-        takeDamage(damage);
+        takeDamage(damage, killerName, 'grenade', killerTeam);
     }
 }
 
-function killEnemy(enemy) {
+function killEnemy(enemy, killerName = playerName, weapon = currentWeapon, killerTeam = playerTeam) {
     enemy.userData.alive = false;
+    
+    // Kill Feed Entry
+    addKillFeedEntry(killerName, enemy.userData.name || "Bot", weapon, killerTeam);
+
+    if (killerName === playerName) {
+        playerKills++;
+        
+        // Award Cash
+        let reward = 300;
+        if (weapon === 'knife') reward = 1500;
+        playerCash += reward;
+        
+        updateUI();
+        
+        // Multiplayer: Broadcast the kill if we are host or just tell others
+        if (connections.length > 0) {
+            broadcastKill(killerName, enemy.userData.name || "Bot", weapon, killerTeam);
+        }
+    }
 
     // --- DISABLE COLLISION FOR DEAD BODY ---
     enemy.children.forEach(child => {
@@ -1631,34 +1750,39 @@ function animate() {
     if (!renderer || !scene || !camera) return;
 
     const time = performance.now();
-    const delta = (time - prevTime) / 1000;
+    const delta = Math.min((time - prevTime) / 1000, 0.05);
 
     if (controls.isLocked === true) {
+        // Update matrix to ensure movement uses the latest mouse rotation
+        camera.updateMatrixWorld();
+
         raycaster.ray.origin.copy(camera.position);
-        // The raycaster is already pointing down, so it will hit objects below the eye height
 
         const intersections = raycaster.intersectObjects(objects, false);
         const onObject = intersections.length > 0;
 
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
-        velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass
+        velocity.y -= 9.8 * 100.0 * delta; 
 
         direction.z = Number(moveForward) - Number(moveBackward);
         direction.x = Number(moveRight) - Number(moveLeft);
         direction.normalize();
 
-        const moveSpeed = isCrouching ? 200.0 : 400.0;
+        const moveSpeed = isCrouching ? PHYSICS.CROUCH_SPEED : PHYSICS.MOVE_SPEED;
         if (moveForward || moveBackward) velocity.z -= direction.z * moveSpeed * delta;
         if (moveLeft || moveRight) velocity.x -= direction.x * moveSpeed * delta;
 
-        if (onObject === true) {
-            velocity.y = Math.max(0, velocity.y);
+        // Ground detection
+        if (onObject && velocity.y <= 0) {
+            velocity.y = 0;
             canJump = true;
+        } else {
+            canJump = false;
         }
 
         // --- COLLISION DETECTION (SLIDING) ---
-        const playerRadius = 4.0; 
+        const playerRadius = PHYSICS.PLAYER_RADIUS; 
         const moveX = -velocity.x * delta;
         const moveZ = -velocity.z * delta;
         const steps = 4;
@@ -1666,43 +1790,35 @@ function animate() {
         const stepZ = moveZ / steps;
 
         for (let s = 0; s < steps; s++) {
-            // 1. Try X movement
             const oldPos = camera.position.clone();
             controls.moveRight(stepX);
             if (checkCollisionAt(camera.position, objects)) {
-                camera.position.copy(oldPos); // Revert FULL position
+                camera.position.copy(oldPos);
             }
 
-            // 2. Try Z movement
             const midPos = camera.position.clone();
             controls.moveForward(stepZ);
             if (checkCollisionAt(camera.position, objects)) {
-                camera.position.copy(midPos); // Revert FULL position
+                camera.position.copy(midPos);
             }
         }
 
-        camera.position.y += (velocity.y * delta);
-
         const currentTargetHeight = isCrouching ? crouchingHeight : standingHeight;
-        if (camera.position.y <= currentTargetHeight + 0.1 && canJump) {
-            // Smoothly lerp height when on ground
-            camera.position.y = THREE.MathUtils.lerp(camera.position.y, currentTargetHeight, 0.2);
-            velocity.y = 0;
-            canJump = true;
-        }
-
-        if (camera.position.y < currentTargetHeight) {
-            velocity.y = 0;
-            camera.position.y = currentTargetHeight;
-            canJump = true;
+        
+        if (!canJump) {
+            camera.position.y += (velocity.y * delta);
+        } else {
+            const lerpSpeed = 12.0; 
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, currentTargetHeight, 1.0 - Math.exp(-lerpSpeed * delta));
+            if (Math.abs(camera.position.y - currentTargetHeight) < 0.01) {
+                camera.position.y = currentTargetHeight;
+            }
         }
 
         // Gun animations
         if (gun) {
-            // Recoil recovery
             recoil = THREE.MathUtils.lerp(recoil, 0, 0.1);
             
-            // ADS Transition
             const adsSpeed = 0.15;
             if (isAiming && !isReloading) {
                 adsProgress = THREE.MathUtils.lerp(adsProgress, 1, adsSpeed);
@@ -1710,15 +1826,12 @@ function animate() {
                 adsProgress = THREE.MathUtils.lerp(adsProgress, 0, adsSpeed);
             }
 
-            // Lerp gun position between rest and ADS
             const currentTargetPos = new THREE.Vector3().lerpVectors(restPos, adsPos, adsProgress);
             gun.position.copy(currentTargetPos);
             
-            // Apply recoil and reload offsets
             gun.position.z += recoil;
             gun.position.y += (recoil * 0.5);
 
-            // Reload animation offset
             if (isReloading) {
                 const duration = 2300;
                 const elapsed = time - reloadStartTime;
@@ -1737,46 +1850,45 @@ function animate() {
             }
             gun.position.y += reloadOffset;
 
-            // FOV Zoom while aiming
             camera.fov = settings.fov - (adsProgress * 15);
             camera.updateProjectionMatrix();
 
-            // Crosshair visibility
             if (crosshair) {
-                crosshair.style.opacity = 1 - (adsProgress * 0.8); // Fade out but maybe keep a hint
+                crosshair.style.opacity = 1 - (adsProgress * 0.8);
             }
         }
-        
-        // Apply temporary recoil offset and then render
+
+        // Apply temporary recoil for render only
         const originalRotationX = camera.rotation.x;
         if (cameraRecoilX > 0.001) {
             cameraRecoilX = THREE.MathUtils.lerp(cameraRecoilX, 0, 0.15);
             camera.rotation.x += cameraRecoilX;
         }
 
+        // Render with recoil
+        renderer.render(scene, camera);
+
+        // Restore rotation so it doesn't drift permanently
+        camera.rotation.x = originalRotationX;
+
         // Knife animation
         if (knife && currentWeapon === 'knife') {
             if (isKnifeAttacking) {
                 knifeAttackProgress += 0.2;
                 if (knifeAttackProgress > Math.PI) knifeAttackProgress = Math.PI;
-                
                 const stabDepth = Math.sin(knifeAttackProgress) * 0.4;
                 knife.position.set(0.1, -0.4, -0.4 - stabDepth);
             } else {
-                // Resting position
                 knife.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
             }
         }
 
-        // Grenade animation
         if (grenade && currentWeapon === 'grenade') {
-            // Simple breathing/resting for now
             grenade.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
         }
 
         updateGrenades(delta);
 
-        // Enemy AI & Roaming
         enemies.forEach(enemy => {
             if (enemy.userData.alive) {
                 updateBotAI(enemy, camera, objects, delta);
@@ -1785,61 +1897,48 @@ function animate() {
             }
         });
 
-        // Blood Particles animation
         for (let i = bloodParticles.length - 1; i >= 0; i--) {
             const p = bloodParticles[i];
-            p.position.add(p.userData.velocity.clone().multiplyScalar(0.016)); // Simple step
-            p.userData.velocity.y -= 0.5; // Gravity
+            p.position.add(p.userData.velocity.clone().multiplyScalar(0.016));
+            p.userData.velocity.y -= 0.5;
             p.userData.life -= 0.02;
             p.material.opacity = p.userData.life;
             p.material.transparent = true;
-
             if (p.userData.life <= 0) {
                 scene.remove(p);
                 bloodParticles.splice(i, 1);
             }
         }
 
-        // Dropped Guns animation & Pickup
         for (let i = droppedGuns.length - 1; i >= 0; i--) {
             const gunPickup = droppedGuns[i];
-            
-            // Use 2D distance (X and Z) to ignore height differences
             const dx = camera.position.x - gunPickup.position.x;
             const dz = camera.position.z - gunPickup.position.z;
             const dist2D = Math.sqrt(dx * dx + dz * dz);
-
             if (dist2D < 15) {
-                // Pickup!
                 ammoTotal += gunPickup.userData.ammoAmount;
                 updateUI();
-                
                 scene.remove(gunPickup);
                 droppedGuns.splice(i, 1);
-                console.log("Picked up 30 ammo!");
             }
         }
 
-        // Broadcast position to others
         if (connections.length > 0 && isGameStarted) {
             const transformData = {
                 type: 'transform',
                 name: playerName,
                 team: playerTeam,
                 pos: camera.position,
-                rot: {
-                    y: camera.rotation.y
-                }
+                rot: { y: camera.rotation.y }
             };
             connections.forEach(conn => {
                 if (conn.open) conn.send(transformData);
             });
         }
-        
-        // Restore rotation so it doesn't drift permanently
-        camera.rotation.x = originalRotationX;
+    } else {
+        // Menu or unlocked: just render normally
+        renderer.render(scene, camera);
     }
 
     prevTime = time;
-    renderer.render(scene, camera);
 }

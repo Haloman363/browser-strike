@@ -4,6 +4,7 @@ import { COLORS } from './Constants.js';
 export const UI = {
     health: document.getElementById('health'),
     ammo: document.getElementById('ammo'),
+    wallet: document.getElementById('wallet'),
     killStats: document.getElementById('kill-stats'),
     aliveCount: document.getElementById('alive-count'),
     damageFlash: document.getElementById('damage-flash'),
@@ -16,6 +17,7 @@ export const UI = {
 
     updateUI(enemies = []) {
         if (this.health) this.health.innerText = `${Math.ceil(GameState.health)} HP`;
+        if (this.wallet) this.wallet.innerText = `$${GameState.cash}`;
         
         if (this.timer) {
             if (GameState.selectedMode === 'dm') {

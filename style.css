@@ -337,10 +337,15 @@ input[type=range]::-webkit-slider-thumb {
     text-shadow: 2px 2px 0px #000;
 }
 
-#health, #ammo, #kill-stats, #timer {
+#health, #ammo, #wallet, #kill-stats, #timer {
     background: rgba(0, 0, 0, 0.4);
     padding: 10px 20px;
     border: 2px solid #0f0;
+}
+
+#wallet {
+    color: #0f0;
+    font-family: 'Courier New', Courier, monospace;
 }
 
 #timer {
@@ -412,4 +417,39 @@ input[type=range]::-webkit-slider-thumb {
     background-color: rgba(255, 0, 0, 0.3);
 }
 
+#kill-feed {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    pointer-events: none;
+    z-index: 900;
+}
 
+.kill-entry {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 5px 15px;
+    font-size: 16px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    animation: slideInRight 0.3s ease-out;
+    border-right: 3px solid #ff9d00;
+}
+
+.kill-entry .killer { color: #fff; }
+.kill-entry .victim { color: #ff4444; }
+.kill-entry .weapon { color: #888; font-size: 12px; font-style: italic; }
+
+.kill-entry.team-a-kill { border-right-color: #4444ff; }
+.kill-entry.team-b-kill { border-right-color: #ff4444; }
+
+@keyframes slideInRight {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}

@@ -125,10 +125,12 @@
         </div>
 
         <div id="damage-flash"></div>
+        <div id="kill-feed"></div>
         <div id="crosshair" style="display: none;"></div>
                 <div id="stats" style="display: none;">
             <div id="health">100 HP</div>
             <div id="kill-stats" style="display: none;">Enemies: <span id="alive-count">0</span></div>
+            <div id="wallet">$800</div>
             <div id="timer" style="display: none;">10:00</div>
             <div id="ammo">30 / 90</div>
         </div>
@@ -196,6 +198,13 @@
                 <div class="setting-item">
                     <label>View Distance: <span id="dist-val">500</span></label>
                     <input type="range" id="dist-slider" min="200" max="2000" step="100" value="500">
+                </div>
+                <div class="setting-item">
+                    <label>Kill Feed</label>
+                    <div class="options" id="killfeed-toggle" style="justify-content: center;">
+                        <button class="option active" data-value="true" style="padding: 10px 20px;">ON</button>
+                        <button class="option" data-value="false" style="padding: 10px 20px;">OFF</button>
+                    </div>
                 </div>
                 <div style="display: flex; gap: 10px; width: 100%;">
                     <button id="reset-settings" class="menu-btn" style="flex: 1; border-color: #555;">RESET DEFAULTS</button>

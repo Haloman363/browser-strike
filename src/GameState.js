@@ -12,6 +12,7 @@ export const GameState = {
     gameTimeLeft: 600,
     isPlayerDead: false,
     health: 100,
+    cash: 800,
     ammoInClip: 20,
     ammoTotal: 120,
     isReloading: false,
