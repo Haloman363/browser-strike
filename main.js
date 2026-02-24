@@ -1000,13 +1000,13 @@ function init() {
         camera.add(gun);
 
         // Knife Model
-        knife = createKnifeModel();
+        knife = createKnifeModel(true);
         knife.position.set(0.3, -0.4, -0.4);
         knife.visible = false;
         camera.add(knife);
 
         // Grenade Model
-        grenade = createGrenadeModel();
+        grenade = createGrenadeModel(true);
         grenade.position.set(0.3, -0.4, -0.4);
         grenade.visible = false;
         camera.add(grenade);
@@ -1328,7 +1328,7 @@ function throwGrenade() {
         takeDamage(100);
     } else {
         // Create the thrown grenade entity
-        const thrownNade = createGrenadeModel(); // Reuse the model
+        const thrownNade = createGrenadeModel(false); // Reuse the model (no arms)
         thrownNade.scale.set(10, 10, 10); // Scale up for world visibility
         thrownNade.position.copy(camera.position);
         

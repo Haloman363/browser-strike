@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COLORS } from './Constants.js';
 
-export function createKnifeModel() {
+export function createKnifeModel(isViewModel = false) {
     const group = new THREE.Group();
     
     // Blade
@@ -24,24 +24,26 @@ export function createKnifeModel() {
     guard.position.z = -0.02;
     group.add(guard);
 
-    // --- VIEWMODEL ARMS ---
-    const skinMat = new THREE.MeshPhongMaterial({ color: COLORS.SKIN });
-    
-    // Right Arm
-    const armMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.0, 8), skinMat);
-    armMesh.rotation.x = Math.PI / 2;
-    armMesh.position.z = 0.5;
-    
-    const armGroup = new THREE.Group();
-    armGroup.add(armMesh);
-    armGroup.position.set(0.1, -0.1, 0.1);
-    armGroup.rotation.set(-0.2, -0.4, -0.2);
-    group.add(armGroup);
+    if (isViewModel) {
+        // --- VIEWMODEL ARMS ---
+        const skinMat = new THREE.MeshPhongMaterial({ color: COLORS.SKIN });
+        
+        // Right Arm
+        const armMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.0, 8), skinMat);
+        armMesh.rotation.x = Math.PI / 2;
+        armMesh.position.z = 0.5;
+        
+        const armGroup = new THREE.Group();
+        armGroup.add(armMesh);
+        armGroup.position.set(0.1, -0.1, 0.1);
+        armGroup.rotation.set(-0.2, -0.4, -0.2);
+        group.add(armGroup);
+    }
 
     return group;
 }
 
-export function createGrenadeModel() {
+export function createGrenadeModel(isViewModel = false) {
     const group = new THREE.Group();
     
     // Body
@@ -63,19 +65,21 @@ export function createGrenadeModel() {
     pin.position.set(0.02, 0.07, 0);
     group.add(pin);
 
-    // --- VIEWMODEL ARMS ---
-    const skinMat = new THREE.MeshPhongMaterial({ color: COLORS.SKIN });
-    
-    // Right Arm
-    const armMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.0, 8), skinMat);
-    armMesh.rotation.x = Math.PI / 2;
-    armMesh.position.z = 0.5;
-    
-    const armGroup = new THREE.Group();
-    armGroup.add(armMesh);
-    armGroup.position.set(0.1, -0.1, 0.1);
-    armGroup.rotation.set(-0.2, -0.4, -0.2);
-    group.add(armGroup);
+    if (isViewModel) {
+        // --- VIEWMODEL ARMS ---
+        const skinMat = new THREE.MeshPhongMaterial({ color: COLORS.SKIN });
+        
+        // Right Arm
+        const armMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 1.0, 8), skinMat);
+        armMesh.rotation.x = Math.PI / 2;
+        armMesh.position.z = 0.5;
+        
+        const armGroup = new THREE.Group();
+        armGroup.add(armMesh);
+        armGroup.position.set(0.1, -0.1, 0.1);
+        armGroup.rotation.set(-0.2, -0.4, -0.2);
+        group.add(armGroup);
+    }
 
     return group;
 }
