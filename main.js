@@ -1329,7 +1329,7 @@ function throwGrenade() {
     } else {
         // Create the thrown grenade entity
         const thrownNade = createGrenadeModel(false); // Reuse the model (no arms)
-        thrownNade.scale.set(10, 10, 10); // Scale up for world visibility
+        thrownNade.scale.set(3, 3, 3); // Smaller scale
         thrownNade.position.copy(camera.position);
         
         // Add velocity
