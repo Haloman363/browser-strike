@@ -273,6 +273,23 @@ class SoundEngine {
         osc.stop(now + 0.05);
     }
 
+    playImpact() {
+        if (!this.enabled) return;
+        this.resume();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1000, now);
+        osc.frequency.exponentialRampToValueAtTime(500, now + 0.05);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(now + 0.05);
+    }
+
     playFootstep() {
         if (!this.enabled) return;
         this.resume();

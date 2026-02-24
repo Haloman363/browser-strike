@@ -21,3 +21,25 @@ export function createBloodSplatter(position, scene, bloodParticles) {
         bloodParticles.push(particle);
     }
 }
+
+export function createImpactEffect(position, scene, impactParticles, color = 0x888888) {
+    const particleCount = 5;
+    const geo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+    const mat = new THREE.MeshBasicMaterial({ color: color });
+
+    for (let i = 0; i < particleCount; i++) {
+        const particle = new THREE.Mesh(geo, mat.clone());
+        particle.position.copy(position);
+        
+        // Random velocity
+        particle.userData.velocity = new THREE.Vector3(
+            (Math.random() - 0.5) * 5,
+            (Math.random() * 5),
+            (Math.random() - 0.5) * 5
+        );
+        particle.userData.life = 1.0;
+
+        scene.add(particle);
+        impactParticles.push(particle);
+    }
+}

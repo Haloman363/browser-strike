@@ -6,7 +6,7 @@ import { TextureGenerator } from './src/TextureGenerator.js';
 import { GameState } from './src/GameState.js';
 import { UI } from './src/UI.js';
 import { checkCollisionAt } from './src/Physics.js';
-import { createBloodSplatter } from './src/Weapon.js';
+import { createBloodSplatter, createImpactEffect } from './src/Weapon.js';
 import { updateBotAI, updateRagdoll } from './src/AI.js';
 import { soundEngine } from './src/SoundEngine.js';
 
@@ -17,6 +17,7 @@ const objects = [];
 let raycaster;
 const enemies = [];
 const bloodParticles = [];
+const impactParticles = [];
 const droppedGuns = [];
 const activeGrenades = [];
 
@@ -949,6 +950,7 @@ function init() {
         const floorMaterial = new THREE.MeshPhongMaterial({ map: sandTex });
         const floor = new THREE.Mesh(floorGeometry, floorMaterial);
         floor.receiveShadow = true;
+        floor.userData.isGround = true;
         scene.add(floor);
         objects.push(floor);
 
@@ -1427,6 +1429,14 @@ function knifeAttack() {
             if (enemy.userData.health <= 0) {
                 killEnemy(enemy);
             }
+        } else {
+            // Hit wall, crate, or something else
+            let impactColor = 0x888888;
+            if (hitPart.userData.isCrate) impactColor = 0x8b4513;
+            if (hitPart.userData.isGround) impactColor = 0xd2b48c;
+
+            createImpactEffect(intersects[0].point, scene, impactParticles, impactColor);
+            soundEngine.playImpact();
         }
     }
 
@@ -1488,6 +1498,15 @@ function shoot() {
             
             // Send hit to the specific player
             broadcastHit(remoteId, damage);
+        }
+        else {
+            // Hit wall, crate, ground, etc.
+            let impactColor = 0x888888;
+            if (hitPart.userData.isCrate) impactColor = 0x8b4513; // Brown for crates
+            if (hitPart.userData.isGround) impactColor = 0xd2b48c; // Sand color
+            
+            createImpactEffect(intersects[0].point, scene, impactParticles, impactColor);
+            soundEngine.playImpact();
         }
     }
 }
@@ -2080,6 +2099,19 @@ function animate() {
             if (p.userData.life <= 0) {
                 scene.remove(p);
                 bloodParticles.splice(i, 1);
+            }
+        }
+
+        for (let i = impactParticles.length - 1; i >= 0; i--) {
+            const p = impactParticles[i];
+            p.position.add(p.userData.velocity.clone().multiplyScalar(0.016));
+            p.userData.velocity.y -= 0.5;
+            p.userData.life -= 0.05; // Impact particles fade faster
+            p.material.opacity = p.userData.life;
+            p.material.transparent = true;
+            if (p.userData.life <= 0) {
+                scene.remove(p);
+                impactParticles.splice(i, 1);
             }
         }
 

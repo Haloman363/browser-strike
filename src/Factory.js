@@ -263,6 +263,7 @@ export function createWall(width, height, depth, x, y, z, color = COLORS.WALL_DE
     wall.castShadow = true;
     wall.receiveShadow = true;
     wall.userData.isSolid = true;
+    wall.userData.isWall = true;
     
     const halfW = width / 2;
     const halfH = height / 2;
@@ -285,6 +286,7 @@ export function createCrate(size, x, y, z, scene, objects) {
     crate.castShadow = true;
     crate.receiveShadow = true;
     crate.userData.isSolid = true;
+    crate.userData.isCrate = true;
     
     const half = size / 2;
     crate.userData.boundingBox = new THREE.Box3(
