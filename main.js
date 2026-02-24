@@ -35,8 +35,8 @@ const crosshair = document.getElementById('crosshair');
 
 // Player Stats
 let health = 100;
-let ammoInClip = 30;
-let ammoTotal = 90;
+let ammoInClip = 20;
+let ammoTotal = 120;
 let isReloading = false;
 let reloadStartTime = 0;
 let reloadOffset = 0;
@@ -465,6 +465,11 @@ function setupDataConnection(conn) {
                     updateScoreboard();
                 }
             }
+        } else if (data.type === 'player-hit') {
+            // Check if WE were the one hit
+            if (data.targetId === peer.id) {
+                takeDamage(data.damage);
+            }
         }
     });
 
@@ -480,7 +485,21 @@ function updateNetworkPlayer(id, data) {
         scene.add(model);
         networkPlayers[id] = model;
 
-        // Simple Nametag
+        // Mark parts for shooting/collision
+        model.children.forEach(part => {
+            part.userData.isEnemy = true; // Treated like an enemy for shooting logic
+            part.userData.parentPlayerId = id;
+            part.userData.isSolid = true;
+            part.userData.boundingBox = new THREE.Box3().setFromObject(part);
+            
+            // Check for headshot
+            if (part.position.y > 18) {
+                part.userData.isHeadshot = true;
+            }
+            objects.push(part);
+        });
+
+        // Simple Nametag... (rest of nametag code)
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         canvas.width = 256;
@@ -501,8 +520,17 @@ function updateNetworkPlayer(id, data) {
     }
     
     const model = networkPlayers[id];
-    model.position.set(data.pos.x, data.pos.y, data.pos.z);
-    model.rotation.set(0, data.rot.y, 0); // Only sync horizontal rotation for the body
+    // Fix floating: Subtract eye height (18) so model feet are on ground
+    model.position.set(data.pos.x, data.pos.y - 18, data.pos.z);
+    model.rotation.set(0, data.rot.y, 0);
+
+    // Update bounding boxes for shooting
+    model.children.forEach(part => {
+        if (part.userData.isSolid) {
+            part.updateMatrixWorld(true);
+            part.userData.boundingBox.setFromObject(part);
+        }
+    });
 }
 
 function removeNetworkPlayer(id) {
@@ -1188,16 +1216,17 @@ function updateUI() {
 }
 
 function reload() {
-    if (isReloading || ammoInClip === 30 || ammoTotal === 0) return;
+    if (isReloading || ammoInClip === 20 || ammoTotal === 0) return;
 
     console.log("Reloading...");
     isReloading = true;
     reloadStartTime = performance.now();
     ammoUI.innerText = "RELOADING...";
     
-    // Simulate reload time
+    // Simulate reload time (Glock is ~2.3s)
+    const duration = 2300;
     setTimeout(() => {
-        const needed = 30 - ammoInClip;
+        const needed = 20 - ammoInClip;
         const toLoad = Math.min(needed, ammoTotal);
         ammoInClip += toLoad;
         ammoTotal -= toLoad;
@@ -1205,7 +1234,7 @@ function reload() {
         reloadOffset = 0;
         updateUI();
         console.log("Reload complete");
-    }, 2000);
+    }, duration);
 }
 
 function onWindowResize() {
@@ -1279,32 +1308,48 @@ function shoot() {
 
     if (intersects.length > 0) {
         const hitPart = intersects[0].object;
-        const enemy = hitPart.userData.parentEnemy;
+        
+        // Handle Bot hits
+        if (hitPart.userData.isEnemy && hitPart.userData.parentEnemy) {
+            const enemy = hitPart.userData.parentEnemy;
+            if (enemy.userData.alive) {
+                createBloodSplatter(intersects[0].point);
+                let damage = 20; // Glock body damage
+                if (hitPart.userData.isHeadshot) damage = 100;
+                enemy.userData.health -= damage;
+                
+                const originalColor = hitPart.material.color.clone();
+                hitPart.material.color.set(0xffffff);
+                setTimeout(() => {
+                    if (enemy.userData.alive) hitPart.material.color.copy(originalColor);
+                }, 50);
 
-        // Only affect enemies that are alive
-        if (hitPart.userData.isEnemy && enemy.userData.alive) {
-            // Add blood splatter at hit point
-            createBloodSplatter(intersects[0].point);
-
-            let damage = 25; // Normal body shot
-            if (hitPart.userData.isHeadshot) {
-                damage = 100; // Headshot kill
-                console.log("HEADSHOT!");
-            }
-
-            enemy.userData.health -= damage;
-            
-            // Visual feedback on hit
-            const originalColor = hitPart.material.color.clone();
-            hitPart.material.color.set(0xffffff);
-            setTimeout(() => {
-                if (enemy.userData.alive) hitPart.material.color.copy(originalColor);
-            }, 50);
-
-            if (enemy.userData.health <= 0) {
-                killEnemy(enemy);
+                if (enemy.userData.health <= 0) killEnemy(enemy);
             }
         }
+        
+        // Handle Remote Player hits
+        else if (hitPart.userData.isEnemy && hitPart.userData.parentPlayerId) {
+            createBloodSplatter(intersects[0].point);
+            let damage = 20; // Glock body damage
+            if (hitPart.userData.isHeadshot) damage = 100;
+            
+            // Send hit to the specific player
+            broadcastHit(hitPart.userData.parentPlayerId, damage);
+        }
+    }
+}
+
+function broadcastHit(targetId, damage) {
+    if (connections.length > 0) {
+        const data = {
+            type: 'player-hit',
+            targetId: targetId,
+            damage: damage
+        };
+        connections.forEach(conn => {
+            if (conn.open) conn.send(data);
+        });
     }
 }
 
@@ -1550,7 +1595,7 @@ function animate() {
 
         // Reload animation offset
         if (isReloading) {
-            const duration = 2000;
+            const duration = 2300;
             const elapsed = time - reloadStartTime;
             const progress = elapsed / duration;
             const targetY = -0.5;
