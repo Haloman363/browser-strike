@@ -830,75 +830,75 @@ function init() {
 
         // --- EXPANDED DUST 2 LAYOUT ---
         // Main Perimeter (Bigger boundary)
-        createWall(3000, 80, 20, 0, 40, -1500); // Back
-        createWall(3000, 80, 20, 0, 40, 1500);  // Front
-        createWall(20, 80, 3000, -1500, 40, 0); // Left
-        createWall(20, 80, 3000, 1500, 40, 0);  // Right
+        createWall(3000, 80, 20, 0, 40, -1500, COLORS.WALL_DEFAULT, scene, objects); // Back
+        createWall(3000, 80, 20, 0, 40, 1500, COLORS.WALL_DEFAULT, scene, objects);  // Front
+        createWall(20, 80, 3000, -1500, 40, 0, COLORS.WALL_DEFAULT, scene, objects); // Left
+        createWall(20, 80, 3000, 1500, 40, 0, COLORS.WALL_DEFAULT, scene, objects);  // Right
 
         // "T-Spawn" Area (South)
-        createWall(400, 60, 20, 0, 30, -1200); // T-Spawn back wall
-        createWall(20, 60, 400, -200, 30, -1000); 
-        createWall(20, 60, 400, 200, 30, -1000);
+        createWall(400, 60, 20, 0, 30, -1200, COLORS.WALL_DEFAULT, scene, objects); // T-Spawn back wall
+        createWall(20, 60, 400, -200, 30, -1000, COLORS.WALL_DEFAULT, scene, objects); 
+        createWall(20, 60, 400, 200, 30, -1000, COLORS.WALL_DEFAULT, scene, objects);
 
         // "Long A" Pathway (East)
-        createWall(20, 60, 800, 600, 30, -400);  // Long A outer wall
-        createWall(20, 60, 600, 400, 30, -300);  // Long A inner wall
-        createWall(200, 60, 20, 500, 30, 0);     // Long A corner (Blue box area)
-        createWall(20, 60, 400, 700, 30, 400);   // Pathway to A site
+        createWall(20, 60, 800, 600, 30, -400, COLORS.WALL_DEFAULT, scene, objects);  // Long A outer wall
+        createWall(20, 60, 600, 400, 30, -300, COLORS.WALL_DEFAULT, scene, objects);  // Long A inner wall
+        createWall(200, 60, 20, 500, 30, 0, COLORS.WALL_DEFAULT, scene, objects);     // Long A corner (Blue box area)
+        createWall(20, 60, 400, 700, 30, 400, COLORS.WALL_DEFAULT, scene, objects);   // Pathway to A site
         
         // "Pit" Area
-        createWall(200, 20, 200, 600, 10, -800, 0x8b7355); // Pit walls
-        createWall(20, 40, 200, 500, 20, -800);
+        createWall(200, 20, 200, 600, 10, -800, 0x8b7355, scene, objects); // Pit walls
+        createWall(20, 40, 200, 500, 20, -800, COLORS.WALL_DEFAULT, scene, objects);
 
         // "A Site" (Northeast)
-        createWall(300, 20, 300, 600, 10, 800, 0xaaaaaa); // Site platform
-        createWall(20, 60, 300, 450, 30, 800);  // Short A wall
-        createWall(300, 60, 20, 600, 30, 950);  // Site back wall
+        createWall(300, 20, 300, 600, 10, 800, 0xaaaaaa, scene, objects); // Site platform
+        createWall(20, 60, 300, 450, 30, 800, COLORS.WALL_DEFAULT, scene, objects);  // Short A wall
+        createWall(300, 60, 20, 600, 30, 950, COLORS.WALL_DEFAULT, scene, objects);  // Site back wall
 
         // "Mid" Area (Center)
-        createWall(20, 60, 400, -150, 30, -200); // Mid wall West
-        createWall(20, 60, 400, 150, 30, -200);  // Mid wall East
-        createWall(100, 60, 20, -100, 30, 200);  // Xbox area wall
-        createWall(300, 60, 20, 0, 30, 400);     // Mid Doors boundary
+        createWall(20, 60, 400, -150, 30, -200, COLORS.WALL_DEFAULT, scene, objects); // Mid wall West
+        createWall(20, 60, 400, 150, 30, -200, COLORS.WALL_DEFAULT, scene, objects);  // Mid wall East
+        createWall(100, 60, 20, -100, 30, 200, COLORS.WALL_DEFAULT, scene, objects);  // Xbox area wall
+        createWall(300, 60, 20, 0, 30, 400, COLORS.WALL_DEFAULT, scene, objects);     // Mid Doors boundary
         // Mid Doors
-        createWall(120, 60, 10, -80, 30, 400, 0x554433); 
-        createWall(120, 60, 10, 80, 30, 400, 0x554433);
+        createWall(120, 60, 10, -80, 30, 400, 0x554433, scene, objects); 
+        createWall(120, 60, 10, 80, 30, 400, 0x554433, scene, objects);
 
         // "B Site" (Northwest)
-        createWall(400, 60, 20, -700, 30, 800);  // B Back
-        createWall(20, 60, 400, -900, 30, 600);  // B Side
-        createWall(20, 60, 400, -500, 30, 600);  // B Entry wall
-        createWall(200, 60, 20, -600, 30, 400);  // B Doors area
+        createWall(400, 60, 20, -700, 30, 800, COLORS.WALL_DEFAULT, scene, objects);  // B Back
+        createWall(20, 60, 400, -900, 30, 600, COLORS.WALL_DEFAULT, scene, objects);  // B Side
+        createWall(20, 60, 400, -500, 30, 600, COLORS.WALL_DEFAULT, scene, objects);  // B Entry wall
+        createWall(200, 60, 20, -600, 30, 400, COLORS.WALL_DEFAULT, scene, objects);  // B Doors area
 
         // "Tunnels" (West)
-        createWall(20, 60, 600, -600, 30, -200);  // Upper Tunnel Outer
-        createWall(20, 60, 400, -400, 30, -100);  // Upper Tunnel Inner
-        createWall(200, 60, 20, -500, 30, 100);   // Lower Tunnel connection
+        createWall(20, 60, 600, -600, 30, -200, COLORS.WALL_DEFAULT, scene, objects);  // Upper Tunnel Outer
+        createWall(20, 60, 400, -400, 30, -100, COLORS.WALL_DEFAULT, scene, objects);  // Upper Tunnel Inner
+        createWall(200, 60, 20, -500, 30, 100, COLORS.WALL_DEFAULT, scene, objects);   // Lower Tunnel connection
         
         // Roofs for Tunnels (Darker)
-        createWall(200, 5, 600, -500, 60, -200, 0x333333); 
+        createWall(200, 5, 600, -500, 60, -200, 0x333333, scene, objects); 
 
         // Strategic Crates
         // Mid
-        createCrate(25, 0, 12.5, 150); // Xbox
-        createCrate(20, 140, 10, -100);
+        createCrate(25, 0, 12.5, 150, scene, objects); // Xbox
+        createCrate(20, 140, 10, -100, scene, objects);
         
         // A Site
-        createCrate(20, 600, 20, 800); 
-        createCrate(20, 620, 20, 800);
+        createCrate(20, 600, 20, 800, scene, objects); 
+        createCrate(20, 620, 20, 800, scene, objects);
         
         // B Site
-        createCrate(20, -700, 10, 700);
-        createCrate(20, -700, 30, 700);
-        createCrate(20, -720, 10, 700);
+        createCrate(20, -700, 10, 700, scene, objects);
+        createCrate(20, -700, 30, 700, scene, objects);
+        createCrate(20, -720, 10, 700, scene, objects);
 
         // Long A
-        createCrate(25, 550, 12.5, -300);
-        createCrate(25, 550, 37.5, -300);
+        createCrate(25, 550, 12.5, -300, scene, objects);
+        createCrate(25, 550, 37.5, -300, scene, objects);
 
         // Random Scatter for extra cover
         for(let i=0; i<40; i++) {
-            createCrate(20, Math.random()*2400-1200, 10, Math.random()*2400-1200);
+            createCrate(20, Math.random()*2400-1200, 10, Math.random()*2400-1200, scene, objects);
         }
 
         // Enemies
