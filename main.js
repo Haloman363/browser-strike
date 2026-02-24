@@ -1104,6 +1104,24 @@ function takeDamage(amount) {
 }
 
 function updateUI() {
+    // Sync to GameState for UI.js
+    GameState.health = health;
+    GameState.ammoInClip = ammoInClip;
+    GameState.ammoTotal = ammoTotal;
+    GameState.isReloading = isReloading;
+    GameState.selectedMode = selectedMode;
+    GameState.gameTimeLeft = gameTimeLeft;
+    GameState.currentWeapon = currentWeapon;
+    GameState.playerKills = playerKills;
+    GameState.playerName = playerName;
+    GameState.teamsEnabled = teamsEnabled;
+    GameState.playerTeam = playerTeam;
+    GameState.networkScores = networkScores;
+    GameState.peer = peer;
+    GameState.isPlayerDead = isPlayerDead;
+    GameState.isGameStarted = isGameStarted;
+    GameState.isHost = isHost;
+
     UI.updateUI(enemies);
 }
 
