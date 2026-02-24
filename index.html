@@ -5,42 +5,112 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Browser Strike</title>
     <link rel="stylesheet" href="./style.css">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
     <div id="ui">
         <div id="main-menu">
+            <div id="version">v0.1</div>
             <h1>BROWSER STRIKE</h1>
-            <div class="menu-section">
-                <h3>Select Map</h3>
-                <div class="options" id="map-select">
-                    <button class="option active" data-value="dust2">Dust 2</button>
-                    <button class="option" data-value="mirage">Mirage (Coming Soon)</button>
+            
+            <div class="menu-tabs">
+                <button class="tab-btn active" data-tab="multiplayer">MULTIPLAYER</button>
+                <button class="tab-btn" data-tab="solo">SINGLEPLAYER</button>
+            </div>
+
+            <div id="multiplayer-settings" class="menu-tab-content active">
+                <div class="menu-section">
+                    <h3>Multiplayer</h3>
+                    
+                    <div id="mp-initial-choice" class="mp-controls">
+                        <button id="show-host-view-btn" class="option" style="width: 250px;">Host Game</button>
+                        <button id="show-join-view-btn" class="option" style="width: 250px;">Join Game</button>
+                    </div>
+
+                    <div id="mp-host-view" style="display: none; flex-direction: column; align-items: center; gap: 15px;">
+                        <input type="text" class="username-input" value="Noob" placeholder="USERNAME" maxlength="12" style="margin-bottom: 10px;">
+                        <div id="mp-lobby-host-controls" style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                            <div class="menu-section">
+                                <h3>Select Map</h3>
+                                <div class="options" id="mp-map-select">
+                                    <button class="option active" data-value="dust2">Dust 2</button>
+                                    <button class="option" data-value="mirage">Mirage</button>
+                                </div>
+                            </div>
+                            <div class="menu-section">
+                                <h3>Select Mode</h3>
+                                <div class="options" id="mp-mode-select">
+                                    <button class="option active" data-value="dm">Deathmatch</button>
+                                    <button class="option" data-value="practice">Target Practice</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="host-btn" class="option" style="background: #443311; border-color: #ff9d00;">Create Lobby</button>
+                        <button class="mp-back-btn" style="background:none; border:none; color:#888; cursor:pointer; text-decoration:underline;">Back</button>
+                    </div>
+
+                    <div id="mp-join-view" style="display: none; flex-direction: column; align-items: center; gap: 15px;">
+                        <input type="text" class="username-input" value="Noob" placeholder="USERNAME" maxlength="12" style="margin-bottom: 10px;">
+                        <div class="join-area">
+                            <input type="text" id="join-code" placeholder="ENTER CODE" maxlength="6">
+                            <button id="join-btn" class="option">Join</button>
+                        </div>
+                        <button class="mp-back-btn" style="background:none; border:none; color:#888; cursor:pointer; text-decoration:underline;">Back</button>
+                    </div>
+
+                    <p id="mp-status" style="color: #ff9d00; margin-top: 20px; font-weight: bold;"></p>
                 </div>
             </div>
-            <div class="menu-section">
-                <h3>Select Gamemode</h3>
-                <div class="options" id="mode-select">
-                    <button class="option active" data-value="dm">Deathmatch</button>
-                    <button class="option" data-value="practice">Target Practice</button>
+
+            <div id="solo-settings" class="menu-tab-content">
+                <div class="menu-section">
+                    <h3>Select Map</h3>
+                    <div class="options" id="map-select">
+                        <button class="option active" data-value="dust2">Dust 2</button>
+                        <button class="option" data-value="mirage">Mirage (Coming Soon)</button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <h3>Select Gamemode</h3>
+                    <div class="options" id="mode-select">
+                        <button class="option active" data-value="dm">Deathmatch</button>
+                        <button class="option" data-value="practice">Target Practice</button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <h3>Bots</h3>
+                    <div class="options" id="bot-select">
+                        <button class="option active" data-value="true">Enabled</button>
+                        <button class="option" data-value="false">Disabled</button>
+                    </div>
                 </div>
             </div>
-            <div class="menu-section">
-                <h3>Bots</h3>
-                <div class="options" id="bot-select">
-                    <button class="option active" data-value="true">Enabled</button>
-                    <button class="option" data-value="false">Disabled</button>
-                </div>
-            </div>
+
             <button id="start-button">START GAME</button>
         </div>
 
         <div id="damage-flash"></div>
         <div id="crosshair" style="display: none;"></div>
-        <div id="stats" style="display: none;">
-            <div id="health">100 HP</div>
-            <div id="ammo">30 / 90</div>
-        </div>
-        <div id="pause-overlay" style="display: none;">
+                <div id="stats" style="display: none;">
+                    <div id="health">100 HP</div>
+                    <div id="kill-stats" style="display: none;">Enemies: <span id="alive-count">0</span></div>
+                    <div id="ammo">30 / 90</div>
+                </div>
+        
+                <div id="scoreboard" style="display: none;">
+                    <div class="scoreboard-content">
+                        <h2>SCOREBOARD</h2>
+                        <div id="score-list">
+                            <div class="score-header">
+                                <span>PLAYER</span>
+                                <span>KILLS</span>
+                            </div>
+                            <!-- Scores will be injected here -->
+                        </div>
+                    </div>
+                </div>
+        
+                <div id="pause-overlay" style="display: none;">
             <h1>PAUSED</h1>
             <div class="pause-options">
                 <button id="resume-button" class="menu-btn">RESUME</button>
