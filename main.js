@@ -1643,6 +1643,9 @@ function animate() {
         const playerRadius = 4.0; 
         const moveX = -velocity.x * delta;
         const moveZ = -velocity.z * delta;
+        const steps = 4;
+        const stepX = moveX / steps;
+        const stepZ = moveZ / steps;
 
         for (let s = 0; s < steps; s++) {
             // 1. Try X movement
@@ -1675,151 +1678,150 @@ function animate() {
             camera.position.y = currentTargetHeight;
             canJump = true;
         }
+
+        // Gun animations
+        if (gun) {
+            // Recoil recovery
+            recoil = THREE.MathUtils.lerp(recoil, 0, 0.1);
+            
+            // ADS Transition
+            const adsSpeed = 0.15;
+            if (isAiming && !isReloading) {
+                adsProgress = THREE.MathUtils.lerp(adsProgress, 1, adsSpeed);
+            } else {
+                adsProgress = THREE.MathUtils.lerp(adsProgress, 0, adsSpeed);
+            }
+
+            // Lerp gun position between rest and ADS
+            const currentTargetPos = new THREE.Vector3().lerpVectors(restPos, adsPos, adsProgress);
+            gun.position.copy(currentTargetPos);
+            
+            // Apply recoil and reload offsets
+            gun.position.z += recoil;
+            gun.position.y += (recoil * 0.5);
+
+            // Reload animation offset
+            if (isReloading) {
+                const duration = 2300;
+                const elapsed = time - reloadStartTime;
+                const progress = elapsed / duration;
+                const targetY = -0.5;
+
+                if (progress < 0.5) {
+                    reloadOffset = THREE.MathUtils.lerp(0, targetY, progress * 2);
+                } else if (progress < 1) {
+                    reloadOffset = THREE.MathUtils.lerp(targetY, 0, (progress - 0.5) * 2);
+                } else {
+                    reloadOffset = 0;
+                }
+            } else {
+                reloadOffset = THREE.MathUtils.lerp(reloadOffset, 0, 0.1);
+            }
+            gun.position.y += reloadOffset;
+
+            // FOV Zoom while aiming
+            camera.fov = settings.fov - (adsProgress * 15);
+            camera.updateProjectionMatrix();
+
+            // Crosshair visibility
+            if (crosshair) {
+                crosshair.style.opacity = 1 - (adsProgress * 0.8); // Fade out but maybe keep a hint
+            }
+        }
+        
+        // Apply temporary recoil offset and then render
+        const originalRotationX = camera.rotation.x;
+        if (cameraRecoilX > 0.001) {
+            cameraRecoilX = THREE.MathUtils.lerp(cameraRecoilX, 0, 0.15);
+            camera.rotation.x += cameraRecoilX;
+        }
+
+        // Knife animation
+        if (knife && currentWeapon === 'knife') {
+            if (isKnifeAttacking) {
+                knifeAttackProgress += 0.2;
+                if (knifeAttackProgress > Math.PI) knifeAttackProgress = Math.PI;
+                
+                const stabDepth = Math.sin(knifeAttackProgress) * 0.4;
+                knife.position.set(0.1, -0.4, -0.4 - stabDepth);
+            } else {
+                // Resting position
+                knife.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
+            }
+        }
+
+        // Grenade animation
+        if (grenade && currentWeapon === 'grenade') {
+            // Simple breathing/resting for now
+            grenade.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
+        }
+
+        updateGrenades(delta);
+
+        // Enemy AI & Roaming
+        enemies.forEach(enemy => {
+            if (enemy.userData.alive) {
+                updateBotAI(enemy, camera, objects, delta);
+            } else if (enemy.userData.isRagdoll) {
+                updateRagdoll(enemy);
+            }
+        });
+
+        // Blood Particles animation
+        for (let i = bloodParticles.length - 1; i >= 0; i--) {
+            const p = bloodParticles[i];
+            p.position.add(p.userData.velocity.clone().multiplyScalar(0.016)); // Simple step
+            p.userData.velocity.y -= 0.5; // Gravity
+            p.userData.life -= 0.02;
+            p.material.opacity = p.userData.life;
+            p.material.transparent = true;
+
+            if (p.userData.life <= 0) {
+                scene.remove(p);
+                bloodParticles.splice(i, 1);
+            }
+        }
+
+        // Dropped Guns animation & Pickup
+        for (let i = droppedGuns.length - 1; i >= 0; i--) {
+            const gunPickup = droppedGuns[i];
+            
+            // Use 2D distance (X and Z) to ignore height differences
+            const dx = camera.position.x - gunPickup.position.x;
+            const dz = camera.position.z - gunPickup.position.z;
+            const dist2D = Math.sqrt(dx * dx + dz * dz);
+
+            if (dist2D < 15) {
+                // Pickup!
+                ammoTotal += gunPickup.userData.ammoAmount;
+                updateUI();
+                
+                scene.remove(gunPickup);
+                droppedGuns.splice(i, 1);
+                console.log("Picked up 30 ammo!");
+            }
+        }
+
+        // Broadcast position to others
+        if (connections.length > 0 && isGameStarted) {
+            const transformData = {
+                type: 'transform',
+                name: playerName,
+                team: playerTeam,
+                pos: camera.position,
+                rot: {
+                    y: camera.rotation.y
+                }
+            };
+            connections.forEach(conn => {
+                if (conn.open) conn.send(transformData);
+            });
+        }
+        
+        // Restore rotation so it doesn't drift permanently
+        camera.rotation.x = originalRotationX;
     }
 
     prevTime = time;
-
-    // Gun animations
-    if (gun) {
-        // Recoil recovery
-        recoil = THREE.MathUtils.lerp(recoil, 0, 0.1);
-        
-        // ADS Transition
-        const adsSpeed = 0.15;
-        if (isAiming && !isReloading) {
-            adsProgress = THREE.MathUtils.lerp(adsProgress, 1, adsSpeed);
-        } else {
-            adsProgress = THREE.MathUtils.lerp(adsProgress, 0, adsSpeed);
-        }
-
-        // Lerp gun position between rest and ADS
-        const currentTargetPos = new THREE.Vector3().lerpVectors(restPos, adsPos, adsProgress);
-        gun.position.copy(currentTargetPos);
-        
-        // Apply recoil and reload offsets
-        gun.position.z += recoil;
-        gun.position.y += (recoil * 0.5);
-
-        // Reload animation offset
-        if (isReloading) {
-            const duration = 2300;
-            const elapsed = time - reloadStartTime;
-            const progress = elapsed / duration;
-            const targetY = -0.5;
-
-            if (progress < 0.5) {
-                reloadOffset = THREE.MathUtils.lerp(0, targetY, progress * 2);
-            } else if (progress < 1) {
-                reloadOffset = THREE.MathUtils.lerp(targetY, 0, (progress - 0.5) * 2);
-            } else {
-                reloadOffset = 0;
-            }
-        } else {
-            reloadOffset = THREE.MathUtils.lerp(reloadOffset, 0, 0.1);
-        }
-        gun.position.y += reloadOffset;
-
-        // FOV Zoom while aiming
-        camera.fov = settings.fov - (adsProgress * 15);
-        camera.updateProjectionMatrix();
-
-        // Crosshair visibility
-        if (crosshair) {
-            crosshair.style.opacity = 1 - (adsProgress * 0.8); // Fade out but maybe keep a hint
-        }
-    }
-    
-    // Apply temporary recoil offset and then render
-    const originalRotationX = camera.rotation.x;
-    if (cameraRecoilX > 0.001) {
-        cameraRecoilX = THREE.MathUtils.lerp(cameraRecoilX, 0, 0.15);
-        camera.rotation.x += cameraRecoilX;
-    }
-
-    // Knife animation
-    if (knife && currentWeapon === 'knife') {
-        if (isKnifeAttacking) {
-            knifeAttackProgress += 0.2;
-            if (knifeAttackProgress > Math.PI) knifeAttackProgress = Math.PI;
-            
-            const stabDepth = Math.sin(knifeAttackProgress) * 0.4;
-            knife.position.set(0.1, -0.4, -0.4 - stabDepth);
-        } else {
-            // Resting position
-            knife.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
-        }
-    }
-
-    // Grenade animation
-    if (grenade && currentWeapon === 'grenade') {
-        // Simple breathing/resting for now
-        grenade.position.lerp(new THREE.Vector3(0.1, -0.4, -0.4), 0.1);
-    }
-
-    updateGrenades(delta);
-
-    // Enemy AI & Roaming
-    enemies.forEach(enemy => {
-        if (enemy.userData.alive) {
-            updateBotAI(enemy, camera, objects, delta);
-        } else if (enemy.userData.isRagdoll) {
-            updateRagdoll(enemy);
-        }
-    });
-
-    // Blood Particles animation
-    for (let i = bloodParticles.length - 1; i >= 0; i--) {
-        const p = bloodParticles[i];
-        p.position.add(p.userData.velocity.clone().multiplyScalar(0.016)); // Simple step
-        p.userData.velocity.y -= 0.5; // Gravity
-        p.userData.life -= 0.02;
-        p.material.opacity = p.userData.life;
-        p.material.transparent = true;
-
-        if (p.userData.life <= 0) {
-            scene.remove(p);
-            bloodParticles.splice(i, 1);
-        }
-    }
-
-    // Dropped Guns animation & Pickup
-    for (let i = droppedGuns.length - 1; i >= 0; i--) {
-        const gunPickup = droppedGuns[i];
-        
-        // Use 2D distance (X and Z) to ignore height differences
-        const dx = camera.position.x - gunPickup.position.x;
-        const dz = camera.position.z - gunPickup.position.z;
-        const dist2D = Math.sqrt(dx * dx + dz * dz);
-
-        if (dist2D < 15) {
-            // Pickup!
-            ammoTotal += gunPickup.userData.ammoAmount;
-            updateUI();
-            
-            scene.remove(gunPickup);
-            droppedGuns.splice(i, 1);
-            console.log("Picked up 30 ammo!");
-        }
-    }
-
     renderer.render(scene, camera);
-    
-    // Broadcast position to others
-    if (connections.length > 0 && isGameStarted) {
-        const transformData = {
-            type: 'transform',
-            name: playerName,
-            team: playerTeam,
-            pos: camera.position,
-            rot: {
-                y: camera.rotation.y
-            }
-        };
-        connections.forEach(conn => {
-            if (conn.open) conn.send(transformData);
-        });
-    }
-    
-    // Restore rotation so it doesn't drift permanently
-    camera.rotation.x = originalRotationX;
 }
