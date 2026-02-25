@@ -55,6 +55,20 @@ A high-performance, web-based first-person shooter prototype built with Three.js
    npm run build
    ```
 
+## 🎨 Game Textures
+
+The game uses procedural textures by default, generated in `src/TextureGenerator.js`. 
+You can replace these with high-quality AI-generated textures (using the `nanobanana` extension) by saving images to `assets/textures/`:
+
+- `sand.png`: Ground texture
+- `wall.png`: Wall texture
+- `crate.png`: Crate texture
+- `concrete.png`: Alternative wall/floor texture
+- `metal.png`: Weapon metal texture
+- `sky.png`: Skybox texture
+
+The `src/TextureGenerator.js` file is already refactored to support these overrides. To enable them, simply save the files and the loader will attempt to pick them up (see `getTexture` method in `src/TextureGenerator.js`).
+
 ## 🛡️ Security & Performance
 
 - **XSS Mitigation**: Sanitized user inputs and safe DOM manipulation for dynamic UI elements.

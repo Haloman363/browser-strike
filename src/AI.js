@@ -3,6 +3,11 @@ import * as THREE from 'three';
 export function updateBotAI(enemy, camera, objects, delta) {
     if (!enemy.userData.alive) return;
 
+    if (enemy.userData.isStationary) {
+        // Stationary bots don't move or rotate
+        return;
+    }
+
     // Face the player if close, otherwise face movement direction
     const distToPlayer = enemy.position.distanceTo(camera.position);
     

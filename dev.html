@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weapon Dev Viewer</title>
+    <style>
+        body { margin: 0; background: #111; overflow: hidden; font-family: sans-serif; color: white; }
+        #info {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; border: 1px solid #444;
+        }
+        .controls { margin-top: 10px; display: flex; gap: 5px; }
+        button { background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer; }
+        button:hover { background: #444; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <div style="margin-bottom: 10px;">
+            <select id="category-select" onchange="window.changeCategory(this.value)" style="background: #222; color: white; border: 1px solid #555; padding: 5px; width: 100%;">
+                <option value="weapons">WEAPONS</option>
+                <option value="grenades">GRENADES</option>
+                <option value="characters">CHARACTERS</option>
+                <option value="environment">ENVIRONMENT</option>
+            </select>
+        </div>
+        <h2 id="weapon-name">Loading...</h2>
+        <div class="controls">
+            <button onclick="window.prevWeapon()">PREV</button>
+            <button onclick="window.nextWeapon()">NEXT</button>
+            <button id="vm-toggle" onclick="window.toggleViewModel()">TOGGLE VIEWMODEL</button>
+            <button onclick="window.resetCamera()">RESET CAMERA</button>
+            <button onclick="window.reloadItem()">RELOAD</button>
+        </div>
+        <p style="font-size: 0.8em; color: #aaa;">Drag to rotate • Scroll to zoom</p>
+    </div>
+    <script type="module" src="/src/DevViewer.js"></script>
+</body>
+</html>

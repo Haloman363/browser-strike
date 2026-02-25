@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Dev Viewer</title>
+    <style>
+        body { margin: 0; background: #111; overflow: hidden; font-family: sans-serif; color: white; }
+        #info {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; border: 1px solid #444;
+            max-width: 300px;
+        }
+        #coords {
+            position: absolute; bottom: 20px; right: 20px;
+            background: rgba(0,0,0,0.7); padding: 10px; border-radius: 8px; border: 1px solid #444;
+            font-family: monospace;
+        }
+        .controls { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+        button { background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer; text-align: left; }
+        button:hover { background: #444; }
+        select { background: #222; color: white; border: 1px solid #555; padding: 5px; width: 100%; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <select id="map-select" onchange="window.changeMap(this.value)">
+            <option value="dust2">Dust 2</option>
+            <option value="training">Training</option>
+        </select>
+        <h2 id="map-name">Map: Dust 2</h2>
+        <div class="controls">
+            <button onclick="window.resetCamera()">TOP VIEW</button>
+            <button onclick="window.perspectiveView()">PERSPECTIVE VIEW</button>
+            <button onclick="window.reloadMap()">RELOAD MAP</button>
+            <hr style="width: 100%; border: 0; border-top: 1px solid #444;">
+            <div id="stats" style="font-size: 0.8em; color: #aaa;">
+                Objects: <span id="obj-count">0</span><br>
+                Enemies: <span id="enemy-count">0</span>
+            </div>
+        </div>
+        <p style="font-size: 0.8em; color: #aaa; margin-top: 10px;">
+            Left Click: Rotate<br>
+            Right Click: Pan<br>
+            Scroll: Zoom
+        </p>
+    </div>
+    <div id="coords">X: 0, Y: 0, Z: 0</div>
+    <script type="module" src="/src/MapDevViewer.js"></script>
+</body>
+</html>

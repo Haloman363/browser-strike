@@ -15,6 +15,7 @@ export const GameState = {
     cash: 800,
     ammoInClip: 20,
     ammoTotal: 120,
+    currentWeaponName: "Glock-18",
     grenadeCount: 2,
     maxGrenades: 4,
     isReloading: false,

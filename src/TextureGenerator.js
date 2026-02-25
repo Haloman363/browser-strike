@@ -1,186 +1,223 @@
 import * as THREE from 'three';
 
+const loader = new THREE.TextureLoader();
+
 export class TextureGenerator {
-    static createSandTexture(size = 512) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+    static getTexture(name, fallbackFn, size = 512) {
+        // Create the procedural texture first as our immediate return value
+        const texture = fallbackFn(size);
+        
+        // Use the absolute path relative to the root for the Vite server
+        const path = `/browser-strike/assets/textures/${name}.png`;
+        
+        // Attempt to load the real texture from nanobanana output
+        loader.load(path, 
+            (loadedTex) => {
+                // When successfully loaded, swap the procedural image with the real one
+                texture.image = loadedTex.image;
+                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                texture.needsUpdate = true;
+                console.log(`Successfully swapped with nanobanana texture: ${name}`);
+            },
+            undefined,
+            (err) => {
+                // Silently keep using the procedural fallback
+                // console.warn(`Texture ${name} not found at ${path}. Using procedural.`);
+            }
+        );
 
-        // Base sand color
-        ctx.fillStyle = '#edc9af';
-        ctx.fillRect(0, 0, size, size);
-
-        // Add noise/grains
-        for (let i = 0; i < 50000; i++) {
-            const x = Math.random() * size;
-            const y = Math.random() * size;
-            const s = Math.random() * 2;
-            const shade = Math.random() * 20 - 10;
-            ctx.fillStyle = `rgb(${237 + shade}, ${201 + shade}, ${175 + shade})`;
-            ctx.fillRect(x, y, s, s);
-        }
-
-        // Add some "dune" variations
-        for (let i = 0; i < 10; i++) {
-            const x = Math.random() * size;
-            const y = Math.random() * size;
-            const r = Math.random() * 100 + 50;
-            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-            grad.addColorStop(0, 'rgba(0,0,0,0.05)');
-            grad.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, size, size);
-        }
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
         return texture;
+    }
+
+    static createSandTexture(size = 512) {
+        return this.getTexture('sand', (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
+
+            // Base sand color
+            ctx.fillStyle = '#edc9af';
+            ctx.fillRect(0, 0, s, s);
+
+            // Add noise/grains
+            for (let i = 0; i < 50000; i++) {
+                const x = Math.random() * s;
+                const y = Math.random() * s;
+                const sizeMult = Math.random() * 2;
+                const shade = Math.random() * 20 - 10;
+                ctx.fillStyle = `rgb(${237 + shade}, ${201 + shade}, ${175 + shade})`;
+                ctx.fillRect(x, y, sizeMult, sizeMult);
+            }
+
+            // Add some "dune" variations
+            for (let i = 0; i < 10; i++) {
+                const x = Math.random() * s;
+                const y = Math.random() * s;
+                const r = Math.random() * 100 + 50;
+                const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+                grad.addColorStop(0, 'rgba(0,0,0,0.05)');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, s, s);
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }, size);
     }
 
     static createWallTexture(size = 512) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+        return this.getTexture('wall', (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base stone color
-        ctx.fillStyle = '#c2b280';
-        ctx.fillRect(0, 0, size, size);
+            // Base stone color
+            ctx.fillStyle = '#c2b280';
+            ctx.fillRect(0, 0, s, s);
 
-        // Add grit/noise
-        for (let i = 0; i < 20000; i++) {
-            const x = Math.random() * size;
-            const y = Math.random() * size;
-            const shade = Math.random() * 30 - 15;
-            ctx.fillStyle = `rgb(${194 + shade}, ${178 + shade}, ${128 + shade})`;
-            ctx.fillRect(x, y, 1, 1);
-        }
-
-        // Draw bricks
-        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-        ctx.lineWidth = 2;
-        const rows = 8;
-        const cols = 4;
-        const rowH = size / rows;
-        const colW = size / cols;
-
-        for (let r = 0; r < rows; r++) {
-            const offset = (r % 2) * (colW / 2);
-            for (let c = -1; c <= cols; c++) {
-                ctx.strokeRect(c * colW + offset, r * rowH, colW, rowH);
-                
-                // Bevel/Highlights
-                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-                ctx.beginPath();
-                ctx.moveTo(c * colW + offset, r * rowH + rowH);
-                ctx.lineTo(c * colW + offset, r * rowH);
-                ctx.lineTo(c * colW + offset + colW, r * rowH);
-                ctx.stroke();
-                
-                ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            // Add grit/noise
+            for (let i = 0; i < 20000; i++) {
+                const x = Math.random() * s;
+                const y = Math.random() * s;
+                const shade = Math.random() * 30 - 15;
+                ctx.fillStyle = `rgb(${194 + shade}, ${178 + shade}, ${128 + shade})`;
+                ctx.fillRect(x, y, 1, 1);
             }
-        }
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+            // Draw bricks
+            ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            ctx.lineWidth = 2;
+            const rows = 8;
+            const cols = 4;
+            const rowH = s / rows;
+            const colW = s / cols;
+
+            for (let r = 0; r < rows; r++) {
+                const offset = (r % 2) * (colW / 2);
+                for (let c = -1; c <= cols; c++) {
+                    ctx.strokeRect(c * colW + offset, r * rowH, colW, rowH);
+                    
+                    // Bevel/Highlights
+                    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                    ctx.beginPath();
+                    ctx.moveTo(c * colW + offset, r * rowH + rowH);
+                    ctx.lineTo(c * colW + offset, r * rowH);
+                    ctx.lineTo(c * colW + offset + colW, r * rowH);
+                    ctx.stroke();
+                    
+                    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                }
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }, size);
     }
 
     static createCrateTexture(size = 512) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+        return this.getTexture('crate', (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base wood color
-        ctx.fillStyle = '#8b4513';
-        ctx.fillRect(0, 0, size, size);
+            // Base wood color
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(0, 0, s, s);
 
-        // Wood grain
-        for (let i = 0; i < size; i += 2) {
-            ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.15})`;
-            ctx.fillRect(0, i, size, Math.random() * 2);
-        }
+            // Wood grain
+            for (let i = 0; i < s; i += 2) {
+                ctx.fillStyle = `rgba(0,0,0,${Math.random() * 0.15})`;
+                ctx.fillRect(0, i, s, Math.random() * 2);
+            }
 
-        // Frame
-        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-        ctx.lineWidth = 20;
-        ctx.strokeRect(10, 10, size - 20, size - 20);
+            // Frame
+            ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+            ctx.lineWidth = 20;
+            ctx.strokeRect(10, 10, s - 20, s - 20);
 
-        // Cross brace
-        ctx.beginPath();
-        ctx.moveTo(10, 10);
-        ctx.lineTo(size - 10, size - 10);
-        ctx.stroke();
-
-        // Planks
-        ctx.lineWidth = 2;
-        const planks = 5;
-        for (let i = 1; i < planks; i++) {
+            // Cross brace
             ctx.beginPath();
-            ctx.moveTo(10, (size / planks) * i);
-            ctx.lineTo(size - 10, (size / planks) * i);
+            ctx.moveTo(10, 10);
+            ctx.lineTo(s - 10, s - 10);
             ctx.stroke();
-        }
 
-        // Nails
-        ctx.fillStyle = '#333';
-        const corners = [20, size - 20];
-        corners.forEach(x => {
-            corners.forEach(y => {
+            // Planks
+            ctx.lineWidth = 2;
+            const planks = 5;
+            for (let i = 1; i < planks; i++) {
                 ctx.beginPath();
-                ctx.arc(x, y, 4, 0, Math.PI * 2);
-                ctx.fill();
-            });
-        });
+                ctx.moveTo(10, (s / planks) * i);
+                ctx.lineTo(s - 10, (s / planks) * i);
+                ctx.stroke();
+            }
 
-        const texture = new THREE.CanvasTexture(canvas);
-        return texture;
+            // Nails
+            ctx.fillStyle = '#333';
+            const corners = [20, s - 20];
+            corners.forEach(x => {
+                corners.forEach(y => {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+            });
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }, size);
     }
 
     static createConcreteTexture(size = 512) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+        return this.getTexture('concrete', (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base concrete
-        ctx.fillStyle = '#888';
-        ctx.fillRect(0, 0, size, size);
+            // Base concrete
+            ctx.fillStyle = '#888';
+            ctx.fillRect(0, 0, s, s);
 
-        // Noise
-        for (let i = 0; i < 30000; i++) {
-            const x = Math.random() * size;
-            const y = Math.random() * size;
-            const shade = Math.random() * 40 - 20;
-            ctx.fillStyle = `rgb(${136 + shade}, ${136 + shade}, ${136 + shade})`;
-            ctx.fillRect(x, y, 1, 1);
-        }
-
-        // Cracks
-        ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < 5; i++) {
-            ctx.beginPath();
-            let x = Math.random() * size;
-            let y = Math.random() * size;
-            ctx.moveTo(x, y);
-            for (let j = 0; j < 10; j++) {
-                x += (Math.random() - 0.5) * 40;
-                y += (Math.random() - 0.5) * 40;
-                ctx.lineTo(x, y);
+            // Noise
+            for (let i = 0; i < 30000; i++) {
+                const x = Math.random() * s;
+                const y = Math.random() * s;
+                const shade = Math.random() * 40 - 20;
+                ctx.fillStyle = `rgb(${136 + shade}, ${136 + shade}, ${136 + shade})`;
+                ctx.fillRect(x, y, 1, 1);
             }
-            ctx.stroke();
-        }
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+            // Cracks
+            ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                let x = Math.random() * s;
+                let y = Math.random() * s;
+                ctx.moveTo(x, y);
+                for (let j = 0; j < 10; j++) {
+                    x += (Math.random() - 0.5) * 40;
+                    y += (Math.random() - 0.5) * 40;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+            }
+
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }, size);
     }
+
 
     static createCamoTexture(baseColor = '#556b2f', size = 256) {
         const canvas = document.createElement('canvas');

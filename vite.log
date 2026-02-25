@@ -1,0 +1,12 @@
+
+> browser-strike@1.0.0 dev
+> vite --host --port 5173
+
+
+  VITE v7.3.1  ready in 441 ms
+
+  ➜  Local:   http://localhost:5173/browser-strike/
+  ➜  Network: http://10.255.255.254:5173/browser-strike/
+  ➜  Network: http://172.18.93.35:5173/browser-strike/
+  ➜  press h + enter to show help
+2:29:47 PM [vite] (client) page reload dev.html

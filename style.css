@@ -365,41 +365,58 @@ input[type=range]::-webkit-slider-thumb {
     right: 20px;
     display: flex;
     flex-direction: column-reverse;
-    gap: 10px;
+    gap: 8px;
+    width: 140px; /* Wider for names */
 }
 
 .inventory-slot {
-    width: 80px;
-    height: 50px;
-    background: rgba(0, 0, 0, 0.4);
-    border: 2px solid #555;
-    display: flex;
-    flex-direction: column;
+    height: 45px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #444;
+    display: grid;
+    grid-template-columns: 25px 1fr 40px;
     align-items: center;
-    justify-content: center;
-    font-size: 14px;
+    padding: 0 10px;
+    font-size: 12px;
     font-weight: bold;
-    color: #888;
+    color: #666;
     transition: all 0.2s;
     pointer-events: none;
+    border-radius: 2px;
 }
 
-.inventory-slot::after {
-    content: attr(data-label);
-    font-size: 10px;
-    margin-top: 2px;
+.slot-num {
+    font-size: 14px;
+    color: #888;
+}
+
+.slot-name {
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.slot-ammo {
+    text-align: right;
+    font-family: monospace;
+    font-size: 11px;
+    color: #aaa;
 }
 
 .inventory-slot.active {
     border-color: #ff9d00;
-    color: #ff9d00;
-    background: rgba(255, 157, 0, 0.1);
-    transform: scale(1.1) translateX(-10px);
+    color: #fff;
+    background: rgba(255, 157, 0, 0.2);
+    transform: scale(1.05) translateX(-5px);
 }
 
+.inventory-slot.active .slot-num { color: #ff9d00; }
+.inventory-slot.active .slot-ammo { color: #ff9d00; }
+
 .inventory-slot.occupied {
-    color: #ccc;
-    border-color: #888;
+    color: #bbb;
+    border-color: #666;
 }
 
 #damage-flash {

@@ -15,7 +15,7 @@
             
             <div class="menu-tabs">
                 <button class="tab-btn active" data-tab="multiplayer">MULTIPLAYER</button>
-                <button class="tab-btn" data-tab="solo">SINGLEPLAYER</button>
+                <button class="tab-btn" data-tab="solo">TRAINING</button>
             </div>
 
             <div id="multiplayer-settings" class="menu-tab-content active">
@@ -84,39 +84,16 @@
             </div>
 
             <div id="solo-settings" class="menu-tab-content">
-                <div class="menu-section">
-                    <h3>Teams</h3>
-                    <div class="options" id="teams-toggle">
-                        <button class="option active" data-value="false">Disabled</button>
-                        <button class="option" data-value="true">Enabled</button>
-                    </div>
-                </div>
-                <div class="menu-section team-selector" style="display: none;">
-                    <h3>Select Team</h3>
-                    <div class="options" id="solo-team-select">
-                        <button class="option active" data-value="A" style="color: #4444ff; border-color: #4444ff;">Team A</button>
-                        <button class="option" data-value="B" style="color: #ff4444; border-color: #ff4444;">Team B</button>
-                    </div>
-                </div>
-                <div class="menu-section">
-                    <h3>Select Map</h3>
-                    <div class="options" id="map-select">
-                        <button class="option active" data-value="dust2">Dust 2</button>
-                        <button class="option" data-value="mirage">Mirage (Coming Soon)</button>
-                    </div>
-                </div>
-                <div class="menu-section">
-                    <h3>Select Gamemode</h3>
-                    <div class="options" id="mode-select">
-                        <button class="option active" data-value="dm">Deathmatch</button>
-                        <button class="option" data-value="practice">Target Practice</button>
-                    </div>
-                </div>
-                <div class="menu-section">
-                    <h3>Bots</h3>
-                    <div class="options" id="bot-select">
-                        <button class="option active" data-value="true">Enabled</button>
-                        <button class="option" data-value="false">Disabled</button>
+                <div class="menu-section" style="text-align: center; padding: 20px;">
+                    <h2 style="color: #ff9d00;">OFFLINE TRAINING</h2>
+                    <p style="color: #ccc; font-size: 18px; line-height: 1.6;">
+                        Enter the official Browser Strike training facility.<br>
+                        Test all weapons, utility, and practice your aim<br>
+                        against stationary targets at varying distances.
+                    </p>
+                    <div style="margin-top: 20px; padding: 15px; border: 1px solid #444; background: rgba(0,0,0,0.3);">
+                        <p style="margin: 5px 0;"><strong>MAP:</strong> Training Range</p>
+                        <p style="margin: 5px 0;"><strong>MODE:</strong> Target Practice</p>
                     </div>
                 </div>
             </div>
@@ -127,7 +104,10 @@
         <div id="damage-flash"></div>
         <div id="kill-feed"></div>
         <div id="crosshair" style="display: none;"></div>
-                <div id="stats" style="display: none;">
+        <div id="pickup-prompt" style="display: none; position: absolute; top: 60%; left: 50%; transform: translateX(-50%); color: #ff9d00; font-weight: bold; font-size: 20px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 1000; text-align: center;">
+            PRESS <span style="background: #ff9d00; color: #000; padding: 2px 8px; border-radius: 3px;">E</span> TO SWAP WEAPON
+        </div>
+        <div id="stats" style="display: none;">
             <div id="health">100 HP</div>
             <div id="kill-stats" style="display: none;">Enemies: <span id="alive-count">0</span></div>
             <div id="wallet">$800</div>
@@ -141,11 +121,44 @@
         </div>
 
         <div id="inventory" style="display: none;">
-            <div class="inventory-slot occupied" id="slot-1" data-label="KNIFE">1</div>
-            <div class="inventory-slot active occupied" id="slot-2" data-label="GUN">2</div>
-            <div class="inventory-slot" id="slot-3" data-label="EMPTY">3</div>
-            <div class="inventory-slot occupied" id="slot-4" data-label="NADE">4</div>
-            <div class="inventory-slot" id="slot-5" data-label="SPEC">5</div>
+            <div class="inventory-slot occupied" id="slot-1">
+                <span class="slot-num">1</span>
+                <span class="slot-name">KNIFE</span>
+            </div>
+            <div class="inventory-slot active occupied" id="slot-2">
+                <span class="slot-num">2</span>
+                <span class="slot-name">PISTOL</span>
+                <span class="slot-ammo"></span>
+            </div>
+            <div class="inventory-slot occupied" id="slot-3">
+                <span class="slot-num">3</span>
+                <span class="slot-name">RIFLE</span>
+                <span class="slot-ammo"></span>
+            </div>
+            <div class="inventory-slot occupied" id="slot-4">
+                <span class="slot-num">4</span>
+                <span class="slot-name">HE</span>
+                <span class="slot-ammo"></span>
+            </div>
+            <div class="inventory-slot" id="slot-5">
+                <span class="slot-num">5</span>
+                <span class="slot-name">BOMB</span>
+            </div>
+            <div class="inventory-slot occupied" id="slot-6">
+                <span class="slot-num">6</span>
+                <span class="slot-name">FLASH</span>
+                <span class="slot-ammo"></span>
+            </div>
+            <div class="inventory-slot occupied" id="slot-7">
+                <span class="slot-num">7</span>
+                <span class="slot-name">SMOKE</span>
+                <span class="slot-ammo"></span>
+            </div>
+            <div class="inventory-slot occupied" id="slot-8">
+                <span class="slot-num">8</span>
+                <span class="slot-name">MOLY</span>
+                <span class="slot-ammo"></span>
+            </div>
         </div>
         
         <div id="scoreboard" style="display: none;">

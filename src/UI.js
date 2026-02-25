@@ -15,7 +15,7 @@ export const UI = {
     winnerName: document.getElementById('winner-name'),
     finalScoreList: document.getElementById('final-score-list'),
 
-    updateUI(enemies = []) {
+    updateUI(enemies = [], inventory = {}) {
         if (this.health) this.health.innerText = `${Math.ceil(GameState.health)} HP`;
         if (this.wallet) this.wallet.innerText = `$${GameState.cash}`;
         
@@ -31,7 +31,8 @@ export const UI = {
         if (this.ammo) {
             if (GameState.currentWeapon === 'gun') {
                 this.ammo.style.visibility = 'visible';
-                this.ammo.innerText = GameState.isReloading ? "RELOADING..." : `${GameState.ammoInClip} / ${GameState.ammoTotal}`;
+                const weaponName = GameState.currentWeaponName ? `<span style="font-size: 0.8em; color: #aaa;">${GameState.currentWeaponName}</span><br>` : "";
+                this.ammo.innerHTML = weaponName + (GameState.isReloading ? "RELOADING..." : `${GameState.ammoInClip} / ${GameState.ammoTotal}`);
             } else if (GameState.currentWeapon === 'grenade') {
                 this.ammo.style.visibility = 'visible';
                 this.ammo.innerText = `${GameState.grenadeCount} / ${GameState.maxGrenades} Nades`;
@@ -39,6 +40,39 @@ export const UI = {
                 this.ammo.style.visibility = 'hidden';
             }
         }
+
+        // --- INVENTORY UI ---
+        Object.keys(inventory).forEach(slot => {
+            const item = inventory[slot];
+            const slotEl = document.getElementById(`slot-${slot}`);
+            if (!slotEl) return;
+
+            const nameEl = slotEl.querySelector('.slot-name');
+            const ammoEl = slotEl.querySelector('.slot-ammo');
+
+            if (item.type === 'none' || !item.weaponKey) {
+                if (nameEl) nameEl.textContent = "EMPTY";
+                if (ammoEl) ammoEl.textContent = "";
+                slotEl.classList.remove('occupied');
+            } else {
+                slotEl.classList.add('occupied');
+                if (nameEl) {
+                    if (item.type === 'knife') nameEl.textContent = "KNIFE";
+                    else if (item.type === 'gun') nameEl.textContent = item.weaponKey;
+                    else if (item.type === 'grenade') nameEl.textContent = item.weaponKey;
+                }
+
+                if (ammoEl) {
+                    if (item.type === 'gun') {
+                        ammoEl.textContent = `${item.ammoInClip}/${item.ammoTotal}`;
+                    } else if (item.type === 'grenade') {
+                        ammoEl.textContent = `x${item.count}`;
+                    } else {
+                        ammoEl.textContent = "";
+                    }
+                }
+            }
+        });
         
         if (GameState.selectedMode === 'dm' && !GameState.peer && this.killStats && this.aliveCount) {
             this.killStats.style.display = 'block';
