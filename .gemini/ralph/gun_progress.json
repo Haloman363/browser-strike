@@ -1,6 +1,6 @@
 {
   "guns": ["AK47", "M4A4", "AWP", "DEAGLE", "GLOCK", "USP", "P90", "MAC10", "MP9", "GALIL", "FAMAS", "AUG", "SG553", "SSG08", "NEGEV", "M249", "XM1014", "NOVA", "P250", "COMBAT_KNIFE"],
-  "current_gun_index": 0,
-  "current_iteration": 2,
+  "current_gun_index": 1,
+  "current_iteration": 4,
   "iterations_per_gun": 15
 }

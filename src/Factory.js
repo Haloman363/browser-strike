@@ -637,6 +637,13 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
             slideGroup.add(receiver);
             receiver.position.set(0, 0, 0); // Builder already set it, but we parented it
         }
+
+        if (recipe.m4ReceiverDetails) {
+            // Upper receiver protrusion (where bolt sits)
+            builder.addCylinder(0.045, 0.045, 0.35, bodyMat, {x: 0, y: 0.045, z: -0.05}, {x: Math.PI/2, y: 0, z: 0});
+            // Dust cover door (closed)
+            builder.addBox({x: 0.01, y: 0.025, z: 0.12}, accentMat, {x: 0.04, y: 0.04, z: -0.05});
+        }
     }
     if (recipe.framePoints) {
         builder.addExtrudedShape(recipe.framePoints, recipe.receiverWidth, gripMat);
@@ -678,7 +685,16 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
             stockShape.lineTo(0, -0.04);
             stockShape.lineTo(0, 0.03);
             // Rotate 180 degrees to point backward (+Z)
-            builder.addExtrudedShape(stockShape.getPoints(), 0.06, bodyMat, recipe.stockPos, {x: 0, y: Math.PI, z: 0});
+            const stock = builder.addExtrudedShape(stockShape.getPoints(), 0.06, bodyMat, recipe.stockPos, {x: 0, y: Math.PI, z: 0});
+
+            if (recipe.m4AdjustableStock) {
+                // Adjustment lever
+                builder.addBox({x: 0.02, y: 0.015, z: 0.1}, accentMat, {x: 0, y: recipe.stockPos.y - 0.03, z: recipe.stockPos.z + 0.15});
+                // Buttpad ribs
+                for (let i = 0; i < 4; i++) {
+                    builder.addBox({x: 0.05, y: 0.005, z: 0.01}, accentMat, {x: 0, y: recipe.stockPos.y + 0.01 - (i * 0.04), z: recipe.stockPos.z + 0.255});
+                }
+            }
         } else if (recipe.awpDetails) {
             // AWP Thumbhole Stock
             const stockShape = new THREE.Shape();
@@ -737,26 +753,57 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
     // 5. Magazine
     if (recipe.magType === 'rifle_curved') {
         const shape = new THREE.Shape();
-        shape.moveTo(0, 0);
-        shape.quadraticCurveTo(-0.04, -0.1, -0.04, -0.28);
-        shape.lineTo(0.06, -0.28);
-        shape.quadraticCurveTo(0.06, -0.1, 0.1, 0);
-        shape.lineTo(0, 0);
-        
+        if (recipe.curvedMag) {
+            // Highly curved 7.62x39 style mag
+            shape.moveTo(0, 0);
+            shape.lineTo(0.12, 0);
+            shape.quadraticCurveTo(0.12, -0.15, 0.05, -0.32);
+            shape.lineTo(-0.08, -0.32);
+            shape.quadraticCurveTo(-0.02, -0.15, 0, 0);
+        } else {
+            shape.moveTo(0, 0);
+            shape.quadraticCurveTo(-0.04, -0.1, -0.04, -0.28);
+            shape.lineTo(0.06, -0.28);
+            shape.quadraticCurveTo(0.06, -0.1, 0.1, 0);
+            shape.lineTo(0, 0);
+        }
+
         const mPos = recipe.magPos || {x:0, y:-0.05, z:-0.05};
-        const mag = builder.addExtrudedShape(shape.getPoints(), 0.06, accentMat, mPos, {x: 0, y: 0, z: 0});
+        const mag = builder.addExtrudedShape(shape.getPoints(), 0.065, accentMat, mPos, {x: 0, y: 0, z: 0});
         mag.name = 'magazine';
-        
-        // Ribbing for AK mag
-        if (recipe.akDetails) {
+
+        // Enhanced Ribbing for AK mag
+        if (recipe.curvedMag) {
+            // Horizontal ribs
+            for (let i = 0; i < 6; i++) {
+                const ribY = -0.05 - (i * 0.045);
+                const rib = builder.addBox({x: 0.075, y: 0.015, z: 0.015}, accentMat, {x: 0, y: mPos.y + ribY, z: mPos.z + 0.02});
+                mag.add(rib);
+                rib.position.sub(new THREE.Vector3(mPos.x, mPos.y, mPos.z));
+            }
+            // Vertical rear spine
+            const spine = builder.addBox({x: 0.02, y: 0.3, z: 0.02}, accentMat, {x: 0, y: mPos.y - 0.15, z: mPos.z + 0.05});
+            mag.add(spine);
+            spine.position.sub(new THREE.Vector3(mPos.x, mPos.y, mPos.z));
+        } else if (recipe.akDetails) {
             for (let i = 0; i < 5; i++) {
                 const rib = builder.addBox({x: 0.07, y: 0.01, z: 0.1}, accentMat, {x: 0, y: mPos.y - 0.05 - (i * 0.045), z: mPos.z - 0.02});
-                mag.add(rib); // Add to mag instead of group directly
-                rib.position.sub(new THREE.Vector3(mPos.x, mPos.y, mPos.z)); // Adjust relative pos
+                mag.add(rib);
+                rib.position.sub(new THREE.Vector3(mPos.x, mPos.y, mPos.z));
             }
         }
-    } else if (recipe.magType === 'smg_long') {
-        const mag = builder.addBox({x: 0.045, y: 0.35, z: 0.06}, accentMat, recipe.magPos, {x: 0.2, y: 0, z: 0});
+    } else if (recipe.magType === 'rifle_straight') {
+        const mag = builder.addBox({x: 0.06, y: 0.22, z: 0.09}, accentMat, recipe.magPos, {x: 0.2, y: 0, z: 0});
+        mag.name = 'magazine';
+        if (recipe.magRibs) {
+            // Horizontal ribs for STANAG style mags
+            for (let i = 0; i < 4; i++) {
+                const ribY = 0.05 - (i * 0.04);
+                const rib = builder.addBox({x: 0.065, y: 0.01, z: 0.1}, accentMat, {x: 0, y: ribY, z: 0});
+                mag.add(rib);
+            }
+        }
+    } else if (recipe.magType === 'smg_long') {        const mag = builder.addBox({x: 0.045, y: 0.35, z: 0.06}, accentMat, recipe.magPos, {x: 0.2, y: 0, z: 0});
         mag.name = 'magazine';
         mag.userData.isInternalMag = true;
         mag.visible = false;
@@ -829,6 +876,14 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
                 upperShape.lineTo(-0.1, 0.03);
                 upperShape.lineTo(-0.1, 0);
                 builder.addExtrudedShape(upperShape.getPoints(), 0.07, woodMat, {x: 0, y: 0.05, z: -0.2});
+
+                if (recipe.ventedHandguard) {
+                    // Add some vertical slits/vents to the upper wood handguard
+                    for (let i = 0; i < 4; i++) {
+                        const slitZ = -0.2 + (i * 0.04) - 0.06;
+                        builder.addBox({x: 0.075, y: 0.005, z: 0.015}, accentMat, {x: 0, y: 0.09, z: slitZ});
+                    }
+                }
             } else {
                 // Lower handguard
                 builder.addBox({x: 0.08, y: 0.08, z: 0.3}, woodMat, {x: 0, y: 0.0, z: -0.25});
@@ -840,6 +895,15 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
             if (recipe.m4Details) {
                 // Ribbed M4 handguard
                 builder.addCylinder(0.045, 0.045, 0.3, hgMat, {x: 0, y: 0.035, z: -0.25});
+                
+                if (recipe.ventedHandguard) {
+                    // Vertical cooling vents on top
+                    for (let i = 0; i < 6; i++) {
+                        const ventZ = -0.25 + (i * 0.04) - 0.1;
+                        builder.addBox({x: 0.01, y: 0.01, z: 0.02}, accentMat, {x: 0, y: 0.08, z: ventZ});
+                    }
+                }
+
                 // Quad rail side/bottom
                 builder.addPicatinnyRail(0.3, 0.04, new THREE.Vector3(0, 0.035, -0.25), accentMat); // bottom
                 builder.addPicatinnyRail(0.3, 0.04, new THREE.Vector3(0.04, 0.035, -0.25), accentMat); // right
@@ -866,7 +930,14 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
 
     // Dust Cover
     if (recipe.dustCover) {
-        builder.addBox({x: 0.06, y: 0.05, z: 0.4}, accentMat, {x: 0, y: 0.06, z: -0.05});
+        const dc = builder.addBox({x: 0.06, y: 0.05, z: 0.4}, accentMat, {x: 0, y: 0.06, z: -0.05});
+        if (recipe.ribbedDustCover) {
+            for (let i = 0; i < 4; i++) {
+                const ribZ = -0.15 + (i * 0.08);
+                const rib = builder.addBox({x: 0.065, y: 0.01, z: 0.02}, accentMat, {x: 0, y: 0.025, z: ribZ});
+                dc.add(rib);
+            }
+        }
     }
 
     // Charging Handle
@@ -888,9 +959,13 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
     
     if (recipe.m4Details) {
         // Brass Deflector
-        builder.addBox({x: 0.02, y: 0.03, z: 0.04}, accentMat, {x: 0.04, y: 0.04, z: 0.05}, {x: 0, y: 0.5, z: 0});
+        if (recipe.brassDeflector) {
+            builder.addBox({x: 0.02, y: 0.03, z: 0.04}, accentMat, {x: 0.04, y: 0.04, z: 0.05}, {x: 0, y: 0.5, z: 0});
+        }
         // Forward Assist
-        builder.addCylinder(0.01, 0.01, 0.04, accentMat, {x: 0.04, y: 0.02, z: 0.12}, {x: 0, y: 0, z: -Math.PI/2});
+        if (recipe.forwardAssist) {
+            builder.addCylinder(0.01, 0.01, 0.04, accentMat, {x: 0.04, y: 0.02, z: 0.12}, {x: 0, y: 0, z: -Math.PI/2});
+        }
     } else if (recipe.awpDetails) {
         // AWP Bolt Shroud
         builder.addCylinder(0.025, 0.025, 0.1, accentMat, {x: 0, y: 0.035, z: 0.1}, {x: Math.PI/2, y: 0, z: 0});
@@ -1001,8 +1076,15 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
             carryHandleShape.lineTo(0.1, 0.04);
             carryHandleShape.lineTo(-0.1, 0.04);
             carryHandleShape.lineTo(-0.15, 0);
-            builder.addExtrudedShape(carryHandleShape.getPoints(), 0.04, accentMat, {x: 0, y: 0.08, z: 0.05});
-            builder.addBox({x: 0.05, y: 0.03, z: 0.05}, accentMat, {x: 0, y: 0.1, z: 0.15});
+            const ch = builder.addExtrudedShape(carryHandleShape.getPoints(), 0.04, accentMat, {x: 0, y: 0.08, z: 0.05});
+            
+            if (recipe.m4CarryHandle) {
+                // Precise rear sight notch block
+                builder.addBox({x: 0.05, y: 0.03, z: 0.05}, accentMat, {x: 0, y: 0.1, z: 0.15});
+                // Thumb screws for mounting
+                builder.addCylinder(0.015, 0.015, 0.01, accentMat, {x: 0.025, y: 0.08, z: 0.05}, {x: 0, y: 0, z: Math.PI/2});
+                builder.addCylinder(0.015, 0.015, 0.01, accentMat, {x: 0.025, y: 0.08, z: 0.15}, {x: 0, y: 0, z: Math.PI/2});
+            }
         } else {
             builder.addIronSights({x: 0, y: 0.08, z: 0}, accentMat);
         }
