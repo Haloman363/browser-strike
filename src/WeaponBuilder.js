@@ -53,8 +53,8 @@ export class WeaponBuilder {
         
         const mesh = new THREE.Mesh(geometry, material);
         
-        // Lathe is Y-up. Rotate to Z-forward.
-        mesh.rotation.set(rotation.x + Math.PI / 2, rotation.y, rotation.z);
+        // Lathe is Y-up. Rotate -90 deg around X so Y points to -Z (forward).
+        mesh.rotation.set(rotation.x - Math.PI / 2, rotation.y, rotation.z);
         mesh.position.set(position.x, position.y, position.z);
         
         this.group.add(mesh);
@@ -70,14 +70,16 @@ export class WeaponBuilder {
         return mesh;
     }
 
-    addTriggerGroup(position, material, guardMaterial) {
+    addTriggerGroup(position, material, guardMaterial, includeGuard = true) {
         const tg = new THREE.Group();
         
-        // Simplified guard
-        const guardGeo = new THREE.TorusGeometry(0.03, 0.005, 8, 12, Math.PI);
-        const guard = new THREE.Mesh(guardGeo, guardMaterial);
-        guard.rotation.z = Math.PI / 2;
-        tg.add(guard);
+        if (includeGuard) {
+            // Simplified guard
+            const guardGeo = new THREE.TorusGeometry(0.03, 0.005, 8, 12, Math.PI);
+            const guard = new THREE.Mesh(guardGeo, guardMaterial);
+            guard.rotation.z = Math.PI / 2;
+            tg.add(guard);
+        }
 
         const trigGeo = new THREE.BoxGeometry(0.005, 0.02, 0.01);
         const trig = new THREE.Mesh(trigGeo, material);
@@ -104,13 +106,19 @@ export class WeaponBuilder {
         }
         railGroup.position.copy(position);
         this.group.add(railGroup);
+        return railGroup;
     }
 
     addCylinder(radiusTop, radiusBottom, height, material, position = {x:0, y:0, z:0}, rotation = {x:0, y:0, z:0}) {
         const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 16);
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(position.x, position.y, position.z);
-        mesh.rotation.set(rotation.x, rotation.y, rotation.z);
+        // Default orientation should be horizontal (along Z) if no rotation is given
+        if (rotation.x === 0 && rotation.y === 0 && rotation.z === 0) {
+            mesh.rotation.x = -Math.PI / 2;
+        } else {
+            mesh.rotation.set(rotation.x, rotation.y, rotation.z);
+        }
         this.group.add(mesh);
         return mesh;
     }
@@ -135,6 +143,21 @@ export class WeaponBuilder {
         group.position.copy(position);
         this.group.add(group);
         return group;
+    }
+
+    addIronSights(position, material) {
+        const sights = new THREE.Group();
+        // Rear sight
+        const rear = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.02, 0.02), material);
+        rear.position.z = 0.1;
+        sights.add(rear);
+        // Front sight
+        const front = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.03, 0.01), material);
+        front.position.z = -0.3;
+        sights.add(front);
+        sights.position.copy(position);
+        this.group.add(sights);
+        return sights;
     }
 
     getGroup() {

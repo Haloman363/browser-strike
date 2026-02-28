@@ -118,14 +118,14 @@ export const WEAPONS_DATA = {
     'AK47': {
         name: 'AK-47',
         slot: 3,
-        damage: 35,
+        damage: 36,
         headshotMultiplier: 4,
         magSize: 30,
         reserveAmmo: 90,
         reloadTime: 2500,
         fireRate: 600,
-        recoil: 0.1,
-        spread: 0.03,
+        recoil: 0.12,
+        spread: 0.035,
         isAutomatic: true,
         price: 2700,
         type: 'rifle'

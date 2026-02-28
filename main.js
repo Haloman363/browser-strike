@@ -35,7 +35,7 @@ let prevTime = performance.now();
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 
-let gun, knife, grenade, muzzleFlash, muzzleLight;
+let gun, knife, grenade, muzzleFlash, muzzleLight, playerWorldGun, playerBody;
 let currentWeapon = 'gun'; // 'gun', 'knife', or 'grenade'
 let currentSlot = 2;
 let currentWeaponData = WEAPONS_DATA['GLOCK'];
@@ -81,6 +81,12 @@ const MAX_GRENADES = 4;
 let isReloading = false;
 let reloadStartTime = 0;
 let reloadOffset = 0;
+let isSlideCycling = false;
+let slideCycleStartTime = 0;
+const slideCycleDuration = 100; // ms
+let isBoltCycling = false;
+let boltCycleStartTime = 0;
+const boltCycleDuration = 120; // ms
 let selectedMap = 'dust2';
 let selectedMode = 'dm';
 let teamsEnabled = false;
@@ -126,12 +132,22 @@ const aliveCountUI = document.getElementById('alive-count');
 const damageFlash = document.getElementById('damage-flash');
 
 // Global one-time initialization
-renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-document.body.appendChild(renderer.domElement);
+try {
+    renderer = new THREE.WebGLRenderer({ 
+        antialias: false, 
+        powerPreference: 'high-performance',
+        failIfMajorPerformanceCaveat: false
+    });
+} catch (e) {
+    console.error("WebGL initialization failed:", e);
+}
+if (renderer) {
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+}
 
 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 2000);
 controls = new PointerLockControls(camera, renderer.domElement);
@@ -575,14 +591,56 @@ function updateNetworkPlayer(id, data) {
     }
 
     // Fix floating: Subtract eye height (18) so model feet are on ground
+    // If crouched, the data.pos.y is already lower (crouchingHeight=10 vs standingHeight=18)
+    // We want the feet to stay at 0, so we position relative to data.pos.y
     model.position.set(data.pos.x, data.pos.y - 18, data.pos.z);
+    
+    // Animate Crouch (Leg Scaling and lowering)
+    const humanoid = model.children.find(c => c.name === "humanoid" || c.children.some(p => p.userData.isEnemy));
+    if (humanoid) {
+        if (data.isCrouched) {
+            // Lower the body group relative to the feet
+            humanoid.position.y = -7; 
+            humanoid.children.forEach(part => {
+                if (part.name === "rightLeg" || part.name === "leftLeg") {
+                    part.scale.y = 0.4; // Shorten legs
+                }
+            });
+            // Adjust nametag
+            const nametag = model.children.find(c => c.name === "nametag");
+            if (nametag) nametag.position.y = 18;
+        } else {
+            humanoid.position.y = 0;
+            humanoid.children.forEach(part => {
+                if (part.name === "rightLeg" || part.name === "leftLeg") {
+                    part.scale.y = 1.0;
+                }
+            });
+            const nametag = model.children.find(c => c.name === "nametag");
+            if (nametag) nametag.position.y = 25;
+        }
+    }
+
+    // Adjust weapon position on model
+    const modelGun = model.children.find(c => c.userData && c.userData.weaponKey);
+    if (modelGun) {
+        modelGun.position.y = 13.5 + (data.isCrouched ? -7 : 0);
+    }
+
     model.rotation.set(0, data.rot.y, 0);
 
     // Update bounding boxes for shooting
-    model.children.forEach(part => {
+    model.traverse(part => {
         if (part.userData.isSolid) {
             part.updateMatrixWorld(true);
+            if (!part.userData.boundingBox) part.userData.boundingBox = new THREE.Box3();
             part.userData.boundingBox.setFromObject(part);
+            
+            // Re-calculate headshot status based on new position
+            const worldPos = new THREE.Vector3();
+            part.getWorldPosition(worldPos);
+            const headThreshold = data.isCrouched ? 11 : 18;
+            part.userData.isHeadshot = (worldPos.y > headThreshold);
         }
     });
 }
@@ -711,6 +769,32 @@ function switchWeapon(slot) {
     currentWeapon = inventory[slot].type;
     const item = inventory[slot];
 
+    // Update Third Person Model Weapon
+    if (playerBody && playerWorldGun) {
+        playerBody.remove(playerWorldGun);
+        if (item.type === 'gun' || item.type === 'knife' || item.type === 'grenade') {
+            const weaponKey = item.weaponKey || 'GLOCK';
+            
+            if (item.type === 'grenade') {
+                playerWorldGun = createGrenadeModel(false, weaponKey);
+                playerWorldGun.scale.set(30, 30, 30);
+                playerWorldGun.position.set(4, 11, 6);
+                playerWorldGun.rotation.set(0, 0, 0);
+            } else {
+                playerWorldGun = createGunModel(weaponKey, false);
+                playerWorldGun.scale.set(15, 15, 15);
+                playerWorldGun.position.set(4, 13.5, 7);
+                playerWorldGun.rotation.y = Math.PI;
+            }
+            
+            // Apply layer 1 so it stays hidden from local camera
+            playerWorldGun.traverse(child => {
+                if (child.isMesh) child.layers.set(1);
+            });
+            playerBody.add(playerWorldGun);
+        }
+    }
+
     if (item.type === 'gun') {
         currentWeaponData = WEAPONS_DATA[item.weaponKey];
         ammoInClip = item.ammoInClip;
@@ -749,7 +833,7 @@ function switchWeapon(slot) {
 }
 
 
-function createEnemy(x, y, z, team = 'A') {
+function createEnemy(x, y, z, team = 'A', options = {}) {
     const enemy = new THREE.Group();
     
     let botColor = 0x556b2f;
@@ -761,10 +845,19 @@ function createEnemy(x, y, z, team = 'A') {
     enemy.add(humanoid);
     enemy.userData.team = team;
 
+    if (options.isCrouched) {
+        humanoid.position.y -= 7;
+        humanoid.children.forEach(part => {
+            if (part.name === "rightLeg" || part.name === "leftLeg") {
+                part.scale.y = 0.4;
+            }
+        });
+    }
+
     // Gun
     const enemyGun = createGunModel('GLOCK', false);
     enemyGun.scale.set(15, 15, 15); 
-    enemyGun.position.set(4, 13.5, 7); 
+    enemyGun.position.set(4, 13.5 + (options.isCrouched ? -7 : 0), 7); 
     enemyGun.rotation.y = Math.PI; 
     enemy.add(enemyGun);
 
@@ -791,7 +884,9 @@ function createEnemy(x, y, z, team = 'A') {
             // Headshot detection (using world position since head might be in headGroup)
             const worldPos = new THREE.Vector3();
             part.getWorldPosition(worldPos);
-            if (worldPos.y > 18) part.userData.isHeadshot = true;
+            // Lower threshold for headshots if crouched
+            const headThreshold = options.isCrouched ? 11 : 18;
+            if (worldPos.y > headThreshold) part.userData.isHeadshot = true;
             objects.push(part);
         }
     });
@@ -802,11 +897,22 @@ function createEnemy(x, y, z, team = 'A') {
     enemy.userData.health = 100;
     enemy.userData.alive = true;
     enemy.userData.targetPos = new THREE.Vector3(x, y, z);
-    enemy.userData.roamTimer = Math.random() * 5000 + 2000;
+    enemy.userData.spawnPos = { x, y, z }; // Store for respawning
+    enemy.userData.isStationary = options.isStationary || false;
+    enemy.userData.isCrouched = options.isCrouched || false;
+    enemy.userData.roamTimer = enemy.userData.isStationary ? 999999999 : (Math.random() * 5000 + 2000);
     enemy.userData.walkCycle = 0;
     
     enemies.push(enemy);
     return enemy;
+}
+
+function respawnEnemy(pos, team, options = {}) {
+    if (!isGameStarted || selectedMap !== 'training') return;
+    
+    console.log("Respawning enemy at", pos);
+    createEnemy(pos.x, pos.y, pos.z, team, options);
+    updateUI();
 }
 
 function init() {
@@ -859,6 +965,7 @@ function init() {
         sun.shadow.camera.far = 1000;
         sun.shadow.mapSize.width = 2048;
         sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.layers.enable(1); // Enable layer 1 for shadows (player body)
         scene.add(sun);
 
         const ambientLight = new THREE.AmbientLight(0x404040, 0.5); 
@@ -1195,13 +1302,42 @@ function init() {
         if (teamsEnabled) {
             playerBodyColor = playerTeam === 'A' ? 0x0000ff : 0xff0000;
         }
-        const playerBody = createHumanoidModel(playerTeam === 'B' ? 'TERRORIST' : 'COUNTER_TERRORIST');
+        playerBody = createHumanoidModel(playerTeam === 'B' ? 'TERRORIST' : 'COUNTER_TERRORIST');
         playerBody.position.set(0, -18, 0); // Position below the camera
-        // Hide the head of the player's own body to avoid clipping with camera
+
+        // Add a visual weapon for the local player's body (for others/shadows to see)
+        playerWorldGun = createGunModel('GLOCK', false);
+        playerWorldGun.scale.set(15, 15, 15);
+        playerWorldGun.position.set(4, 13.5, 7);
+        playerWorldGun.rotation.y = Math.PI;
+        
+        // Apply layer 1 so it stays hidden from local camera
+        playerWorldGun.traverse(child => {
+            if (child.isMesh) child.layers.set(1);
+        });
+        playerBody.add(playerWorldGun);
+
+        // Position arms to hold the gun
+        playerBody.traverse(part => {
+            if (part.name === "rightArm") {
+                part.rotation.x = -Math.PI / 2.5;
+                part.position.set(4.5, 17.5, 0);
+                part.scale.y = 1.2;
+            }
+            if (part.name === "leftArm") {
+                part.rotation.x = -Math.PI / 2.8;
+                part.rotation.z = 0.6;
+                part.position.set(-4.5, 17.5, 0);
+                part.scale.y = 1.4;
+            }
+        });
+
+        // Use layers to hide the player's own body from their own camera 
+        // while remaining visible to others (shadows, spectators, etc.)
         playerBody.traverse(child => {
-            const worldPos = new THREE.Vector3();
-            child.getWorldPosition(worldPos);
-            if (worldPos.y > 18) child.visible = false;
+            if (child.isMesh) {
+                child.layers.set(1); // Put player body and world weapon on layer 1
+            }
         });
         camera.add(playerBody);
 
@@ -2087,6 +2223,10 @@ function killEnemy(enemy, killerName = playerName, weapon = currentWeapon, kille
         console.log("Teammate eliminated (no points)");
     }
 
+    const spawnPos = { ...enemy.userData.spawnPos };
+    const enemyTeam = enemy.userData.team;
+    const isStationary = enemy.userData.isStationary;
+
     // Despawn after 5 seconds
     setTimeout(() => {
         let fadeTime = 1000; // 1 second fade
@@ -2116,6 +2256,13 @@ function killEnemy(enemy, killerName = playerName, weapon = currentWeapon, kille
                 // Remove from enemies array
                 const eIdx = enemies.indexOf(enemy);
                 if (eIdx > -1) enemies.splice(eIdx, 1);
+
+                // Training Range Respawn
+                if (selectedMap === 'training') {
+                    setTimeout(() => {
+                        respawnEnemy(spawnPos, enemyTeam, { isStationary: isStationary, isCrouched: isCrouched });
+                    }, 3000); // 3 seconds after complete removal
+                }
             }
         }
         fadeOut();
@@ -2157,6 +2304,14 @@ function animate() {
                     recoil = isAiming ? 0.04 : 0.08; 
                     recoilRotation = isAiming ? 0.02 : 0.05;
                     cameraRecoilX = 0.02;
+                    
+                    if (currentWeaponData.type === 'pistol') {
+                        isSlideCycling = true;
+                        slideCycleStartTime = time;
+                    } else {
+                        isBoltCycling = true;
+                        boltCycleStartTime = time;
+                    }
                     
                     crosshair.classList.add('firing');
                     setTimeout(() => crosshair.classList.remove('firing'), 100);
@@ -2314,24 +2469,198 @@ function animate() {
                 activeModel.rotation.x = Math.sin(knifeAttackProgress) * 0.5;
             }
 
-            // 7. Reload Offset
+            // 7. Reload Animation Refinement
+            let reloadCameraShake = 0;
             if (isReloading && currentWeapon === 'gun') {
-                const duration = 2300;
+                const duration = currentWeaponData.reloadTime || 2300;
                 const elapsed = time - reloadStartTime;
                 const progress = elapsed / duration;
-                const targetY = -0.5;
-
-                if (progress < 0.5) {
-                    reloadOffset = THREE.MathUtils.lerp(0, targetY, progress * 2);
-                } else if (progress < 1) {
-                    reloadOffset = THREE.MathUtils.lerp(targetY, 0, (progress - 0.5) * 2);
-                } else {
-                    reloadOffset = 0;
+                const type = currentWeaponData.type;
+                
+                // Weapon Tilt - specialized per type
+                let tiltZMult = 0.5;
+                let tiltXMult = 0.2;
+                if (type === 'pistol') {
+                    tiltZMult = 0.3;
+                    tiltXMult = 0.1;
+                } else if (type === 'sniper' || type === 'heavy') {
+                    tiltZMult = 0.7;
+                    tiltXMult = 0.3;
                 }
+
+                const tiltZ = Math.sin(progress * Math.PI) * tiltZMult;
+                const tiltX = Math.sin(progress * Math.PI * 0.8) * tiltXMult;
+                activeModel.rotation.z += tiltZ;
+                activeModel.rotation.x += tiltX;
+                
+                // Camera Bob during reload
+                reloadCameraShake = Math.sin(progress * Math.PI * 4) * 0.01;
+                camera.position.y += reloadCameraShake;
+
+                const mag = activeModel.getObjectByName('magazine');
+                const leftArm = activeModel.getObjectByName('leftArm');
+                const rightArm = activeModel.getObjectByName('rightArm');
+
+                // Ensure original positions are stored
+                [mag, leftArm, rightArm].forEach(obj => {
+                    if (obj && !obj.userData.originalPos) {
+                        obj.userData.originalPos = obj.position.clone();
+                        obj.userData.originalRot = obj.rotation.clone();
+                    }
+                });
+
+                // --- PHASE 1: Mag Eject (0% - 30%) ---
+                if (progress < 0.3) {
+                    const p = progress / 0.3;
+                    const easedP = p * p; // Accelerating down
+                    if (mag) {
+                        mag.visible = true;
+                        mag.position.y = THREE.MathUtils.lerp(mag.userData.originalPos.y, mag.userData.originalPos.y - 0.6, easedP);
+                    }
+                    if (leftArm) {
+                        leftArm.position.y = THREE.MathUtils.lerp(leftArm.userData.originalPos.y, leftArm.userData.originalPos.y - 0.4, easedP);
+                        leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.userData.originalRot.x, leftArm.userData.originalRot.x - 0.3, easedP);
+                    }
+                } 
+                // --- PHASE 2: Reaching for Mag (30% - 50%) ---
+                else if (progress < 0.5) {
+                    if (mag) mag.visible = false;
+                    if (leftArm) {
+                        const p = (progress - 0.3) / 0.2;
+                        leftArm.position.y = THREE.MathUtils.lerp(leftArm.userData.originalPos.y - 0.4, leftArm.userData.originalPos.y - 0.8, p);
+                    }
+                }
+                // --- PHASE 3: Mag Insertion (50% - 80%) ---
+                else if (progress < 0.8) {
+                    const p = (progress - 0.5) / 0.3;
+                    const easedP = 1 - Math.pow(1 - p, 3); // Decelerating in
+                    if (mag) {
+                        mag.visible = true;
+                        mag.position.y = THREE.MathUtils.lerp(mag.userData.originalPos.y - 0.6, mag.userData.originalPos.y, easedP);
+                    }
+                    if (leftArm) {
+                        leftArm.position.y = THREE.MathUtils.lerp(leftArm.userData.originalPos.y - 0.8, leftArm.userData.originalPos.y, easedP);
+                        leftArm.rotation.x = THREE.MathUtils.lerp(leftArm.userData.originalRot.x - 0.3, leftArm.userData.originalRot.x, easedP);
+                    }
+                    // Jolt on insert
+                    if (p > 0.9 && p < 1.0) {
+                        const jolt = Math.sin((p - 0.9) * 10 * Math.PI) * 0.05;
+                        activeModel.position.y += jolt;
+                        camera.position.y += jolt * 0.2;
+                    }
+                }
+                // --- PHASE 4: Bolt Cycle / Chambering (80% - 100%) ---
+                else {
+                    const p = (progress - 0.8) / 0.2;
+                    if (mag) {
+                        mag.position.copy(mag.userData.originalPos);
+                        // Only hide internal magazines (pistols/handle-fed SMGs)
+                        if (mag.userData.isInternalMag) {
+                            mag.visible = false;
+                        } else {
+                            mag.visible = true;
+                        }
+                    }
+                    
+                    activeModel.traverse(child => {
+                        if (child.name === 'bolt') {
+                            if (!child.userData.originalPos) child.userData.originalPos = child.position.clone();
+                            
+                            const isPistol = type === 'pistol';
+                            const boltTravel = isPistol ? 0.08 : 0.15;
+                            const cycleSpeed = isPistol ? 0.2 : 0.4; // Proportion of phase 4
+
+                            if (p < cycleSpeed) { // Fast back
+                                const bp = p / cycleSpeed;
+                                child.position.z = THREE.MathUtils.lerp(child.userData.originalPos.z, child.userData.originalPos.z + boltTravel, bp);
+                                if (rightArm) {
+                                    rightArm.position.z = THREE.MathUtils.lerp(rightArm.userData.originalPos.z, rightArm.userData.originalPos.z + boltTravel, bp);
+                                }
+                                camera.position.x += (Math.random() - 0.5) * 0.005; // Tiny shake
+                            } else if (p < cycleSpeed * 2) { // Forward
+                                const bp = (p - cycleSpeed) / cycleSpeed;
+                                child.position.z = THREE.MathUtils.lerp(child.userData.originalPos.z + boltTravel, child.userData.originalPos.z, bp);
+                                if (rightArm) {
+                                    rightArm.position.z = THREE.MathUtils.lerp(rightArm.userData.originalPos.z + boltTravel, rightArm.userData.originalPos.z, bp);
+                                }
+                            } else { // Reset
+                                child.position.copy(child.userData.originalPos);
+                                if (rightArm) rightArm.position.copy(rightArm.userData.originalPos);
+                            }
+                        }
+                    });
+                }
+
+                // Base dip
+                const targetY = -0.15;
+                reloadOffset = (progress < 0.5) ? THREE.MathUtils.lerp(0, targetY, progress * 2) : THREE.MathUtils.lerp(targetY, 0, (progress - 0.5) * 2);
             } else {
                 reloadOffset = THREE.MathUtils.lerp(reloadOffset, 0, 0.1);
+                // Reset all components
+                activeModel.traverse(child => {
+                    if ((child.name === 'magazine' || child.name === 'bolt' || child.name === 'leftArm' || child.name === 'rightArm') && child.userData.originalPos) {
+                        child.position.copy(child.userData.originalPos);
+                        if (child.userData.originalRot) child.rotation.copy(child.userData.originalRot);
+                        
+                        if (child.name === 'magazine') {
+                            child.visible = !child.userData.isInternalMag;
+                        } else {
+                            child.visible = true;
+                        }
+                    }
+                });
             }
             activeModel.position.y += reloadOffset;
+
+            // 7.5 Slide Cycle Animation (Pistols)
+            if (isSlideCycling && currentWeapon === 'gun') {
+                const elapsed = time - slideCycleStartTime;
+                const progress = elapsed / slideCycleDuration;
+                const slide = activeModel.getObjectByName('slide');
+                
+                if (slide) {
+                    const slideTravel = 0.08;
+                    if (progress < 0.3) {
+                        // Rapid move back
+                        slide.position.z = THREE.MathUtils.lerp(0, slideTravel, progress / 0.3);
+                    } else if (progress < 1.0) {
+                        // Slower return forward
+                        slide.position.z = THREE.MathUtils.lerp(slideTravel, 0, (progress - 0.3) / 0.7);
+                    } else {
+                        slide.position.z = 0;
+                        isSlideCycling = false;
+                    }
+                } else {
+                    isSlideCycling = false;
+                }
+            } else if (currentWeapon === 'gun') {
+                const slide = activeModel.getObjectByName('slide');
+                if (slide) slide.position.z = 0;
+            }
+
+            // 7.6 Bolt Cycle Animation (Rifles/SMGs/Shotguns)
+            if (isBoltCycling && currentWeapon === 'gun') {
+                const elapsed = time - boltCycleStartTime;
+                const progress = elapsed / boltCycleDuration;
+                
+                activeModel.traverse(child => {
+                    if (child.name === 'bolt') {
+                        const boltTravel = 0.12;
+                        if (progress < 0.3) {
+                            child.position.z = THREE.MathUtils.lerp(0, boltTravel, progress / 0.3);
+                        } else if (progress < 1.0) {
+                            child.position.z = THREE.MathUtils.lerp(boltTravel, 0, (progress - 0.3) / 0.7);
+                        } else {
+                            child.position.z = 0;
+                            isBoltCycling = false;
+                        }
+                    }
+                });
+            } else if (currentWeapon === 'gun') {
+                activeModel.traverse(child => {
+                    if (child.name === 'bolt') child.position.z = 0;
+                });
+            }
 
             // 8. Camera Effects
             camera.fov = settings.fov - (adsProgress * 15);
@@ -2351,6 +2680,36 @@ function animate() {
                 updateRagdoll(enemy);
             }
         });
+
+        // 9. Local Player Body Animation (for shadows/others)
+        if (playerBody) {
+            // Foot-lock positioning: Camera eye is at standingHeight(18) or crouchingHeight(10)
+            // But we want feet to stay at y=0. camera.position is global, playerBody is child of camera.
+            // playerBody is at -18 relative to camera, but if we crouch we need to adjust.
+            if (isCrouching) {
+                playerBody.position.y = -10; // 10 units below camera at eye level 10 = floor 0
+                playerBody.children.forEach(child => {
+                    if (child.name === "humanoid" || child.children.some(p => p.userData.isEnemy)) {
+                        child.position.y = -7;
+                        child.children.forEach(part => {
+                            if (part.name === "rightLeg" || part.name === "leftLeg") part.scale.y = 0.4;
+                        });
+                    }
+                });
+                if (playerWorldGun) playerWorldGun.position.y = 13.5 - 7;
+            } else {
+                playerBody.position.y = -18; // 18 units below camera at eye level 18 = floor 0
+                playerBody.children.forEach(child => {
+                    if (child.name === "humanoid" || child.children.some(p => p.userData.isEnemy)) {
+                        child.position.y = 0;
+                        child.children.forEach(part => {
+                            if (part.name === "rightLeg" || part.name === "leftLeg") part.scale.y = 1.0;
+                        });
+                    }
+                });
+                if (playerWorldGun) playerWorldGun.position.y = 13.5;
+            }
+        }
 
         for (let i = bloodParticles.length - 1; i >= 0; i--) {
             const p = bloodParticles[i];
@@ -2438,7 +2797,8 @@ function animate() {
                 name: playerName,
                 team: playerTeam,
                 pos: camera.position,
-                rot: { y: camera.rotation.y }
+                rot: { y: camera.rotation.y },
+                isCrouched: isCrouching
             };
             connections.forEach(conn => {
                 if (conn.open) conn.send(transformData);

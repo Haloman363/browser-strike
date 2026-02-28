@@ -11,11 +11,23 @@ let enemies = [];
 let droppedGuns = [];
 let currentMapKey = 'dust2';
 
-function createEnemy(x, y, z, team = 'A') {
+function createEnemy(x, y, z, team = 'A', options = {}) {
     const enemy = new THREE.Group();
     const humanoid = createHumanoidModel(team === 'B' ? 'TERRORIST' : 'COUNTER_TERRORIST');
     enemy.add(humanoid);
     enemy.userData.team = team;
+    enemy.userData.isStationary = options.isStationary || false;
+    enemy.userData.isCrouched = options.isCrouched || false;
+
+    if (options.isCrouched) {
+        humanoid.position.y -= 7;
+        humanoid.children.forEach(part => {
+            if (part.name === "rightLeg" || part.name === "leftLeg") {
+                part.scale.y = 0.4;
+            }
+        });
+    }
+
     enemy.position.set(x, y, z);
     scene.add(enemy);
     enemies.push(enemy);
@@ -56,12 +68,18 @@ function init() {
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 5000);
     camera.position.set(0, 1500, 0);
+    camera.layers.enable(1); // Show player body layer in map dev view
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
+    try {
+        renderer = new THREE.WebGLRenderer({ antialias: false });
+    } catch (e) {
+        console.error("WebGL initialization failed:", e);
+    }    if (renderer) {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+    }
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;

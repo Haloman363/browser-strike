@@ -1,0 +1,11 @@
+
+> browser-strike@1.0.0 dev
+> vite --host --port 5173 --base /browser-strike/
+
+Port 5173 is in use, trying another one...
+
+  VITE v7.3.1  ready in 401 ms
+
+  ➜  Local:   http://localhost:5174/browser-strike/
+  ➜  Network: http://10.255.255.254:5174/browser-strike/
+  ➜  Network4:49:26 PM [vite] (client) page reload main.js

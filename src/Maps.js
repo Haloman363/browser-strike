@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { COLORS, WEAPONS_DATA, GRENADES_DATA } from './Constants.js';
-import { createWall, createCrate, createGunModel, createGrenadeModel, createHumanoidModel } from './Factory.js';
+import { createWall, createCrate, createPillar, createGunModel, createGrenadeModel, createHumanoidModel } from './Factory.js';
 import { TextureGenerator } from './TextureGenerator.js';
 
 export const Maps = {
     'dust2': {
         spawnPoint: { x: 0, y: 18, z: 600 }, // CT Spawn area
         build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer) => {
+            // ... (rest of the imports) ...
             // Floor (The Sand)
             const floorGeometry = new THREE.PlaneGeometry(5000, 5000);
             floorGeometry.rotateX(-Math.PI / 2);
@@ -25,6 +26,10 @@ export const Maps = {
             createWall(20, 150, 4000, -2000, 75, 0, COLORS.WALL_DEFAULT, scene, objects);
             createWall(20, 150, 4000, 2000, 75, 0, COLORS.WALL_DEFAULT, scene, objects);
 
+            // Mid Pillars
+            createPillar(20, 100, -200, 0, -200, scene, objects);
+            createPillar(20, 100, 200, 0, -200, scene, objects);
+
             // --- CT SPAWN AREA (South/Positive Z) ---
             createWall(400, 40, 200, 0, 20, 800, 0xaaaaaa, scene, objects); // CT Ramp
             createWall(600, 80, 20, 0, 40, 950, COLORS.WALL_DEFAULT, scene, objects); // Back Wall CT
@@ -41,6 +46,7 @@ export const Maps = {
             createCrate(40, -700, 30, -800, scene, objects); // Center Crate B
             createCrate(30, -850, 25, -950, scene, objects);
             createCrate(30, -850, 55, -950, scene, objects);
+            createPillar(15, 60, -600, 0, -950, scene, objects);
 
             // --- MID AREA ---
             // Mid Doors (Double Doors)
@@ -66,6 +72,7 @@ export const Maps = {
             // Strategic A Crates
             createCrate(40, 800, 55, -800, scene, objects);
             createCrate(40, 700, 35, -700, scene, objects);
+            createPillar(15, 80, 1000, 0, -850, scene, objects);
 
             // --- T SPAWN AREA (North/Negative Z) ---
             createWall(600, 80, 20, 0, 40, -1800, COLORS.WALL_DEFAULT, scene, objects); // T Spawn Back Wall
@@ -110,34 +117,37 @@ export const Maps = {
     'training': {
         spawnPoint: { x: 0, y: 18, z: -50 },
         build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer) => {
-            // Training Shooting Range
+            // Training Shooting Range (Resized & Compact)
             
             // Ground (Concrete)
-            const floorGeo = new THREE.PlaneGeometry(2000, 2000);
+            const floorWidth = 1000;
+            const floorDepth = 1200;
+            const floorGeo = new THREE.PlaneGeometry(floorWidth, floorDepth);
             floorGeo.rotateX(-Math.PI / 2);
             const concreteTex = TextureGenerator.createConcreteTexture();
-            concreteTex.repeat.set(50, 50);
+            concreteTex.repeat.set(20, 24);
             const floorMat = new THREE.MeshPhongMaterial({ map: concreteTex });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.receiveShadow = true;
             floor.userData.isGround = true;
+            floor.position.set(0, 0, 350); 
             scene.add(floor);
             objects.push(floor);
 
             // Perimeter Walls
-            createWall(2000, 100, 20, 0, 50, -1000, 0xaaaaaa, scene, objects);
-            createWall(2000, 100, 20, 0, 50, 1000, 0xaaaaaa, scene, objects);
-            createWall(20, 100, 2000, -1000, 50, 0, 0xaaaaaa, scene, objects);
-            createWall(20, 100, 2000, 1000, 50, 0, 0xaaaaaa, scene, objects);
+            createWall(floorWidth, 100, 20, 0, 50, -250, 0xaaaaaa, scene, objects); // Back Wall
+            createWall(floorWidth, 100, 20, 0, 50, 950, 0xaaaaaa, scene, objects);  // Far Wall
+            createWall(20, 100, floorDepth, -500, 50, 350, 0xaaaaaa, scene, objects); // Left Wall
+            createWall(20, 100, floorDepth, 500, 50, 350, 0xaaaaaa, scene, objects);  // Right Wall
 
             // Shooting Stations (Gun Counter)
             const weaponKeys = Object.keys(WEAPONS_DATA);
             weaponKeys.forEach((key, idx) => {
-                const x = (idx - (weaponKeys.length / 2)) * 60;
-                const z = -200;
+                const x = (idx - (weaponKeys.length / 2)) * 35;
+                const z = -120;
                 
-                // Station counter - Half height (10)
-                createWall(40, 10, 20, x, 5, z, 0x555555, scene, objects);
+                // Station counter
+                createWall(30, 10, 15, x, 5, z, 0x555555, scene, objects);
                 
                 const pickup = createGunModel(key, false);
                 pickup.scale.set(15, 15, 15);
@@ -153,11 +163,11 @@ export const Maps = {
             // Grenade Station (Smaller Counter)
             const grenadeKeys = Object.keys(GRENADES_DATA);
             grenadeKeys.forEach((key, idx) => {
-                const x = (idx - (grenadeKeys.length / 2)) * 40;
-                const z = -300;
+                const x = (idx - (grenadeKeys.length / 2)) * 30;
+                const z = -180;
                 
-                // Station counter - Half height (10)
-                createWall(30, 10, 20, x, 5, z, 0x444444, scene, objects);
+                // Station counter
+                createWall(25, 10, 15, x, 5, z, 0x444444, scene, objects);
                 
                 const pickup = createGrenadeModel(false, key);
                 pickup.scale.set(30, 30, 30);
@@ -169,21 +179,38 @@ export const Maps = {
                 droppedGuns.push(pickup);
             });
 
-            // Target Lane Walls (Dividers) - x=0 is now clear
-            const dividerPositions = [-400, -200, 200, 400];
+            // Target Lane Walls (Dividers)
+            const dividerPositions = [-300, -100, 100, 300];
             dividerPositions.forEach(x => {
-                createWall(10, 80, 800, x, 40, 400, 0x999999, scene, objects);
+                createWall(5, 80, 800, x, 40, 500, 0x999999, scene, objects);
             });
 
-            // Stationary Enemies at different distances
-            const distances = [200, 400, 600, 800];
-            const lanes = [-300, -100, 100, 300];
+            // Varied Enemies in Lanes
+            const targetZPositions = [200, 350, 500, 650, 800];
+            const targetXLanes = [-400, -200, 0, 200, 400];
             
-            lanes.forEach(laneX => {
-                distances.forEach(distZ => {
-                    const enemy = createEnemyFn(laneX, 0, distZ);
-                    enemy.userData.isStationary = true;
-                    enemy.userData.roamTimer = 999999999; 
+            targetXLanes.forEach(laneX => {
+                targetZPositions.forEach(distZ => {
+                    const isCrouched = Math.random() > 0.6;
+                    const isObscured = Math.random() > 0.4;
+                    const offset = (Math.random() - 0.5) * 40;
+                    
+                    const enemy = createEnemyFn(laneX + offset, 0, distZ, 'A', { isStationary: true, isCrouched: isCrouched });
+                    
+                    if (isObscured) {
+                         const coverType = Math.random();
+                         const coverX = laneX + offset;
+                         if (coverType > 0.6) {
+                             // Small Crate for head-glitch or crouch cover
+                             createCrate(12, coverX, 6, distZ - 10, scene, objects);
+                         } else if (coverType > 0.3) {
+                             // Half height wall
+                             createWall(35, 12, 5, coverX, 6, distZ - 8, 0x777777, scene, objects);
+                         } else {
+                             // Vertical pillar to peek from
+                             createWall(10, 30, 10, coverX - 15, 15, distZ - 5, 0x666666, scene, objects);
+                         }
+                    }
                 });
             });
         }

@@ -6,7 +6,7 @@ import { COLORS } from './Constants.js';
 
 let scene, camera, renderer, controls, currentMesh;
 let categories = {
-    weapons: Object.keys(WEAPON_RECIPES),
+    weapons: Object.keys(WEAPON_RECIPES).filter(key => key !== 'COMBAT_KNIFE'),
     grenades: ['HE', 'FLASH', 'SMOKE', 'MOLOTOV'],
     characters: ['TERRORIST', 'COUNTER_TERRORIST'],
     environment: ['CRATE', 'STONE_WALL', 'CONCRETE_WALL']
@@ -64,11 +64,18 @@ function init() {
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
     camera.position.set(1, 1, 2);
+    camera.layers.enable(1); // Show player body layer in dev view
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    document.body.appendChild(renderer.domElement);
+    try {
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+    } catch (e) {
+        console.error("WebGL initialization failed:", e);
+    }    
+    if (renderer) {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+    }
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
