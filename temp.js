@@ -1724,6 +1724,7 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
                 builder.addCylinder(0.012, 0.012, 0.15, accentMat, {x: 0, y: bY + 0.035, z: muzzlePos + 0.3}, {x: Math.PI/2, y: 0, z: 0});
             }
         }
+        }
         if (recipe.galilBoltDetails) {
             // Ejection port on right side
             builder.addBox({x: 0.01, y: 0.04, z: 0.15}, accentMat, {x: 0.045, y: 0.05, z: -0.05});
@@ -1931,7 +1932,6 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
             }
         }
 
-    }
     if (recipe.sg553ReceiverDetails) {
         // Side charging handle (characteristic SG 553 knob)
         builder.addCylinder(0.015, 0.015, 0.04, accentMat, {x: 0.05, y: 0.05, z: 0}, {x: 0, y: 0, z: Math.PI/2});

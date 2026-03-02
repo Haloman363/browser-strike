@@ -10,12 +10,25 @@ import { checkCollisionAt } from './src/Physics.js';
 import { createBloodSplatter, createImpactEffect } from './src/Weapon.js';
 import { updateBotAI, updateRagdoll } from './src/AI.js';
 import { soundEngine } from './src/SoundEngine.js';
+import { Utils } from './src/Utils.js';
+import { DebugBridge } from './src/DebugBridge.js';
+
+// Modular Core & Systems
+import { Engine } from './src/core/Engine.js';
+import { InputSystem } from './src/systems/InputSystem.js';
+import { PhysicsSystem } from './src/systems/PhysicsSystem.js';
+import { WeaponSystem } from './src/systems/WeaponSystem.js';
+import { PlayerControllerSystem } from './src/systems/PlayerControllerSystem.js';
+import { UISystem } from './src/systems/UISystem.js';
+import { AISystem } from './src/systems/AISystem.js';
+import { ViewSystem } from './src/systems/ViewSystem.js';
 
 console.log("Script starting...");
 
+// Initialize Engine & Core systems
+const engine = new Engine();
 let camera, scene, renderer, controls;
 const objects = [];
-let raycaster;
 const enemies = [];
 const bloodParticles = [];
 const impactParticles = [];
@@ -133,14 +146,15 @@ const damageFlash = document.getElementById('damage-flash');
 
 // Global one-time initialization
 try {
-    renderer = new THREE.WebGLRenderer({ 
-        antialias: false, 
+    renderer = new THREE.WebGLRenderer({
+        antialias: false,
         powerPreference: 'high-performance',
         failIfMajorPerformanceCaveat: false
     });
 } catch (e) {
     console.error("WebGL initialization failed:", e);
 }
+
 if (renderer) {
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -152,8 +166,24 @@ if (renderer) {
 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 2000);
 controls = new PointerLockControls(camera, renderer.domElement);
 
-setupMenu();
+// Setup Engine Context
+engine.init({ renderer, camera });
+engine.context.objects = objects;
+engine.context.enemies = enemies;
+engine.context.bloodParticles = bloodParticles;
+engine.context.impactParticles = impactParticles;
+engine.context.soundEngine = soundEngine;
 
+// Register Systems
+engine.registerSystem(InputSystem);
+engine.registerSystem(PhysicsSystem);
+engine.registerSystem(WeaponSystem);
+engine.registerSystem(PlayerControllerSystem);
+engine.registerSystem(UISystem);
+engine.registerSystem(AISystem);
+engine.registerSystem(ViewSystem);
+
+setupMenu();
 function setupMenu() {
     // Initialize sound engine on first interaction
     const initSound = () => {
@@ -225,12 +255,10 @@ function setupMenu() {
         input.value = playerName;
         input.addEventListener('input', (e) => {
             soundEngine.playUIHover();
-            // Sanitize: allow only letters, numbers, spaces, - and _
-            let clean = e.target.value.replace(/[^a-zA-Z0-9 _-]/g, '');
-            if (clean.length > 12) clean = clean.substring(0, 12);
+            const clean = Utils.sanitizeName(e.target.value);
             e.target.value = clean;
             
-            playerName = clean.trim() || "Noob";
+            playerName = clean;
             // Sync other inputs but don't overwrite the one being typed in to avoid cursor jumps
             usernameInputs.forEach(i => {
                 if (i !== e.target) i.value = playerName;
@@ -426,7 +454,7 @@ startButton.addEventListener('click', () => {
         
         if (!isGameStarted) {
             init();
-            animate();
+            engine.start();
             isGameStarted = true;
             if (selectedMode === 'dm') {
                 startTimer();
@@ -484,10 +512,9 @@ function setupDataConnection(conn) {
             }
         } else if (data.type === 'score-update') {
             if (typeof data.name === 'string' && typeof data.kills === 'number') {
-                // Sanitize remote name just in case
-                const safeName = data.name.replace(/[^a-zA-Z0-9 _-]/g, '').substring(0, 12);
+                const safeName = Utils.sanitizeName(data.name);
                 networkScores[conn.peer] = {
-                    name: safeName || "Player",
+                    name: safeName,
                     kills: data.kills,
                     team: data.team || 'A'
                 };
@@ -498,11 +525,14 @@ function setupDataConnection(conn) {
         } else if (data.type === 'player-hit') {
             // Check if WE were the one hit
             if (data.targetId === peer.id) {
-                takeDamage(data.damage, data.attackerName || "Player", data.weapon || "Gun", data.attackerTeam);
+                const safeAttacker = Utils.sanitizeName(data.attackerName);
+                takeDamage(data.damage, safeAttacker, data.weapon || "Gun", data.attackerTeam);
             }
         } else if (data.type === 'kill-event') {
-            addKillFeedEntry(data.killer, data.victim, data.weapon, data.team);
-            if (data.killer === playerName && data.victim !== playerName) {
+            const safeKiller = Utils.sanitizeName(data.killer);
+            const safeVictim = Utils.sanitizeName(data.victim);
+            addKillFeedEntry(safeKiller, safeVictim, data.weapon, data.team);
+            if (safeKiller === playerName && safeVictim !== playerName) {
                 playerKills++;
                 let reward = 300;
                 if (data.weapon === 'knife') reward = 1500;
@@ -565,7 +595,7 @@ function updateNetworkPlayer(id, data) {
         }
         
         ctx.textAlign = 'center';
-        ctx.fillText(data.name || "Player", 128, 45);
+        ctx.fillText(Utils.sanitizeName(data.name), 128, 45);
         
         const texture = new THREE.CanvasTexture(canvas);
         const spriteMat = new THREE.SpriteMaterial({ map: texture });
@@ -900,7 +930,9 @@ function createEnemy(x, y, z, team = 'A', options = {}) {
     enemy.userData.spawnPos = { x, y, z }; // Store for respawning
     enemy.userData.isStationary = options.isStationary || false;
     enemy.userData.isCrouched = options.isCrouched || false;
-    enemy.userData.roamTimer = enemy.userData.isStationary ? 999999999 : (Math.random() * 5000 + 2000);
+    enemy.userData.isPacer = options.isPacer || false;
+    enemy.userData.laneX = options.laneX || x;
+    enemy.userData.roamTimer = (enemy.userData.isStationary || enemy.userData.isPacer) ? 999999999 : (Math.random() * 5000 + 2000);
     enemy.userData.walkCycle = 0;
     
     enemies.push(enemy);
@@ -1395,6 +1427,13 @@ function init() {
 
         window.addEventListener('resize', onWindowResize);
         console.log("Renderer appended and scene ready.");
+
+        // Initialize Debug Bridge for real-time Gemini control
+        DebugBridge.init({
+            camera, scene, enemies, objects,
+            WEAPONS_DATA, createEnemy, updateUI
+        });
+
     } catch (error) {
         console.error("Initialization failed:", error);
         document.getElementById('instructions').innerHTML = "<h1>Error initializing 3D environment</h1><p>" + error.message + "</p>";
@@ -1438,11 +1477,11 @@ function updateUI() {
     GameState.peer = peer;
     GameState.isPlayerDead = isPlayerDead;
     GameState.isGameStarted = isGameStarted;
-        GameState.isHost = isHost;
-        
-        UI.updateUI(enemies, inventory);
-    }
-    function addKillFeedEntry(killer, victim, weapon, killerTeam = null) {
+    GameState.isHost = isHost;
+    
+    UI.updateUI(enemies, inventory);
+}
+function addKillFeedEntry(killer, victim, weapon, killerTeam = null) {
     if (!settings.showKillFeed) return;
 
     const killFeed = document.getElementById('kill-feed');
@@ -2226,6 +2265,9 @@ function killEnemy(enemy, killerName = playerName, weapon = currentWeapon, kille
     const spawnPos = { ...enemy.userData.spawnPos };
     const enemyTeam = enemy.userData.team;
     const isStationary = enemy.userData.isStationary;
+    const isCrouched = enemy.userData.isCrouched;
+    const isPacer = enemy.userData.isPacer;
+    const laneX = enemy.userData.laneX;
 
     // Despawn after 5 seconds
     setTimeout(() => {
@@ -2260,7 +2302,12 @@ function killEnemy(enemy, killerName = playerName, weapon = currentWeapon, kille
                 // Training Range Respawn
                 if (selectedMap === 'training') {
                     setTimeout(() => {
-                        respawnEnemy(spawnPos, enemyTeam, { isStationary: isStationary, isCrouched: isCrouched });
+                        respawnEnemy(spawnPos, enemyTeam, { 
+                            isStationary: isStationary, 
+                            isCrouched: isCrouched,
+                            isPacer: isPacer,
+                            laneX: laneX
+                        });
                     }, 3000); // 3 seconds after complete removal
                 }
             }
@@ -2783,10 +2830,18 @@ function animate() {
             currentNearPickup = nearest;
             if (pickupPrompt) {
                 const wName = WEAPONS_DATA[nearest.userData.weaponKey].name;
-                pickupPrompt.innerHTML = `PRESS <span style="background: #ff9d00; color: #000; padding: 2px 8px; border-radius: 3px;">E</span> TO SWAP FOR ${wName}`;
-                pickupPrompt.style.display = 'block';
-            }
-        } else {
+                if (wName) {
+                    pickupPrompt.textContent = "PRESS ";
+                    const eKey = document.createElement('span');
+                    eKey.style.background = '#ff9d00';
+                    eKey.style.color = '#000';
+                    eKey.style.padding = '2px 8px';
+                    eKey.style.borderRadius = '3px';
+                    eKey.textContent = 'E';
+                    pickupPrompt.appendChild(eKey);
+                    pickupPrompt.appendChild(document.createTextNode(` TO SWAP FOR ${wName}`));
+                    pickupPrompt.style.display = 'block';
+                } else {
             currentNearPickup = null;
             if (pickupPrompt) pickupPrompt.style.display = 'none';
         }

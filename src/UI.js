@@ -31,8 +31,19 @@ export const UI = {
         if (this.ammo) {
             if (GameState.currentWeapon === 'gun') {
                 this.ammo.style.visibility = 'visible';
-                const weaponName = GameState.currentWeaponName ? `<span style="font-size: 0.8em; color: #aaa;">${GameState.currentWeaponName}</span><br>` : "";
-                this.ammo.innerHTML = weaponName + (GameState.isReloading ? "RELOADING..." : `${GameState.ammoInClip} / ${GameState.ammoTotal}`);
+                this.ammo.textContent = ""; // Clear
+                
+                if (GameState.currentWeaponName) {
+                    const nameSpan = document.createElement('span');
+                    nameSpan.style.fontSize = '0.8em';
+                    nameSpan.style.color = '#aaa';
+                    nameSpan.textContent = GameState.currentWeaponName;
+                    this.ammo.appendChild(nameSpan);
+                    this.ammo.appendChild(document.createElement('br'));
+                }
+                
+                const ammoText = document.createTextNode(GameState.isReloading ? "RELOADING..." : `${GameState.ammoInClip} / ${GameState.ammoTotal}`);
+                this.ammo.appendChild(ammoText);
             } else if (GameState.currentWeapon === 'grenade') {
                 this.ammo.style.visibility = 'visible';
                 this.ammo.innerText = `${GameState.grenadeCount} / ${GameState.maxGrenades} Nades`;

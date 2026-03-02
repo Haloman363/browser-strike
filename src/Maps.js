@@ -115,9 +115,9 @@ export const Maps = {
         }
     },
     'training': {
-        spawnPoint: { x: 0, y: 18, z: -50 },
+        spawnPoint: { x: 0, y: 25, z: -100 },
         build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer) => {
-            // Training Shooting Range (Resized & Compact)
+            // Training Facility (Compact Scale)
             
             // Ground (Concrete)
             const floorWidth = 1000;
@@ -130,25 +130,28 @@ export const Maps = {
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.receiveShadow = true;
             floor.userData.isGround = true;
-            floor.position.set(0, 0, 350); 
+            floor.position.set(0, 0, 250); 
             scene.add(floor);
             objects.push(floor);
 
             // Perimeter Walls
-            createWall(floorWidth, 100, 20, 0, 50, -250, 0xaaaaaa, scene, objects); // Back Wall
-            createWall(floorWidth, 100, 20, 0, 50, 950, 0xaaaaaa, scene, objects);  // Far Wall
-            createWall(20, 100, floorDepth, -500, 50, 350, 0xaaaaaa, scene, objects); // Left Wall
-            createWall(20, 100, floorDepth, 500, 50, 350, 0xaaaaaa, scene, objects);  // Right Wall
+            createWall(floorWidth, 100, 20, 0, 50, -350, 0x888888, scene, objects); // Back Wall
+            createWall(floorWidth, 100, 20, 0, 50, 850, 0x888888, scene, objects);  // Far Wall
+            createWall(20, 100, floorDepth, -500, 50, 250, 0x888888, scene, objects); // Left Wall
+            createWall(20, 100, floorDepth, 500, 50, 250, 0x888888, scene, objects);  // Right Wall
 
-            // Shooting Stations (Gun Counter)
+            // --- SECTION 1: CENTRAL HUB (EQUIPMENT) ---
+            createWall(400, 5, 200, 0, 2.5, -150, 0x666666, scene, objects);
+            
+            // Weapon Stations (Compact)
             const weaponKeys = Object.keys(WEAPONS_DATA);
             weaponKeys.forEach((key, idx) => {
-                const x = (idx - (weaponKeys.length / 2)) * 35;
-                const z = -120;
+                const row = Math.floor(idx / 8);
+                const col = idx % 8;
+                const x = (col - 3.5) * 45;
+                const z = -200 - (row * 35);
                 
-                // Station counter
-                createWall(30, 10, 15, x, 5, z, 0x555555, scene, objects);
-                
+                createWall(35, 10, 15, x, 5, z, 0x444444, scene, objects);
                 const pickup = createGunModel(key, false);
                 pickup.scale.set(15, 15, 15);
                 pickup.position.set(x, 12, z);
@@ -160,15 +163,12 @@ export const Maps = {
                 droppedGuns.push(pickup);
             });
 
-            // Grenade Station (Smaller Counter)
+            // Grenade Station
             const grenadeKeys = Object.keys(GRENADES_DATA);
             grenadeKeys.forEach((key, idx) => {
-                const x = (idx - (grenadeKeys.length / 2)) * 30;
-                const z = -180;
-                
-                // Station counter
-                createWall(25, 10, 15, x, 5, z, 0x444444, scene, objects);
-                
+                const x = (idx - (grenadeKeys.length / 2)) * 40 + 100;
+                const z = -100;
+                createWall(25, 10, 15, x, 5, z, 0x333333, scene, objects);
                 const pickup = createGrenadeModel(false, key);
                 pickup.scale.set(30, 30, 30);
                 pickup.position.set(x, 15, z);
@@ -179,40 +179,67 @@ export const Maps = {
                 droppedGuns.push(pickup);
             });
 
-            // Target Lane Walls (Dividers)
-            const dividerPositions = [-300, -100, 100, 300];
-            dividerPositions.forEach(x => {
-                createWall(5, 80, 800, x, 40, 500, 0x999999, scene, objects);
-            });
+            // --- SECTION 2: SHOOTING RANGE (NORTH) ---
+            createWall(400, 40, 10, 0, 20, 50, 0x555555, scene, objects);
+            const laneWidth = 80;
+            const numLanes = 5;
+            for(let i=0; i<=numLanes; i++) {
+                const x = (i - numLanes/2) * laneWidth;
+                createWall(5, 50, 600, x, 25, 350, 0x999999, scene, objects);
+            }
 
-            // Varied Enemies in Lanes
-            const targetZPositions = [200, 350, 500, 650, 800];
-            const targetXLanes = [-400, -200, 0, 200, 400];
-            
-            targetXLanes.forEach(laneX => {
-                targetZPositions.forEach(distZ => {
-                    const isCrouched = Math.random() > 0.6;
-                    const isObscured = Math.random() > 0.4;
+            for(let lane=0; lane<numLanes; lane++) {
+                const laneX = (lane - (numLanes-1)/2) * laneWidth;
+                const dists = [200, 400, 600];
+                dists.forEach(z => {
                     const offset = (Math.random() - 0.5) * 40;
-                    
-                    const enemy = createEnemyFn(laneX + offset, 0, distZ, 'A', { isStationary: true, isCrouched: isCrouched });
-                    
-                    if (isObscured) {
-                         const coverType = Math.random();
-                         const coverX = laneX + offset;
-                         if (coverType > 0.6) {
-                             // Small Crate for head-glitch or crouch cover
-                             createCrate(12, coverX, 6, distZ - 10, scene, objects);
-                         } else if (coverType > 0.3) {
-                             // Half height wall
-                             createWall(35, 12, 5, coverX, 6, distZ - 8, 0x777777, scene, objects);
-                         } else {
-                             // Vertical pillar to peek from
-                             createWall(10, 30, 10, coverX - 15, 15, distZ - 5, 0x666666, scene, objects);
-                         }
+                    const isStationary = z < 500;
+                    const enemy = createEnemyFn(laneX + offset, 0, z, 'A', { 
+                        isStationary: isStationary,
+                        isCrouched: Math.random() > 0.8
+                    });
+                    if (!isStationary) {
+                        enemy.userData.targetPos = new THREE.Vector3(laneX - 30, 0, z);
+                        enemy.userData.laneX = laneX;
+                        enemy.userData.isPacer = true;
                     }
+                    if (Math.random() > 0.6) createCrate(15, laneX + offset, 7.5, z - 20, scene, objects);
                 });
-            });
+            }
+
+            // --- SECTION 3: KILL HOUSE (EAST) ---
+            const khX = 350;
+            const khZ = 400;
+            createWall(250, 5, 400, khX, 2.5, khZ, 0x777777, scene, objects);
+            createWall(250, 80, 10, khX, 40, khZ - 200, 0x555555, scene, objects);
+            createWall(250, 80, 10, khX, 40, khZ + 200, 0x555555, scene, objects);
+            createWall(10, 80, 400, khX - 125, 40, khZ, 0x555555, scene, objects);
+            createWall(10, 80, 400, khX + 125, 40, khZ, 0x555555, scene, objects);
+            createWall(150, 80, 10, khX + 50, 40, khZ, 0x666666, scene, objects);
+            createEnemyFn(khX + 80, 0, khZ - 150, 'A', { isStationary: true });
+            createEnemyFn(khX - 80, 0, khZ + 150, 'A', { isStationary: true });
+
+            // --- SECTION 4: PARKOUR (WEST) ---
+            const pkX = -350;
+            const pkZ = 400;
+            createWall(200, 10, 80, pkX, 5, pkZ - 150, 0x444444, scene, objects);
+            for(let i=0; i<6; i++) {
+                const x = pkX + (Math.random() - 0.5) * 100;
+                const z = pkZ - 50 + i * 80;
+                const h = 10 + i * 8;
+                if (Math.random() > 0.5) createCrate(20, x, h/2, z, scene, objects);
+                else createPillar(12, h, x, 0, z, scene, objects);
+            }
+            createWall(150, 80, 80, pkX, 40, pkZ + 450, 0x555555, scene, objects);
+            const reward = createGunModel('AWP', false);
+            reward.position.set(pkX, 85, pkZ + 450);
+            reward.scale.set(15, 15, 15);
+            reward.userData.isPickup = true;
+            reward.userData.weaponKey = 'AWP';
+            reward.userData.ammoAmount = 30;
+            scene.add(reward);
+            droppedGuns.push(reward);
         }
     }
+
 };

@@ -1,0 +1,36 @@
+# Browser Strike Texture Generation Guide
+
+Use the following prompts in your image generator (like Google AI Studio, Midjourney, or DALL-E) to create high-quality seamless textures for the environment.
+
+## 1. Sand Texture (Ground)
+Prompt: Fine desert sand texture, warm beige and tan colors, subtle dunes and ripple patterns, detailed grains, seamless tiling, top-down orthographic view, high resolution.
+Save as: sand.png
+
+## 2. Wall Texture (Buildings/Obstacles)
+Prompt: Weathered tan brick wall texture, old sun-bleached stone, subtle mortar lines, rough architectural surface, seamless tiling, flat front-on view, 4k detail.
+Save as: wall.png
+
+## 3. Concrete Texture (Industrial areas)
+Prompt: Rough grey industrial concrete texture, subtle cracks and weathering, dark spots and noise, weathered cement surface, seamless tiling, flat top-down view.
+Save as: concrete.png
+
+## 4. Glove Texture (Player Hands)
+Prompt: Tactical combat glove fabric texture, dark charcoal grey leather and nylon weave, hexagonal reinforcement patterns, rugged military material, seamless tiling.
+Save as: glove.png
+
+---
+
+### Instructions for Installation:
+
+1. Generate the images based on the prompts above.
+2. Save or convert each image to the .png format.
+3. Place the files in the following directory in your project:
+   /mnt/c/Users/Jaymes/Github Repos/browser-strike/assets/textures/
+
+### File Names (Case Sensitive):
+- assets/textures/sand.png
+- assets/textures/wall.png
+- assets/textures/concrete.png
+- assets/textures/glove.png
+
+Once these files are in place, the game's `TextureGenerator.js` will automatically detect them on the next reload and swap out the simple procedural colors for your high-quality textures!

@@ -1,14 +1,48 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
+import { WebSocketServer, WebSocket } from "ws";
 const server = new Server({
-    name: "threejs-mcp",
-    version: "1.1.0",
+    name: "threejs-mcp-v2",
+    version: "2.0.0",
 }, {
     capabilities: {
         tools: {},
     },
 });
+// --- WebSocket Bridge for Live Updates ---
+const WSS_PORT = 8081;
+const BRIDGE_TOKEN = "BS_DEV_12345"; // Simple dev token
+const wss = new WebSocketServer({
+    port: WSS_PORT,
+    verifyClient: (info, callback) => {
+        // 1. Origin Check (Prevent Hijacking)
+        const origin = info.origin || "";
+        const isLocal = origin.includes("localhost") || origin.includes("127.0.0.1") || origin === "null"; // Allow null for local file testing
+        // 2. Token Check (Prevent unauthorized access)
+        const url = new URL(info.req.url || "", `http://${info.req.headers.host}`);
+        const token = url.searchParams.get("token");
+        if (!isLocal || token !== BRIDGE_TOKEN) {
+            console.error(`[MCP] Rejected connection from origin: ${origin}`);
+            callback(false, 401, "Unauthorized");
+            return;
+        }
+        callback(true);
+    }
+});
+let clients = new Set();
+wss.on("connection", (ws) => {
+    clients.add(ws);
+    console.error("[MCP] Browser client connected to bridge.");
+    ws.on("close", () => clients.delete(ws));
+});
+function broadcast(msg) {
+    const payload = JSON.stringify(msg);
+    clients.forEach(c => {
+        if (c.readyState === WebSocket.OPEN)
+            c.send(payload);
+    });
+}
 const THREE_DOCS = {
     "Group": "https://threejs.org/docs/#api/en/objects/Group",
     "Mesh": "https://threejs.org/docs/#api/en/objects/Mesh",
@@ -22,19 +56,66 @@ const THREE_DOCS = {
 server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {
         tools: [
-            // --- General & Documentation ---
+            // --- LIVE BRIDGE TOOLS ---
+            {
+                name: "live_tweak_weapon",
+                description: "Instantly update weapon parameters in the running game via WebSocket.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        weaponId: { type: "string" },
+                        params: { type: "object", additionalProperties: true }
+                    },
+                    required: ["weaponId", "params"],
+                },
+            },
+            {
+                name: "debug_spawn_enemy",
+                description: "Spawn an AI bot at a specific position in the running game.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        type: { type: "string", enum: ["grunt", "sniper", "heavy"] },
+                        position: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } }
+                    },
+                    required: ["type", "position"],
+                },
+            },
+            // --- ASSET HELPERS (SIMULATING EXTERNAL MCPS) ---
+            {
+                name: "get_audio_config",
+                description: "Generate optimal FFmpeg/WebAudio configuration for game sound assets (Simulates Audio Tweaker MCP).",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        assetName: { type: "string" },
+                        type: { type: "string", enum: ["sfx", "bgm", "ui"] }
+                    },
+                    required: ["assetName", "type"],
+                },
+            },
+            {
+                name: "generate_glb_manifest",
+                description: "Create a boilerplate manifest for external 3D model generation (Simulates Tripo/Flux MCPs).",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        prompt: { type: "string" },
+                        targetSlot: { type: "string", description: "e.g., primary_weapon, prop, character" }
+                    },
+                    required: ["prompt", "targetSlot"],
+                },
+            },
+            // --- EXISTING TOOLS ---
             {
                 name: "get_docs",
                 description: "Get documentation links for Three.js classes.",
                 inputSchema: {
                     type: "object",
-                    properties: {
-                        className: { type: "string", description: "The name of the Three.js class." },
-                    },
+                    properties: { className: { type: "string" } },
                     required: ["className"],
                 },
             },
-            // --- Modeling ---
             {
                 name: "generate_mesh_code",
                 description: "Generate Three.js code snippet for a specific mesh type.",
@@ -52,93 +133,14 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                 description: "Generate code to compute and set a bounding box for collision detection.",
                 inputSchema: {
                     type: "object",
-                    properties: {
-                        variableName: { type: "string", description: "The variable name of the mesh." },
-                    },
+                    properties: { variableName: { type: "string" } },
                     required: ["variableName"],
                 },
             },
-            // --- Map Design ---
-            {
-                name: "generate_map_object",
-                description: "Generate code for a map object (wall, crate, floor) with physics metadata.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        type: { type: "string", enum: ["wall", "crate", "floor"] },
-                        dimensions: {
-                            type: "object",
-                            properties: {
-                                w: { type: "number" },
-                                h: { type: "number" },
-                                d: { type: "number" }
-                            }
-                        },
-                        position: {
-                            type: "object",
-                            properties: {
-                                x: { type: "number" },
-                                y: { type: "number" },
-                                z: { type: "number" }
-                            }
-                        }
-                    },
-                    required: ["type", "dimensions", "position"],
-                },
-            },
-            // --- Gameplay & Physics ---
             {
                 name: "get_physics_constants",
                 description: "Retrieve standard project physics constants (Gravity, Speed, etc).",
                 inputSchema: { type: "object", properties: {} },
-            },
-            {
-                name: "suggest_weapon_tweak",
-                description: "Suggest changes to WEAPONS_DATA based on desired feel (e.g., 'make it faster', 'more recoil').",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        weaponId: { type: "string" },
-                        desiredChange: { type: "string" }
-                    },
-                    required: ["weaponId", "desiredChange"],
-                },
-            },
-            // --- Testing ---
-            {
-                name: "generate_unit_test",
-                description: "Generate a Vitest unit test for a Three.js utility or physics function.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        functionName: { type: "string" },
-                        filePath: { type: "string" }
-                    },
-                    required: ["functionName", "filePath"],
-                },
-            },
-            // --- Rendering & Performance ---
-            {
-                name: "estimate_complexity",
-                description: "Estimate vertex and face counts for common Three.js geometries.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        geometryType: { type: "string" },
-                        parameters: { type: "object", additionalProperties: true }
-                    },
-                    required: ["geometryType"],
-                },
-            },
-            {
-                name: "generate_shader_boilerplate",
-                description: "Generate a basic ShaderMaterial boilerplate with common uniforms.",
-                inputSchema: {
-                    type: "object",
-                    properties: {
-                        name: { type: "string" }
-                    }
-                }
             }
         ],
     };
@@ -146,6 +148,23 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
     switch (name) {
+        case "live_tweak_weapon": {
+            broadcast({ type: "TWEAK_WEAPON", data: args });
+            return { content: [{ type: "text", text: `Sent tweak command for ${args?.weaponId}. Check game console.` }] };
+        }
+        case "debug_spawn_enemy": {
+            broadcast({ type: "SPAWN_ENEMY", data: args });
+            return { content: [{ type: "text", text: `Sent spawn command for ${args?.type}.` }] };
+        }
+        case "get_audio_config": {
+            const { assetName, type } = args;
+            const bitrate = type === "sfx" ? "128k" : "192k";
+            return { content: [{ type: "text", text: `FFmpeg Config for ${assetName}:\n- Format: OGG (Web standard)\n- Bitrate: ${bitrate}\n- Sample Rate: 44.1kHz\n- Optimization: Mono for positional SFX, Stereo for UI.` }] };
+        }
+        case "generate_glb_manifest": {
+            const { prompt, targetSlot } = args;
+            return { content: [{ type: "text", text: `GLB Generation Manifest:\n- Prompt: ${prompt}\n- Slot: ${targetSlot}\n- Export: GLTF/GLB\n- Scale: 0.1 (Three.js standard for this project)\n- Orientation: Forward Z+` }] };
+        }
         case "get_docs": {
             const className = args?.className;
             const url = THREE_DOCS[className];
@@ -158,45 +177,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (type === "box")
                 code = `const geo = new THREE.BoxGeometry(1, 1, 1);\nconst mat = new THREE.MeshPhongMaterial({ color: 0x888888 });\nconst ${vName} = new THREE.Mesh(geo, mat);`;
             if (type === "cylinder")
-                code = `const geo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);\nconst mat = new THREE.MeshPhongMaterial({ color: 0x222222 });\nconst ${vName} = new THREE.Mesh(geo, mat);\n${vName}.rotation.x = -Math.PI / 2; // Project horizontal standard`;
-            return { content: [{ type: "text", text: code }] };
-        }
-        case "calculate_bounding_box": {
-            const vName = args?.variableName;
-            const code = `${vName}.geometry.computeBoundingBox();\n${vName}.userData.boundingBox = ${vName}.geometry.boundingBox.clone();\n${vName}.userData.boundingBox.applyMatrix4(${vName}.matrixWorld);\n${vName}.userData.isSolid = true;`;
-            return { content: [{ type: "text", text: code }] };
-        }
-        case "generate_map_object": {
-            const { type, dimensions: d, position: p } = args;
-            const textureMethod = type === "wall" ? "createWallTexture" : type === "crate" ? "createCrateTexture" : "createConcreteTexture";
-            const code = `const ${type}Geo = new THREE.BoxGeometry(${d.w}, ${d.h}, ${d.d});\nconst ${type}Mat = new THREE.MeshPhongMaterial({ map: TextureGenerator.${textureMethod}() });\nconst ${type} = new THREE.Mesh(${type}Geo, ${type}Mat);\n${type}.position.set(${p.x}, ${p.y}, ${p.z});\n${type}.geometry.computeBoundingBox();\n${type}.userData.isSolid = true;\n${type}.userData.boundingBox = ${type}.geometry.boundingBox.clone().applyMatrix4(${type}.matrixWorld);`;
+                code = `const geo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);\nconst mat = new THREE.MeshPhongMaterial({ color: 0x222222 });\nconst ${vName} = new THREE.Mesh(geo, mat);\n${vName}.rotation.x = -Math.PI / 2;`;
             return { content: [{ type: "text", text: code }] };
         }
         case "get_physics_constants": {
-            return { content: [{ type: "text", text: "Physics Constants:\n- Gravity: 980\n- Standing Height: 18\n- Crouch Height: 10\n- Player Radius: 4.0\n- Move Speed: 1000\n- Jump Force: 250" }] };
-        }
-        case "suggest_weapon_tweak": {
-            const { weaponId, desiredChange } = args;
-            return { content: [{ type: "text", text: `Suggestion for ${weaponId} (${desiredChange}):\n- If too slow: Increase 'fireRate' (RPM).\n- If too shaky: Decrease 'recoil'.\n- If too accurate: Increase 'spread'.` }] };
-        }
-        case "generate_unit_test": {
-            const { functionName, filePath } = args;
-            const code = `import { describe, it, expect } from 'vitest';\nimport { ${functionName} } from '${filePath}';\n\ndescribe('${functionName}', () => {\n  it('should behave correctly', () => {\n    // TODO: Implement test logic\n  });\n});`;
-            return { content: [{ type: "text", text: code }] };
-        }
-        case "estimate_complexity": {
-            const { geometryType, parameters: p } = args;
-            let verts = 0;
-            if (geometryType === "BoxGeometry")
-                verts = 24;
-            if (geometryType === "SphereGeometry")
-                verts = ((p.widthSegments || 32) + 1) * ((p.heightSegments || 16) + 1);
-            return { content: [{ type: "text", text: `Estimated Vertex Count for ${geometryType}: ~${verts}` }] };
-        }
-        case "generate_shader_boilerplate": {
-            const sName = args?.name || "customShader";
-            const code = `const ${sName} = new THREE.ShaderMaterial({\n  uniforms: {\n    uTime: { value: 0 },\n    uResolution: { value: new THREE.Vector2() }\n  },\n  vertexShader: \`void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }\`,\n  fragmentShader: \`uniform float uTime; void main() { gl_FragColor = vec4(abs(sin(uTime)), 0.0, 0.0, 1.0); }\`\n});`;
-            return { content: [{ type: "text", text: code }] };
+            return { content: [{ type: "text", text: "Gravity: 980, PlayerRadius: 4.0, MoveSpeed: 1000" }] };
         }
         default:
             throw new Error(`Unknown tool: ${name}`);
@@ -205,6 +190,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
+    console.error(`[MCP] Bridge Server listening on port ${WSS_PORT}`);
 }
 main().catch((error) => {
     console.error("Server error:", error);
