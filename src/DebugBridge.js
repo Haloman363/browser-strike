@@ -72,8 +72,15 @@ export const DebugBridge = {
         }
 
         if (WEAPONS_DATA && WEAPONS_DATA[weaponId]) {
-            Object.assign(WEAPONS_DATA[weaponId], params);
-            console.log(`[DebugBridge] Updated ${weaponId} with:`, params);
+            // Deeply sanitize params to prevent prototype pollution
+            const cleanParams = {};
+            for (const key in params) {
+                if (forbiddenKeys.includes(key)) continue;
+                cleanParams[key] = params[key];
+            }
+
+            Object.assign(WEAPONS_DATA[weaponId], cleanParams);
+            console.log(`[DebugBridge] Updated ${weaponId} with:`, cleanParams);
             // If the user is holding this weapon, we might need to refresh local refs
             if (this.gameRefs.updateUI) this.gameRefs.updateUI();
         } else {

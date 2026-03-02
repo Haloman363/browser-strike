@@ -1436,7 +1436,10 @@ function init() {
 
     } catch (error) {
         console.error("Initialization failed:", error);
-        document.getElementById('instructions').innerHTML = "<h1>Error initializing 3D environment</h1><p>" + error.message + "</p>";
+        const instructions = document.getElementById('instructions');
+        if (instructions) {
+            instructions.textContent = `Error initializing 3D environment: ${error.message}`;
+        }
     }
 }
 
@@ -2841,7 +2844,9 @@ function animate() {
                     pickupPrompt.appendChild(eKey);
                     pickupPrompt.appendChild(document.createTextNode(` TO SWAP FOR ${wName}`));
                     pickupPrompt.style.display = 'block';
-                } else {
+                }
+            }
+        } else {
             currentNearPickup = null;
             if (pickupPrompt) pickupPrompt.style.display = 'none';
         }

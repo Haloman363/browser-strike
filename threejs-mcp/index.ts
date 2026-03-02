@@ -5,6 +5,9 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { WebSocketServer, WebSocket } from "ws";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const server = new Server(
   {
@@ -20,7 +23,7 @@ const server = new Server(
 
 // --- WebSocket Bridge for Live Updates ---
 const WSS_PORT = 8081;
-const BRIDGE_TOKEN = "BS_DEV_12345"; // Simple dev token
+const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || "DEFAULT_SAFE_TOKEN";
 const wss = new WebSocketServer({ 
   port: WSS_PORT,
   verifyClient: (info, callback) => {

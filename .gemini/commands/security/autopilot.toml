@@ -1,0 +1,2 @@
+description = "Automated end-to-end security auditing and remediation using the repo-security-autopilot skill."
+prompt = "Please activate the 'repo-security-autopilot' skill and perform a comprehensive security audit of the current workspace, applying fixes for any issues found, and verifying the changes."

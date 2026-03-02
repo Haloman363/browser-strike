@@ -2,6 +2,8 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, } from "@modelcontextprotocol/sdk/types.js";
 import { WebSocketServer, WebSocket } from "ws";
+import dotenv from "dotenv";
+dotenv.config();
 const server = new Server({
     name: "threejs-mcp-v2",
     version: "2.0.0",
@@ -12,7 +14,7 @@ const server = new Server({
 });
 // --- WebSocket Bridge for Live Updates ---
 const WSS_PORT = 8081;
-const BRIDGE_TOKEN = "BS_DEV_12345"; // Simple dev token
+const BRIDGE_TOKEN = process.env.BRIDGE_TOKEN || "DEFAULT_SAFE_TOKEN";
 const wss = new WebSocketServer({
     port: WSS_PORT,
     verifyClient: (info, callback) => {
