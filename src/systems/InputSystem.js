@@ -1,6 +1,7 @@
 import { System } from '../core/System.js';
 
 export class InputSystem extends System {
+    static systemName = 'InputSystem';
     constructor(engine) {
         super(engine);
         this.keys = new Set();

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { System } from '../core/System.js';
 
 export class AISystem extends System {
+    static systemName = 'AISystem';
     constructor(engine) {
         super(engine);
         this.enemies = [];

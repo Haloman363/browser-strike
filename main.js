@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
 import { COLORS, PHYSICS, WEAPON_SETTINGS, WEAPONS_DATA, GRENADES_DATA } from './src/Constants_v2.js';
-import { createHumanoidModel, createGunModel, createKnifeModel, createGrenadeModel, createWall, createCrate } from './src/Factory.js';
+import { createHumanoidModel, createGunModel, createKnifeModel, createGrenadeModel, createWall, createCrate, createC4Model } from './src/Factory.js';
 import { TextureGenerator } from './src/TextureGenerator.js';
 import { GameState } from './src/GameState.js';
 import { Maps } from './src/Maps_v2.js';
@@ -10,7 +10,9 @@ import { checkCollisionAt } from './src/Physics.js';
 import { createBloodSplatter, createImpactEffect } from './src/Weapon.js';
 import { updateBotAI, updateRagdoll } from './src/AI.js';
 import { soundEngine } from './src/SoundEngine.js';
-soundEngine.preloadBGM('assets/audio/Apex_Protocol.mp3');
+// Audio preloading
+const BS_BASE_URL = import.meta.env.BASE_URL;
+soundEngine.preloadBGM(`${BS_BASE_URL}assets/audio/Apex_Protocol.mp3`);
 import { Utils } from './src/Utils.js';
 import { DebugBridge } from './src/DebugBridge.js';
 
@@ -23,6 +25,7 @@ import { PlayerControllerSystem } from './src/systems/PlayerControllerSystem.js'
 import { UISystem } from './src/systems/UISystem.js';
 import { AISystem } from './src/systems/AISystem.js';
 import { ViewSystem } from './src/systems/ViewSystem.js';
+import { BombSystem } from './src/systems/BombSystem.js';
 
 console.log("Script starting...");
 
@@ -64,7 +67,7 @@ let prevTime = performance.now();
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 
-let gun, knife, grenade, muzzleFlash, muzzleLight, playerWorldGun, playerBody;
+let gun, knife, grenade, c4, muzzleFlash, muzzleLight, playerWorldGun, playerBody;
 let currentWeapon = 'gun'; // 'gun', 'knife', or 'grenade'
 let currentSlot = 2;
 let currentWeaponData = WEAPONS_DATA['GLOCK'];
@@ -74,7 +77,7 @@ const inventory = {
     2: { type: 'gun', weaponKey: 'GLOCK', model: null, ammoInClip: 20, ammoTotal: 120 },
     3: { type: 'gun', weaponKey: 'AK47', model: null, ammoInClip: 30, ammoTotal: 90 },
     4: { type: 'grenade', weaponKey: 'HE', model: null, count: 1 },
-    5: { type: 'special', model: null },
+    5: { type: 'none', model: null },
     6: { type: 'grenade', weaponKey: 'FLASH', model: null, count: 2 },
     7: { type: 'grenade', weaponKey: 'SMOKE', model: null, count: 1 },
     8: { type: 'grenade', weaponKey: 'MOLOTOV', model: null, count: 1 }
@@ -186,7 +189,7 @@ try {
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.shadowMap.type = THREE.PCFShadowMap;
         document.body.appendChild(renderer.domElement);
     }
 } catch (e) {
@@ -223,6 +226,11 @@ engine.registerSystem(PlayerControllerSystem);
 engine.registerSystem(UISystem);
 engine.registerSystem(AISystem);
 engine.registerSystem(ViewSystem);
+engine.registerSystem(BombSystem);
+
+engine.on('player:damage', (data) => {
+    takeDamage(data.amount, data.source);
+});
 
 // Start the animation loop for menu rendering
 animate();
@@ -234,7 +242,7 @@ function setupMenu() {
     if (audioOverlay) {
         audioOverlay.addEventListener('click', () => {
             soundEngine.init();
-            soundEngine.playBGM('assets/audio/Apex_Protocol.mp3');
+            soundEngine.playBGM(`${BS_BASE_URL}assets/audio/Apex_Protocol.mp3`);
             audioOverlay.style.display = 'none';
         });
     }
@@ -849,12 +857,17 @@ function switchWeapon(slot) {
     // Update Third Person Model Weapon
     if (playerBody && playerWorldGun) {
         playerBody.remove(playerWorldGun);
-        if (item.type === 'gun' || item.type === 'knife' || item.type === 'grenade') {
+        if (item.type === 'gun' || item.type === 'knife' || item.type === 'grenade' || item.type === 'c4') {
             const weaponKey = item.weaponKey || 'GLOCK';
             
             if (item.type === 'grenade') {
                 playerWorldGun = createGrenadeModel(false, weaponKey);
                 playerWorldGun.scale.set(30, 30, 30);
+                playerWorldGun.position.set(4, 11, 6);
+                playerWorldGun.rotation.set(0, 0, 0);
+            } else if (item.type === 'c4') {
+                playerWorldGun = createC4Model(false);
+                playerWorldGun.scale.set(50, 50, 50);
                 playerWorldGun.position.set(4, 11, 6);
                 playerWorldGun.rotation.set(0, 0, 0);
             } else {
@@ -872,14 +885,17 @@ function switchWeapon(slot) {
         }
     }
 
-    if (item.type === 'gun') {
+    if (item.type === 'gun' || item.type === 'c4') {
         currentWeaponData = WEAPONS_DATA[item.weaponKey];
-        ammoInClip = item.ammoInClip;
-        ammoTotal = item.ammoTotal;
-        gun = item.model;
-        
-        // Find muzzle flash in children
-        muzzleFlash = gun.children.find(c => c.userData.isMuzzleFlash);
+        if (item.type === 'gun') {
+            ammoInClip = item.ammoInClip;
+            ammoTotal = item.ammoTotal;
+            gun = item.model;
+            // Find muzzle flash in children
+            muzzleFlash = gun.children.find(c => c.userData.isMuzzleFlash);
+        } else {
+            c4 = item.model;
+        }
     }
 
     if (item.model) {
@@ -1359,10 +1375,10 @@ function init() {
 
         // --- MAP BUILDING ---
         if (Maps[selectedMap]) {
-            Maps[selectedMap].build(scene, objects, enemies, droppedGuns, createEnemy, botsEnabled, teamsEnabled, peer);
+            Maps[selectedMap].build(scene, objects, enemies, droppedGuns, createEnemy, botsEnabled, teamsEnabled, peer, WEAPONS_DATA, GRENADES_DATA);
         } else {
             // Fallback to dust2 if map not found
-            Maps['dust2'].build(scene, objects, enemies, droppedGuns, createEnemy, botsEnabled, teamsEnabled, peer);
+            Maps['dust2'].build(scene, objects, enemies, droppedGuns, createEnemy, botsEnabled, teamsEnabled, peer, WEAPONS_DATA, GRENADES_DATA);
         }
         shootables.push(...objects);
 
@@ -1408,6 +1424,10 @@ function init() {
                 item.model = createGrenadeModel(true, item.weaponKey);
                 item.model.position.set(0.3, -0.4, -0.4);
                 if (slot == currentSlot) grenade = item.model;
+            } else if (item.type === 'c4') {
+                item.model = createC4Model(true);
+                item.model.position.set(0.3, -0.4, -0.4);
+                if (slot == currentSlot) gun = item.model; // C4 uses gun ref for simplicity if not adding dedicated c4 ref
             }
             
             if (item.model) {
@@ -1423,6 +1443,16 @@ function init() {
         }
         playerBody = createHumanoidModel(playerTeam === 'B' ? 'TERRORIST' : 'COUNTER_TERRORIST');
         playerBody.position.set(0, -18, 0); // Position below the camera
+
+        // --- C4 INITIALIZATION ---
+        if (playerTeam === 'B') {
+            inventory[5] = { type: 'c4', weaponKey: 'C4', model: createC4Model(true) };
+            inventory[5].model.position.set(0.3, -0.4, -0.4);
+            inventory[5].model.visible = (currentSlot === 5);
+            camera.add(inventory[5].model);
+        } else {
+            inventory[5] = { type: 'none', model: null };
+        }
 
         // Add a visual weapon for the local player's body (for others/shadows to see)
         playerWorldGun = createGunModel('GLOCK', false);
@@ -1536,6 +1566,7 @@ function init() {
         engine.context.gun = gun;
         engine.context.knife = knife;
         engine.context.grenade = grenade;
+        engine.context.c4 = inventory[5].model;
         engine.context.muzzleFlash = muzzleFlash;
         engine.context.objects = objects;
         engine.context.enemies = enemies;
@@ -2979,27 +3010,8 @@ function animate() {
         }
 
         // Update Swap Prompt
-        if (nearest) {
-            currentNearPickup = nearest;
-            if (pickupPrompt) {
-                const wName = WEAPONS_DATA[nearest.userData.weaponKey].name;
-                if (wName) {
-                    pickupPrompt.textContent = "PRESS ";
-                    const eKey = document.createElement('span');
-                    eKey.style.background = '#ff9d00';
-                    eKey.style.color = '#000';
-                    eKey.style.padding = '2px 8px';
-                    eKey.style.borderRadius = '3px';
-                    eKey.textContent = 'E';
-                    pickupPrompt.appendChild(eKey);
-                    pickupPrompt.appendChild(document.createTextNode(` TO SWAP FOR ${wName}`));
-                    pickupPrompt.style.display = 'block';
-                }
-            }
-        } else {
-            currentNearPickup = null;
-            if (pickupPrompt) pickupPrompt.style.display = 'none';
-        }
+        GameState.set({ currentNearPickup: nearest });
+        currentNearPickup = nearest;
 
         if (connections.length > 0 && isGameStarted) {
             const transformData = {

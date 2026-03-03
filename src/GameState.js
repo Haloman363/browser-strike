@@ -33,7 +33,15 @@ export class GameStateManager extends EventEmitter {
             isHost: false,
             lobbyCode: "",
             peer: null,
-            connections: []
+            connections: [],
+            // Bomb State
+            bombPlanted: false,
+            bombPlanting: false,
+            bombPlantProgress: 0,
+            bombTimeLeft: 40,
+            canPlant: false,
+            atBombSite: null, // 'A' or 'B'
+            bombExploded: false
         };
     }
 

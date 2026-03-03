@@ -3,6 +3,7 @@ import { System } from '../core/System.js';
 import { GameState } from '../GameState.js';
 
 export class ViewSystem extends System {
+    static systemName = 'ViewSystem';
     constructor(engine) {
         super(engine);
         this.bobCounter = 0;
@@ -59,8 +60,13 @@ export class ViewSystem extends System {
         const gun = this.engine.context.gun;
         const knife = this.engine.context.knife;
         const grenade = this.engine.context.grenade;
+        const c4 = this.engine.context.c4;
         
-        const activeModel = currentWeapon === 'gun' ? gun : (currentWeapon === 'knife' ? knife : grenade);
+        let activeModel = null;
+        if (currentWeapon === 'gun') activeModel = gun;
+        else if (currentWeapon === 'knife') activeModel = knife;
+        else if (currentWeapon === 'grenade') activeModel = grenade;
+        else if (currentWeapon === 'c4') activeModel = c4;
         
         if (activeModel) {
             this.updateWeaponModel(activeModel, delta, currentWeapon);
@@ -110,6 +116,7 @@ export class ViewSystem extends System {
         const bobY = Math.abs(Math.sin(this.bobCounter)) * (playerController?.isCrouching ? 0.005 : 0.01);
         
         // Position
+        const isUtility = type === 'knife' || type === 'grenade' || type === 'c4';
         const targetRestPos = type === 'gun' ? this.restPos : new THREE.Vector3(0.3, -0.4, -0.4);
         const currentBasePos = new THREE.Vector3().lerpVectors(targetRestPos, this.adsPos, this.adsProgress);
         

@@ -17,7 +17,17 @@ export const COLORS = {
     CRATE: 0x8b4513,
     WALL_DEFAULT: 0xc2b280,
     SKY: 0xadd8e6,
-    SAND: 0xedc9af
+    SAND: 0xedc9af,
+    C4: 0xffaa00,
+    BOMBSITE: 0x00ff00
+};
+
+export const BOMB_SETTINGS = {
+    PLANT_TIME: 3000,     // 3 seconds to plant
+    EXPLODE_TIME: 40000,  // 40 seconds countdown
+    PLANT_RADIUS: 50,     // Distance to bomb site center
+    EXPLOSION_RADIUS: 500,
+    EXPLOSION_DAMAGE: 500
 };
 
 export const PHYSICS = {
@@ -358,7 +368,7 @@ export const WEAPONS_DATA = {
         price: 5200,
         type: 'heavy'
     },
-    'NOVA': {
+    NOVA: {
         name: 'Nova',
         slot: 3,
         damage: 26,
@@ -373,8 +383,20 @@ export const WEAPONS_DATA = {
         isAutomatic: false,
         price: 1050,
         type: 'shotgun'
+    },
+    C4: {
+        name: 'C4 Explosive',
+        slot: 5,
+        damage: 0,
+        magSize: 1,
+        reserveAmmo: 0,
+        reloadTime: 0,
+        fireRate: 0,
+        price: 0,
+        type: 'utility'
     }
-};
+    };
+
 
 
 

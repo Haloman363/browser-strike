@@ -1,13 +1,29 @@
 import * as THREE from 'three';
-import { COLORS, WEAPONS_DATA, GRENADES_DATA } from './Constants_v2.js';
-import { createWall, createCrate, createPillar, createGunModel, createGrenadeModel, createHumanoidModel } from './Factory.js';
+import { COLORS } from './Constants_v2.js';
+import { createWall, createCrate, createPillar, createGunModel, createGrenadeModel, createHumanoidModel, createBombSiteMarker } from './Factory.js';
 import { TextureGenerator } from './TextureGenerator.js';
 
 export const Maps = {
     'dust2': {
         spawnPoint: { x: 0, y: 18, z: 600 }, // CT Spawn area
-        build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer) => {
-            // ... (rest of the imports) ...
+        build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer, weaponsData, grenadesData) => {
+            const bombsites = [];
+            if (window.engine && window.engine.context) window.engine.context.bombsites = bombsites;
+
+            // A Site Marker
+            const aMarker = createBombSiteMarker('A');
+            aMarker.position.set(800, 15, -800);
+            scene.add(aMarker);
+            objects.push(aMarker);
+            bombsites.push(aMarker);
+
+            // B Site Marker
+            const bMarker = createBombSiteMarker('B');
+            bMarker.position.set(-700, 10, -800);
+            scene.add(bMarker);
+            objects.push(bMarker);
+            bombsites.push(bMarker);
+
             // Floor (The Sand)
             const floorGeometry = new THREE.PlaneGeometry(5000, 5000);
             floorGeometry.rotateX(-Math.PI / 2);
@@ -116,7 +132,7 @@ export const Maps = {
     },
     'training': {
         spawnPoint: { x: 0, y: 25, z: -100 },
-        build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer) => {
+        build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer, weaponsData, grenadesData) => {
             console.log("BUILDING UPDATED TRAINING MAP V4 - Systems Active");
             // Training Facility (Compact Scale)
             
@@ -149,8 +165,8 @@ export const Maps = {
                 'heavy': []
             };
 
-            Object.keys(WEAPONS_DATA).forEach(key => {
-                const type = WEAPONS_DATA[key].type || 'pistol';
+            Object.keys(weaponsData).forEach(key => {
+                const type = weaponsData[key].type || 'pistol';
                 if (weaponsByType[type]) {
                     weaponsByType[type].push(key);
                 }
@@ -175,7 +191,7 @@ export const Maps = {
                     pickup.rotation.set(0, Math.PI / 2, 0); // Flat against wall
                     pickup.userData.isPickup = true;
                     pickup.userData.weaponKey = key;
-                    pickup.userData.ammoAmount = WEAPONS_DATA[key].magSize * 5;
+                    pickup.userData.ammoAmount = weaponsData[key].magSize * 5;
                     scene.add(pickup);
                     droppedGuns.push(pickup);
                     
@@ -186,7 +202,7 @@ export const Maps = {
             });
 
             // Grenade Station (also on wall or nearby)
-            const grenadeKeys = Object.keys(GRENADES_DATA);
+            const grenadeKeys = Object.keys(grenadesData);
             grenadeKeys.forEach((key, idx) => {
                 const x = (idx - (grenadeKeys.length / 2)) * 40 + 350;
                 const z = -330;

@@ -30,7 +30,7 @@ export class Engine extends EventEmitter {
             this.renderer.setPixelRatio(window.devicePixelRatio);
             this.renderer.setSize(window.innerWidth, window.innerHeight);
             this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            this.renderer.shadowMap.type = THREE.PCFShadowMap;
         }
 
         // Add renderer to DOM if not already present
@@ -50,11 +50,13 @@ export class Engine extends EventEmitter {
 
     /**
      * Registers a system with the engine.
-     * @param {System} systemInstance 
+     * @param {SystemClass} SystemClass 
      */
     registerSystem(SystemClass) {
         const system = new SystemClass(this);
-        this.systems.set(system.name, system);
+        // Use static systemName if available, otherwise fallback to constructor name (minification unsafe)
+        const name = SystemClass.systemName || system.name;
+        this.systems.set(name, system);
         if (this.isRunning) {
             system.init();
         }

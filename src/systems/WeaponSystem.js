@@ -5,6 +5,7 @@ import { WEAPONS_DATA, GRENADES_DATA } from '../Constants_v2.js';
 import { createBloodSplatter, createImpactEffect } from '../Weapon.js';
 
 export class WeaponSystem extends System {
+    static systemName = 'WeaponSystem';
     constructor(engine) {
         super(engine);
         this.lastFireTime = 0;

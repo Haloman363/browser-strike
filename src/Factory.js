@@ -599,6 +599,82 @@ export function createHumanoidModel(team = 'TERRORIST') {
     return group;
 }
 
+export function createC4Model(isViewModel = false) {
+    const group = new THREE.Group();
+    group.name = "c4";
+
+    const c4Tex = TextureGenerator.createC4Texture();
+    const material = new THREE.MeshPhongMaterial({ map: c4Tex });
+
+    // Main Body (Plastic blocks)
+    const bodyGeo = new THREE.BoxGeometry(0.12, 0.08, 0.18);
+    const body = new THREE.Mesh(bodyGeo, material);
+    group.add(body);
+
+    // Detonator Unit (Top part)
+    const detGeo = new THREE.BoxGeometry(0.1, 0.04, 0.12);
+    const det = new THREE.Mesh(detGeo, material);
+    det.position.y = 0.06;
+    group.add(det);
+
+    // Small Red LED
+    const ledGeo = new THREE.SphereGeometry(0.005, 8, 8);
+    const ledMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const led = new THREE.Mesh(ledGeo, ledMat);
+    led.position.set(0.04, 0.07, 0.05);
+    led.name = "led";
+    group.add(led);
+
+    if (isViewModel) {
+        const skinTex = TextureGenerator.createSkinTexture(`#${new THREE.Color(COLORS.SKIN).getHexString()}`);
+        const skinMat = new THREE.MeshPhongMaterial({ map: skinTex });
+        const gloveTex = TextureGenerator.createGloveTexture();
+        const gloveMat = new THREE.MeshPhongMaterial({ map: gloveTex });
+        
+        // C4 in hands position
+        const overrides = {
+            left: { x: -0.15, y: -0.2, z: 0.1, rx: 0.4, ry: 0.6 },
+            right: { x: 0.15, y: -0.2, z: 0.1, rx: 0.4, ry: -0.6 }
+        };
+        
+        createViewModelArms(group, skinMat, gloveMat, 'both', overrides);
+    }
+
+    return group;
+}
+
+export function createBombSiteMarker(siteLabel = 'A') {
+    const group = new THREE.Group();
+    group.name = `bombsite_${siteLabel}`;
+
+    const tex = TextureGenerator.createBombSiteTexture(siteLabel);
+    const geo = new THREE.PlaneGeometry(100, 100);
+    const mat = new THREE.MeshBasicMaterial({ 
+        map: tex, 
+        transparent: true, 
+        side: THREE.DoubleSide,
+        depthWrite: false
+    });
+    
+    const plane = new THREE.Mesh(geo, mat);
+    plane.rotation.x = -Math.PI / 2;
+    plane.position.y = 0.5; // Slightly above ground
+    group.add(plane);
+
+    // Glow effect
+    const glowGeo = new THREE.SphereGeometry(30, 16, 16);
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: 0x00ff00,
+        transparent: true,
+        opacity: 0.1
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.y = 10;
+    group.add(glow);
+
+    return group;
+}
+
 export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
     const recipe = WEAPON_RECIPES[weaponKey] || WEAPON_RECIPES['GLOCK'];
     

@@ -3,6 +3,7 @@ import { System } from '../core/System.js';
 import { PHYSICS } from '../Constants_v2.js';
 
 export class PhysicsSystem extends System {
+    static systemName = 'PhysicsSystem';
     constructor(engine) {
         super(engine);
         this.objects = [];

@@ -2,21 +2,26 @@ import { System } from '../core/System.js';
 import { GameState } from '../GameState.js';
 
 export class UISystem extends System {
+    static systemName = 'UISystem';
     constructor(engine) {
         super(engine);
         this.domElements = {
             health: document.getElementById('health'),
             ammo: document.getElementById('ammo'),
-            weapon: document.getElementById('weapon-name'), // This might be null, but we'll check later
+            weapon: document.getElementById('weapon-name'),
             kills: document.getElementById('alive-count'),
-            cash: document.getElementById('wallet')
+            cash: document.getElementById('wallet'),
+            bombAlert: document.getElementById('bomb-alert'),
+            bombTimer: document.getElementById('timer'),
+            plantContainer: document.getElementById('plant-progress-container'),
+            plantBar: document.getElementById('plant-progress-bar'),
+            pickupPrompt: document.getElementById('pickup-prompt')
         };
     }
 
     init() {
         console.log("UISystem initialized");
         
-        // Listen for individual state changes
         GameState.on('change:health', (val) => this.updateElement('health', val));
         GameState.on('change:ammoInClip', () => this.updateAmmo());
         GameState.on('change:ammoTotal', () => this.updateAmmo());
@@ -24,8 +29,72 @@ export class UISystem extends System {
         GameState.on('change:playerKills', (val) => this.updateElement('kills', val));
         GameState.on('change:cash', (val) => this.updateElement('cash', `$${val}`));
 
-        // Initial update
+        // Bomb Sites
+        GameState.on('change:atBombSite', (site) => this.updateBombSitePrompt(site));
+        GameState.on('change:currentNearPickup', (pickup) => this.updatePickupPrompt(pickup));
+        GameState.on('change:bombPlanting', (planting) => this.updatePlantingUI(planting));
+        GameState.on('change:bombPlantProgress', (progress) => this.updatePlantingProgress(progress));
+        GameState.on('change:bombPlanted', (planted) => this.updateBombPlantedUI(planted));
+        GameState.on('change:bombTimeLeft', (time) => this.updateBombTimer(time));
+
         this.fullUpdate();
+    }
+
+    updateBombSitePrompt(site) {
+        if (!this.domElements.pickupPrompt) return;
+        
+        const hasC4 = GameState.get('currentWeapon') === 'c4';
+        const alreadyPlanted = GameState.get('bombPlanted');
+
+        if (site && hasC4 && !alreadyPlanted) {
+            this.domElements.pickupPrompt.innerHTML = `PRESS <span style="background: #ff9d00; color: #000; padding: 2px 8px; border-radius: 3px;">E</span> TO PLANT AT SITE ${site}`;
+            this.domElements.pickupPrompt.style.display = 'block';
+        } else {
+            this.updatePickupPrompt(GameState.get('currentNearPickup'));
+        }
+    }
+
+    updatePickupPrompt(pickup) {
+        if (!this.domElements.pickupPrompt) return;
+        if (GameState.get('atBombSite') && GameState.get('currentWeapon') === 'c4' && !GameState.get('bombPlanted')) return;
+
+        if (pickup && pickup.userData.weaponKey) {
+            const wName = pickup.userData.weaponKey; // Could use WEAPONS_DATA[wName].name if imported
+            this.domElements.pickupPrompt.innerHTML = `PRESS <span style="background: #ff9d00; color: #000; padding: 2px 8px; border-radius: 3px;">E</span> TO SWAP FOR ${wName}`;
+            this.domElements.pickupPrompt.style.display = 'block';
+        } else {
+            this.domElements.pickupPrompt.style.display = 'none';
+        }
+    }
+
+    updatePlantingUI(planting) {
+        if (this.domElements.plantContainer) {
+            this.domElements.plantContainer.style.display = planting ? 'block' : 'none';
+        }
+    }
+
+    updatePlantingProgress(progress) {
+        if (this.domElements.plantBar) {
+            this.domElements.plantBar.style.width = `${progress * 100}%`;
+        }
+    }
+
+    updateBombPlantedUI(planted) {
+        if (this.domElements.bombAlert) {
+            this.domElements.bombAlert.style.display = planted ? 'block' : 'none';
+            if (planted && this.domElements.bombTimer) {
+                this.domElements.bombTimer.style.display = 'block';
+                this.domElements.bombTimer.style.color = '#ff0000';
+            }
+        }
+    }
+
+    updateBombTimer(timeLeft) {
+        if (this.domElements.bombTimer && GameState.get('bombPlanted')) {
+            const mins = Math.floor(timeLeft / 60);
+            const secs = timeLeft % 60;
+            this.domElements.bombTimer.innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+        }
     }
 
     updateElement(key, value) {

@@ -7,24 +7,28 @@ export class TextureGenerator {
         // Create the procedural texture first as our immediate return value
         const texture = fallbackFn(size);
         
-        // Use the absolute path relative to the root for the Vite server
-        const path = `/browser-strike/assets/textures/${name}.png`;
+        // Use the base URL from Vite to ensure correct paths in both dev and prod.
+        // import.meta.env.BASE_URL always has a trailing slash (e.g. '/' or '/browser-strike/').
+        const baseUrl = import.meta.env.BASE_URL;
+        const path = `${baseUrl}assets/textures/${name}.png`;
         
-        // Attempt to load the real texture from nanobanana output
-        loader.load(path, 
-            (loadedTex) => {
-                // When successfully loaded, swap the procedural image with the real one
-                texture.image = loadedTex.image;
-                texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-                texture.needsUpdate = true;
-                console.log(`Successfully swapped with nanobanana texture: ${name}`);
-            },
-            undefined,
-            (err) => {
-                // Silently keep using the procedural fallback
-                // console.warn(`Texture ${name} not found at ${path}. Using procedural.`);
-            }
-        );
+        // Only attempt to load if it's not a hex color name (starting with #)
+        if (!name.startsWith('#')) {
+            // Attempt to load the real texture from nanobanana output
+            loader.load(path, 
+                (loadedTex) => {
+                    // When successfully loaded, swap the procedural image with the real one
+                    texture.image = loadedTex.image;
+                    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+                    texture.needsUpdate = true;
+                    console.log(`Successfully swapped with nanobanana texture: ${name}`);
+                },
+                undefined,
+                (err) => {
+                    // Silently keep using the procedural fallback
+                }
+            );
+        }
 
         return texture;
     }
@@ -469,6 +473,95 @@ export class TextureGenerator {
             const texture = new THREE.CanvasTexture(canvas);
             return texture;
         }, size);
+    }
+
+    static createC4Texture(size = 512) {
+        return this.getTexture('c4', (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
+
+            // Base Plastic/Polymer
+            ctx.fillStyle = '#333';
+            ctx.fillRect(0, 0, s, s);
+
+            // Noise/Texture
+            for (let i = 0; i < 10000; i++) {
+                const x = Math.random() * s;
+                const y = Math.random() * s;
+                const shade = Math.random() * 20;
+                ctx.fillStyle = `rgb(${51 + shade}, ${51 + shade}, ${51 + shade})`;
+                ctx.fillRect(x, y, 1, 1);
+            }
+
+            // Keypad area
+            ctx.fillStyle = '#111';
+            ctx.fillRect(s/2, 50, s/2 - 50, s - 100);
+            
+            // Buttons
+            ctx.fillStyle = '#444';
+            for(let r=0; r<4; r++) {
+                for(let c=0; c<3; c++) {
+                    ctx.fillRect(s/2 + 30 + c * 50, 80 + r * 60, 40, 40);
+                }
+            }
+
+            // Screen
+            ctx.fillStyle = '#2a0000';
+            ctx.fillRect(s/2 + 30, s - 140, s/2 - 110, 60);
+
+            // Wires
+            ctx.lineWidth = 15;
+            ctx.strokeStyle = '#f00';
+            ctx.beginPath();
+            ctx.moveTo(50, 100);
+            ctx.bezierCurveTo(150, 50, 150, 250, 250, 200);
+            ctx.stroke();
+            
+            ctx.strokeStyle = '#00f';
+            ctx.beginPath();
+            ctx.moveTo(50, 150);
+            ctx.bezierCurveTo(150, 100, 150, 300, 250, 250);
+            ctx.stroke();
+
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }, size);
+    }
+
+    static createBombSiteTexture(siteLabel = 'A', size = 512) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        // Transparent background
+        ctx.clearRect(0, 0, size, size);
+
+        // Circular boundary
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 20;
+        ctx.beginPath();
+        ctx.arc(size/2, size/2, size/2 - 20, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Fill with subtle glow
+        const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+        grad.addColorStop(0, 'rgba(0, 255, 0, 0.2)');
+        grad.addColorStop(1, 'rgba(0, 255, 0, 0)');
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Label
+        ctx.fillStyle = '#00ff00';
+        ctx.font = `bold ${size/2}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(siteLabel, size/2, size/2);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        return texture;
     }
 
     static createWoodTexture(name = 'wood', baseColor = '#4a2c11', size = 512) {
