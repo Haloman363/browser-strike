@@ -1,5 +1,5 @@
 import { GameState } from './GameState.js';
-import { COLORS } from './Constants.js';
+import { COLORS } from './Constants_v2.js';
 
 export const UI = {
     health: document.getElementById('health'),
@@ -109,6 +109,9 @@ export const UI = {
         const fontSize = isFinal ? "24px" : "16px";
         const padding = isFinal ? "15px 25px" : "8px 15px";
 
+        // Clear container safely
+        while (container.firstChild) container.removeChild(container.firstChild);
+
         if (GameState.teamsEnabled) {
             let teamAKills = (GameState.playerTeam === 'A') ? GameState.playerKills : 0;
             let teamBKills = (GameState.playerTeam === 'B') ? GameState.playerKills : 0;
@@ -119,17 +122,32 @@ export const UI = {
                 else if (p.team === 'B') teamBKills += p.kills;
             }
 
-            container.innerHTML = `
-                <div style="background: rgba(0,0,0,0.5); padding: ${isFinal ? '15px' : '10px'}; display: flex; justify-content: space-around; border: 1px solid #444; margin-bottom: ${isFinal ? '20px' : '10px'};">
-                    <div style="color: ${COLORS.TEAM_A_LIGHT}; font-weight: bold; font-size: ${isFinal ? '28px' : '16px'};">TEAM A: ${teamAKills}</div>
-                    <div style="color: ${COLORS.TEAM_B_LIGHT}; font-weight: bold; font-size: ${isFinal ? '28px' : '16px'};">TEAM B: ${teamBKills}</div>
-                </div>
-                <div class="score-header">
-                    <span>PLAYER</span>
-                    <span style="flex: 0.5;">TEAM</span>
-                    <span>KILLS</span>
-                </div>
-            `;
+            // Team Header
+            const headerBox = document.createElement('div');
+            headerBox.style.cssText = `background: rgba(0,0,0,0.5); padding: ${isFinal ? '15px' : '10px'}; display: flex; justify-content: space-around; border: 1px solid #444; margin-bottom: ${isFinal ? '20px' : '10px'};`;
+            
+            const teamA = document.createElement('div');
+            teamA.style.cssText = `color: ${COLORS.TEAM_A_LIGHT}; font-weight: bold; font-size: ${isFinal ? '28px' : '16px'};`;
+            teamA.textContent = `TEAM A: ${teamAKills}`;
+            
+            const teamB = document.createElement('div');
+            teamB.style.cssText = `color: ${COLORS.TEAM_B_LIGHT}; font-weight: bold; font-size: ${isFinal ? '28px' : '16px'};`;
+            teamB.textContent = `TEAM B: ${teamBKills}`;
+            
+            headerBox.appendChild(teamA);
+            headerBox.appendChild(teamB);
+            container.appendChild(headerBox);
+
+            // Column Headers
+            const colHeader = document.createElement('div');
+            colHeader.className = 'score-header';
+            const hPlayer = document.createElement('span'); hPlayer.textContent = 'PLAYER';
+            const hTeam = document.createElement('span'); hTeam.textContent = 'TEAM'; hTeam.style.flex = "0.5";
+            const hKills = document.createElement('span'); hKills.textContent = 'KILLS';
+            colHeader.appendChild(hPlayer);
+            colHeader.appendChild(hTeam);
+            colHeader.appendChild(hKills);
+            container.appendChild(colHeader);
 
             const createRow = (name, team, kills, isLocal) => {
                 const row = document.createElement('div');
@@ -156,12 +174,15 @@ export const UI = {
                 container.appendChild(createRow(p.name, p.team || 'A', p.kills, false));
             }
         } else {
-            container.innerHTML = `
-                <div class="score-header">
-                    <span>PLAYER</span>
-                    <span>KILLS</span>
-                </div>
-            `;
+            // FFA Mode
+            const colHeader = document.createElement('div');
+            colHeader.className = 'score-header';
+            const hPlayer = document.createElement('span'); hPlayer.textContent = 'PLAYER';
+            const hKills = document.createElement('span'); hKills.textContent = 'KILLS';
+            colHeader.appendChild(hPlayer);
+            colHeader.appendChild(hKills);
+            container.appendChild(colHeader);
+
             const createRow = (name, kills, isLocal) => {
                 const row = document.createElement('div');
                 row.className = isLocal ? 'score-row local' : 'score-row';

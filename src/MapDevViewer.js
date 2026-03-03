@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Maps } from './Maps.js';
+import { Maps } from './Maps_v2.js';
 import { createHumanoidModel, createGunModel, createKnifeModel, createGrenadeModel, createWall, createCrate } from './Factory.js';
 import { TextureGenerator } from './TextureGenerator.js';
-import { COLORS } from './Constants.js';
+import { COLORS } from './Constants_v2.js';
 
 let scene, camera, renderer, controls;
 let objects = [];

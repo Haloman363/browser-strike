@@ -91,11 +91,16 @@ export class ViewSystem extends System {
         if (isMoving) {
             const speed = playerController.isCrouching ? 4 : 8;
             this.bobCounter += delta * speed;
-            
+
             if (Math.sin(this.bobCounter) < 0 && Math.sin(this.lastBobCounter) >= 0) {
-                if (this.engine.context.soundEngine) this.engine.context.soundEngine.playFootstep();
+                if (this.engine.context.soundEngine) {
+                    const physics = this.engine.getSystem('PhysicsSystem');
+                    const surface = physics ? physics.getSurfaceUnderPlayer(this.engine.camera.position) : 'concrete';
+                    this.engine.context.soundEngine.playFootstep(surface);
+                }
             }
             this.lastBobCounter = this.bobCounter;
+
         } else {
             this.bobCounter = THREE.MathUtils.lerp(this.bobCounter, Math.PI * 2, 0.1);
             if (this.bobCounter >= Math.PI * 2) this.bobCounter = 0;

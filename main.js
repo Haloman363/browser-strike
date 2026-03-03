@@ -1,15 +1,16 @@
 import * as THREE from 'three';
 import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
-import { COLORS, PHYSICS, WEAPON_SETTINGS, WEAPONS_DATA, GRENADES_DATA } from './src/Constants.js';
+import { COLORS, PHYSICS, WEAPON_SETTINGS, WEAPONS_DATA, GRENADES_DATA } from './src/Constants_v2.js';
 import { createHumanoidModel, createGunModel, createKnifeModel, createGrenadeModel, createWall, createCrate } from './src/Factory.js';
 import { TextureGenerator } from './src/TextureGenerator.js';
 import { GameState } from './src/GameState.js';
-import { Maps } from './src/Maps.js';
+import { Maps } from './src/Maps_v2.js';
 import { UI } from './src/UI.js';
 import { checkCollisionAt } from './src/Physics.js';
 import { createBloodSplatter, createImpactEffect } from './src/Weapon.js';
 import { updateBotAI, updateRagdoll } from './src/AI.js';
 import { soundEngine } from './src/SoundEngine.js';
+soundEngine.preloadBGM('assets/audio/Apex_Protocol.mp3');
 import { Utils } from './src/Utils.js';
 import { DebugBridge } from './src/DebugBridge.js';
 
@@ -27,9 +28,24 @@ console.log("Script starting...");
 
 // Initialize Engine & Core systems
 const engine = new Engine();
-let camera, scene, renderer, controls;
+window.engine = engine; // Global for debugging
+// Hotfix for missing update method in some cached environments
+if (typeof engine.update !== 'function') {
+    console.warn("Hotfixing missing engine.update method");
+    engine.update = function(delta, time) {
+        for (const system of this.systems.values()) {
+            if (system.enabled) {
+                system.update(delta, time);
+            }
+        }
+    };
+}
+console.log("Engine instantiated in main.js - has update method:", typeof engine.update === 'function');
+let camera, scene, renderer, controls, raycaster;
+window.scene = null; // Will be set in init
 const objects = [];
 const enemies = [];
+const shootables = []; // New list for hit detection
 const bloodParticles = [];
 const impactParticles = [];
 const droppedGuns = [];
@@ -131,11 +147,25 @@ let networkScores = {}; // peerId -> { name, kills }
 // Settings State (with defaults)
 let settings = {
     fov: 75,
+    volume: 0.2,
     sensitivity: 1.0,
     viewDistance: 800,
     playerName: "Noob",
     showKillFeed: true
 };
+
+const saveSettings = () => {
+    UI.saveSettings(settings);
+};
+
+// Initial load
+const initialLoaded = UI.loadSettings();
+if (initialLoaded) {
+    settings = { ...settings, ...initialLoaded };
+    // Force 20% volume if first time or not set (optional, but requested for "default")
+    // If we want to strictly follow "default be about 20%", we just change the initial object.
+    playerName = settings.playerName || "Noob";
+}
 
 // Settings managed by UI.js
 const healthUI = document.getElementById('health');
@@ -151,23 +181,34 @@ try {
         powerPreference: 'high-performance',
         failIfMajorPerformanceCaveat: false
     });
+    
+    if (renderer) {
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+    }
 } catch (e) {
     console.error("WebGL initialization failed:", e);
 }
 
+camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 2000);
 if (renderer) {
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
+    controls = new PointerLockControls(camera, renderer.domElement);
+} else {
+    // Fallback if renderer failed
+    controls = { isLocked: false, lock: () => {}, unlock: () => {}, addEventListener: () => {} };
 }
 
-camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 2000);
-controls = new PointerLockControls(camera, renderer.domElement);
-
 // Setup Engine Context
-engine.init({ renderer, camera });
+if (renderer) {
+    engine.init({ renderer, camera });
+} else {
+    // If WebGL failed, at least init engine with camera to avoid system crashes
+    engine.camera = camera;
+    engine.scene = new THREE.Scene();
+}
 engine.context.objects = objects;
 engine.context.enemies = enemies;
 engine.context.bloodParticles = bloodParticles;
@@ -183,16 +224,20 @@ engine.registerSystem(UISystem);
 engine.registerSystem(AISystem);
 engine.registerSystem(ViewSystem);
 
+// Start the animation loop for menu rendering
+animate();
+
 setupMenu();
 function setupMenu() {
-    // Initialize sound engine on first interaction
-    const initSound = () => {
-        soundEngine.init();
-        window.removeEventListener('click', initSound);
-        window.removeEventListener('keydown', initSound);
-    };
-    window.addEventListener('click', initSound);
-    window.addEventListener('keydown', initSound);
+    // Audio Start Overlay (Handles browser autoplay policy)
+    const audioOverlay = document.getElementById('audio-start-overlay');
+    if (audioOverlay) {
+        audioOverlay.addEventListener('click', () => {
+            soundEngine.init();
+            soundEngine.playBGM('assets/audio/Apex_Protocol.mp3');
+            audioOverlay.style.display = 'none';
+        });
+    }
 
     const startButton = document.getElementById('start-button');
     const mainMenu = document.getElementById('main-menu');
@@ -259,11 +304,12 @@ function setupMenu() {
             e.target.value = clean;
             
             playerName = clean;
+            settings.playerName = clean;
             // Sync other inputs but don't overwrite the one being typed in to avoid cursor jumps
             usernameInputs.forEach(i => {
                 if (i !== e.target) i.value = playerName;
             });
-            UI.saveSettings({ playerName });
+            saveSettings();
         });
     });
 
@@ -446,15 +492,16 @@ function setupMenu() {
 joinBtn.addEventListener('mouseenter', () => soundEngine.playUIHover());
 
 startButton.addEventListener('click', () => {
-        soundEngine.playUIClick();
-        mainMenu.style.display = 'none';
+    soundEngine.playUIClick();
+    soundEngine.stopBGM();
+    mainMenu.style.display = 'none';
+
         document.getElementById('crosshair').style.display = 'block';
         document.getElementById('stats').style.display = 'flex';
         document.getElementById('inventory').style.display = 'flex';
         
         if (!isGameStarted) {
             init();
-            engine.start();
             isGameStarted = true;
             if (selectedMode === 'dm') {
                 startTimer();
@@ -907,7 +954,7 @@ function createEnemy(x, y, z, team = 'A', options = {}) {
         if (part instanceof THREE.Mesh) {
             part.userData.isEnemy = true;
             part.userData.parentEnemy = enemy;
-            part.userData.isSolid = true;
+            part.userData.isSolid = false; // BOT PARTS SHOULD NOT BLOCK MOVEMENT
             part.updateMatrixWorld(true);
             part.userData.boundingBox = new THREE.Box3().setFromObject(part);
             
@@ -917,7 +964,8 @@ function createEnemy(x, y, z, team = 'A', options = {}) {
             // Lower threshold for headshots if crouched
             const headThreshold = options.isCrouched ? 11 : 18;
             if (worldPos.y > headThreshold) part.userData.isHeadshot = true;
-            objects.push(part);
+            // DO NOT ADD TO objects array - only for weapon/hit detection, not movement physics
+            shootables.push(part);
         }
     });
 
@@ -948,8 +996,19 @@ function respawnEnemy(pos, team, options = {}) {
 }
 
 function init() {
-    console.log("Initializing scene...");
+    console.log("Initializing scene... Map:", selectedMap);
     
+    // Completely clear scene if it exists
+    if (scene) {
+        while(scene.children.length > 0){ 
+            scene.remove(scene.children[0]); 
+        }
+    } else {
+        scene = new THREE.Scene();
+    }
+    window.scene = scene; // Global for debugging
+    engine.scene = scene; // Sync with modular engine
+
     // Reset Game State
     playerKills = 0;
     playerCash = 800;
@@ -959,21 +1018,26 @@ function init() {
     ammoTotal = 120;
     grenadeCount = 2;
     isPlayerDead = false;
+
+    // Clear Object Arrays
+    objects.length = 0;
+    window.objects = objects; // Global for debugging
+    shootables.length = 0;
+    enemies.length = 0;
+    bloodParticles.length = 0;
+    impactParticles.length = 0;
+    droppedGuns.length = 0;
     
     try {
         // Use global camera instead of re-creating it
-                // Initial Spawn Position
-                const mapData = Maps[selectedMap] || Maps['dust2'];
-                const sp = mapData.spawnPoint || { x: 0, y: 18, z: 100 };
-                camera.position.set(sp.x, sp.y, sp.z);
-                
-                // Ensure player is looking in a sensible direction (towards map center or targets)
-                if (selectedMap === 'training') {
-                    camera.lookAt(0, 18, 100);
-                }
-                scene = new THREE.Scene();
+        const mapData = Maps[selectedMap] || Maps['dust2'];
+        const sp = mapData.spawnPoint || { x: 0, y: 18, z: 100 };
+        camera.position.set(sp.x, sp.y, sp.z);
         
-        // --- SKYDOME ---
+        // Ensure player is looking in a sensible direction
+        if (selectedMap === 'training') {
+            camera.lookAt(0, 18, 100);
+        }
         const skyGeo = new THREE.SphereGeometry(1500, 32, 32);
         const skyTex = TextureGenerator.createSkyTexture();
         const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide });
@@ -1016,22 +1080,20 @@ function init() {
 
         // Settings inputs
         const fovSlider = document.getElementById('fov-slider');
+        const volumeSlider = document.getElementById('volume-slider');
         const sensSlider = document.getElementById('sens-slider');
         const distSlider = document.getElementById('dist-slider');
         const fovVal = document.getElementById('fov-val');
+        const volumeVal = document.getElementById('volume-val');
         const sensVal = document.getElementById('sens-val');
         const distVal = document.getElementById('dist-val');
         const killfeedOpts = document.querySelectorAll('#killfeed-toggle .option');
 
-        const loaded = UI.loadSettings();
-        if (loaded) {
-            settings = { ...settings, ...loaded };
-            playerName = settings.playerName || "Noob";
-        }
-
         // Apply saved settings to UI
         fovSlider.value = settings.fov;
         fovVal.innerText = settings.fov;
+        volumeSlider.value = settings.volume * 100;
+        volumeVal.innerText = Math.round(settings.volume * 100);
         sensSlider.value = settings.sensitivity;
         sensVal.innerText = settings.sensitivity.toFixed(1);
         distSlider.value = settings.viewDistance;
@@ -1048,6 +1110,10 @@ function init() {
         
         if (scene.fog) {
             scene.fog.far = settings.viewDistance;
+        }
+
+        if (soundEngine) {
+            soundEngine.volume = settings.volume || 0.2;
         }
 
         resumeBtn.addEventListener('click', () => {
@@ -1077,8 +1143,16 @@ function init() {
 
         resetSettingsBtn.addEventListener('click', () => {
             soundEngine.playUIClick();
-            settings = { fov: 75, sensitivity: 1.0, viewDistance: 800, showKillFeed: true };
+            settings = { 
+                fov: 75, 
+                volume: 0.2, 
+                sensitivity: 1.0, 
+                viewDistance: 800, 
+                playerName: settings.playerName || "Noob", 
+                showKillFeed: true 
+            };
             fovSlider.value = 75; fovVal.innerText = 75;
+            volumeSlider.value = 20; volumeVal.innerText = 20;
             sensSlider.value = 1.0; sensVal.innerText = "1.0";
             distSlider.value = 800; distVal.innerText = 800;
             killfeedOpts.forEach(opt => {
@@ -1086,6 +1160,7 @@ function init() {
             });
             camera.fov = 75; camera.far = 1300; camera.updateProjectionMatrix();
             if (scene.fog) scene.fog.far = 800;
+            if (soundEngine) soundEngine.setVolume(0.2);
             UI.saveSettings(settings);
         });
 
@@ -1097,6 +1172,17 @@ function init() {
             settings.fov = val;
             camera.fov = val;
             camera.updateProjectionMatrix();
+            saveSettings();
+        });
+
+        volumeSlider.addEventListener('input', (e) => {
+            const val = parseInt(e.target.value);
+            volumeVal.innerText = val;
+            const volume = val / 100;
+            settings.volume = volume;
+            if (soundEngine) {
+                soundEngine.setVolume(volume);
+            }
             saveSettings();
         });
 
@@ -1167,35 +1253,35 @@ function init() {
             switch (event.code) {
                 case 'Digit1':
                     switchWeapon(1);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'Digit2':
                     switchWeapon(2);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'Digit3':
                     switchWeapon(3);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'Digit4':
                     switchWeapon(4);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'Digit5':
                     switchWeapon(5);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'Digit6':
                     switchWeapon(6);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'Digit7':
                     switchWeapon(7);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'Digit8':
                     switchWeapon(8);
-                    soundEngine.playUIClick();
+                    soundEngine.playWeaponSwitch();
                     break;
                 case 'ArrowUp':
                 case 'KeyW':
@@ -1278,6 +1364,7 @@ function init() {
             // Fallback to dust2 if map not found
             Maps['dust2'].build(scene, objects, enemies, droppedGuns, createEnemy, botsEnabled, teamsEnabled, peer);
         }
+        shootables.push(...objects);
 
         // --- INVENTORY MODELS ---
         Object.keys(inventory).forEach(slot => {
@@ -1428,11 +1515,35 @@ function init() {
         window.addEventListener('resize', onWindowResize);
         console.log("Renderer appended and scene ready.");
 
+        // Sync modular engine with NEW scene/camera created in this game session
+        engine.scene = scene;
+        engine.camera = camera;
+        
+        // Re-init systems with new scene context
+        for (const system of engine.systems.values()) {
+            system.init();
+        }
+
         // Initialize Debug Bridge for real-time Gemini control
         DebugBridge.init({
             camera, scene, enemies, objects,
             WEAPONS_DATA, createEnemy, updateUI
         });
+
+        // Sync context to modular engine systems
+        engine.context.scene = scene;
+        engine.context.camera = camera;
+        engine.context.gun = gun;
+        engine.context.knife = knife;
+        engine.context.grenade = grenade;
+        engine.context.muzzleFlash = muzzleFlash;
+        engine.context.objects = objects;
+        engine.context.enemies = enemies;
+        engine.context.bloodParticles = bloodParticles;
+        engine.context.impactParticles = impactParticles;
+
+        // Start the manual animation/render loop
+        animate();
 
     } catch (error) {
         console.error("Initialization failed:", error);
@@ -1596,7 +1707,7 @@ function reload() {
     if (!currentWeaponData || isReloading || ammoInClip === currentWeaponData.magSize || ammoTotal === 0) return;
 
     console.log("Reloading " + currentWeaponData.name);
-    soundEngine.playReload();
+    soundEngine.playReload(currentWeaponData);
     isReloading = true;
     reloadStartTime = performance.now();
     ammoUI.innerText = "RELOADING...";
@@ -1644,7 +1755,7 @@ function knifeAttack() {
     knifeRaycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
     knifeRaycaster.far = 25; // Short range
 
-    const intersects = knifeRaycaster.intersectObjects(objects);
+    const intersects = knifeRaycaster.intersectObjects(shootables);
 
     if (intersects.length > 0) {
         const hitPart = intersects[0].object;
@@ -1664,7 +1775,10 @@ function knifeAttack() {
             if (hitPart.userData.isGround) impactColor = 0xd2b48c;
 
             createImpactEffect(intersects[0].point, scene, impactParticles, impactColor);
-            soundEngine.playImpact();
+            let surface = 'concrete';
+            if (hitPart.userData.isCrate) surface = 'wood';
+            if (hitPart.userData.isGround) surface = 'sand';
+            soundEngine.playImpact(surface);
         }
     }
 
@@ -1686,7 +1800,7 @@ function shoot() {
     }
     updateUI();
 
-    soundEngine.playShoot();
+    soundEngine.playShoot(currentWeaponData);
     
     // Add recoil
     recoil = Math.min(recoil + currentWeaponData.recoil, 0.2);
@@ -1706,7 +1820,7 @@ function shoot() {
         
         shootRaycaster.setFromCamera(spread, camera);
 
-        const intersects = shootRaycaster.intersectObjects(objects);
+        const intersects = shootRaycaster.intersectObjects(shootables);
 
         if (intersects.length > 0) {
             const hitPart = intersects[0].object;
@@ -1749,7 +1863,10 @@ function shoot() {
                 if (hitPart.userData.isGround) impactColor = 0xd2b48c;
                 
                 createImpactEffect(intersects[0].point, scene, impactParticles, impactColor);
-                soundEngine.playImpact();
+                let surface = 'concrete';
+                if (hitPart.userData.isCrate) surface = 'wood';
+                if (hitPart.userData.isGround) surface = 'sand';
+                soundEngine.playImpact(surface);
             }
         }
     }
@@ -2036,7 +2153,7 @@ function explode(position, killerName = playerName, killerTeam = playerTeam, gre
     if (grenadeKey === 'HE') {
         soundEngine.playExplosion();
     } else if (grenadeKey === 'FLASH') {
-        soundEngine.playClick(performance.now(), 2000);
+        soundEngine.playFlashbang();
         const dirToNade = position.clone().sub(camera.position).normalize();
         const lookDir = new THREE.Vector3();
         camera.getWorldDirection(lookDir);
@@ -2061,8 +2178,10 @@ function explode(position, killerName = playerName, killerTeam = playerTeam, gre
             }
         }
     } else if (grenadeKey === 'SMOKE') {
+        soundEngine.playSmoke();
         createSmokeCloud(position);
     } else if (grenadeKey === 'MOLOTOV') {
+        soundEngine.playShatter();
         soundEngine.playExplosion();
         createFireArea(position, killerName, killerTeam);
     }
@@ -2163,6 +2282,9 @@ function killEnemy(enemy, killerName = playerName, weapon = currentWeapon, kille
         if (child instanceof THREE.Group) { // Humanoid group
             child.children.forEach(part => {
                 part.userData.isSolid = false;
+                // Remove from shootables so bodies don't block bullets
+                const sIdx = shootables.indexOf(part);
+                if (sIdx > -1) shootables.splice(sIdx, 1);
             });
         }
     });
@@ -2324,8 +2446,11 @@ function animate() {
 
     if (!renderer || !scene || !camera) return;
 
+    // Update camera matrix early so systems (like PlayerController) have fresh rotation data
+    camera.updateMatrixWorld();
+
     // Make sky follow camera
-    const skydome = scene.children.find(c => c.geometry instanceof THREE.SphereGeometry && c.material.side === THREE.BackSide);
+    const skydome = scene.children.find(c => c.geometry instanceof THREE.SphereGeometry && c.material && c.material.side === THREE.BackSide);
     if (skydome) {
         skydome.position.copy(camera.position);
     }
@@ -2333,7 +2458,23 @@ function animate() {
     const time = performance.now();
     const delta = Math.min((time - prevTime) / 1000, 0.05);
 
-    if (controls.isLocked === true) {
+    // Update the modular engine systems
+    try {
+        engine.update(delta, time);
+        // Emergency Floor Safety
+        if (camera.position.y < -500) {
+            console.error("PLAYER FELL THROUGH MAP - TELEPORTING TO SPAWN");
+            const sp = (Maps[selectedMap] || Maps['dust2']).spawnPoint || { x: 0, y: 18, z: 100 };
+            camera.position.set(sp.x, sp.y, sp.z);
+            if (engine.getSystem('PlayerControllerSystem')) {
+                engine.getSystem('PlayerControllerSystem').velocity.set(0,0,0);
+            }
+        }
+    } catch (e) {
+        console.error("Engine update failed:", e);
+    }
+
+    if (controls && controls.isLocked === true) {
         // --- WEAPON FIRING ---
         if (isFiring && currentWeapon === 'gun' && !isReloading) {
             const now = performance.now();
@@ -2380,11 +2521,15 @@ function animate() {
         // Update matrix to ensure movement uses the latest mouse rotation
         camera.updateMatrixWorld();
 
-        raycaster.ray.origin.copy(camera.position);
+        let onObject = false;
+        if (raycaster) {
+            raycaster.ray.origin.copy(camera.position);
+            const intersections = raycaster.intersectObjects(objects, false);
+            onObject = intersections.length > 0;
+        }
 
-        const intersections = raycaster.intersectObjects(objects, false);
-        const onObject = intersections.length > 0;
-
+        /* 
+        // MANUAL MOVEMENT (DEPRECATED - Using PlayerControllerSystem)
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
         velocity.y -= 9.8 * 100.0 * delta; 
@@ -2420,17 +2565,19 @@ function animate() {
         const stepX = moveX / steps;
         const stepZ = moveZ / steps;
 
-        for (let s = 0; s < steps; s++) {
-            const oldPos = camera.position.clone();
-            controls.moveRight(stepX);
-            if (checkCollisionAt(camera.position, objects)) {
-                camera.position.copy(oldPos);
-            }
+        if (controls && typeof controls.moveRight === 'function') {
+            for (let s = 0; s < steps; s++) {
+                const oldPos = camera.position.clone();
+                controls.moveRight(stepX);
+                if (checkCollisionAt(camera.position, objects)) {
+                    camera.position.copy(oldPos);
+                }
 
-            const midPos = camera.position.clone();
-            controls.moveForward(stepZ);
-            if (checkCollisionAt(camera.position, objects)) {
-                camera.position.copy(midPos);
+                const midPos = camera.position.clone();
+                controls.moveForward(stepZ);
+                if (checkCollisionAt(camera.position, objects)) {
+                    camera.position.copy(midPos);
+                }
             }
         }
 
@@ -2445,6 +2592,7 @@ function animate() {
                 camera.position.y = currentTargetHeight;
             }
         }
+        */
 
         // --- REFINED WEAPON ANIMATIONS ---
         const activeModel = currentWeapon === 'gun' ? gun : (currentWeapon === 'knife' ? knife : grenade);
@@ -2474,7 +2622,9 @@ function animate() {
                 
                 // Play footstep at specific points in the cycle
                 if (Math.sin(bobCounter) < 0 && Math.sin(lastBobCounter) >= 0) {
-                    soundEngine.playFootstep();
+                    const physics = engine.getSystem('PhysicsSystem');
+                    const surface = physics ? physics.getSurfaceUnderPlayer(camera.position) : 'concrete';
+                    soundEngine.playFootstep(surface);
                 }
                 lastBobCounter = bobCounter;
             } else {

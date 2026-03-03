@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { System } from '../core/System.js';
-import { PHYSICS } from '../Constants.js';
+import { PHYSICS } from '../Constants_v2.js';
 import { GameState } from '../GameState.js';
 
 export class PlayerControllerSystem extends System {
@@ -19,6 +19,15 @@ export class PlayerControllerSystem extends System {
 
     init() {
         console.log("PlayerControllerSystem initialized");
+        this.velocity.set(0, 0, 0);
+        this.direction.set(0, 0, 0);
+        this.moveForward = false;
+        this.moveBackward = false;
+        this.moveLeft = false;
+        this.moveRight = false;
+        this.canJump = false;
+        this.isCrouching = false;
+        
         this.input = this.engine.getSystem('InputSystem');
         this.physics = this.engine.getSystem('PhysicsSystem');
         
@@ -56,29 +65,53 @@ export class PlayerControllerSystem extends System {
         if (this.isPlayerDead) return;
 
         const camera = this.engine.camera;
+        if (!camera) return;
+
         const speed = this.isCrouching ? PHYSICS.CROUCH_SPEED : PHYSICS.MOVE_SPEED;
 
+        // Apply Friction
         this.velocity.x -= this.velocity.x * 10.0 * delta;
         this.velocity.z -= this.velocity.z * 10.0 * delta;
         this.velocity.y -= PHYSICS.GRAVITY * delta;
 
+        // Calculate local direction
         this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
         this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
         this.direction.normalize();
 
+        // Apply movement to velocity
         if (this.moveForward || this.moveBackward) this.velocity.z -= this.direction.z * speed * delta;
         if (this.moveLeft || this.moveRight) this.velocity.x -= this.direction.x * speed * delta;
 
-        // X movement
-        const nextX = camera.position.clone().add(new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0).multiplyScalar(-this.velocity.x * delta));
+        // --- CAMERA-RELATIVE MOVEMENT MATH ---
+        // Get the horizontal forward and right vectors from the camera
+        const tempVec = new THREE.Vector3();
+        
+        // Right vector (local X)
+        const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+        right.y = 0;
+        right.normalize();
+        
+        // Forward vector (perpendicular to Right and Up)
+        const forward = new THREE.Vector3().crossVectors(camera.up, right);
+        forward.normalize();
+
+        // Calculate world-space move vector
+        const moveVec = new THREE.Vector3();
+        moveVec.addScaledVector(right, -this.velocity.x * delta);
+        moveVec.addScaledVector(forward, -this.velocity.z * delta);
+
+        // --- COLLISION & SLIDING ---
+        // Check X movement
+        const nextX = camera.position.clone();
+        nextX.x += moveVec.x;
         if (!this.physics.checkCollision(nextX)) {
             camera.position.x = nextX.x;
         }
 
-        // Z movement
+        // Check Z movement
         const nextZ = camera.position.clone();
-        const zDir = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0).cross(new THREE.Vector3(0, 1, 0));
-        nextZ.add(zDir.multiplyScalar(this.velocity.z * delta));
+        nextZ.z += moveVec.z;
         if (!this.physics.checkCollision(nextZ)) {
             camera.position.z = nextZ.z;
         }
@@ -88,16 +121,23 @@ export class PlayerControllerSystem extends System {
         nextY.y += this.velocity.y * delta;
         
         const currentHeight = this.isCrouching ? PHYSICS.CROUCHING_HEIGHT : PHYSICS.STANDING_HEIGHT;
-        if (this.physics.checkCollision(nextY, PHYSICS.PLAYER_RADIUS, currentHeight)) {
-            this.velocity.y = Math.max(0, this.velocity.y);
-            this.canJump = true;
+        if (this.physics.checkCollision(nextY)) {
+            if (this.velocity.y <= 0) {
+                this.velocity.y = 0;
+                this.canJump = true;
+            } else {
+                this.velocity.y = 0;
+            }
         } else {
             camera.position.y = nextY.y;
+            this.canJump = false;
         }
 
-        // Ground Clamp
-        if (camera.position.y < PHYSICS.STANDING_HEIGHT && !this.physics.checkCollision(camera.position)) {
-             camera.position.y = THREE.MathUtils.lerp(camera.position.y, currentHeight, 0.1);
+        // Emergency ground safety
+        if (camera.position.y < currentHeight) {
+            camera.position.y = currentHeight;
+            this.velocity.y = 0;
+            this.canJump = true;
         }
     }
 }

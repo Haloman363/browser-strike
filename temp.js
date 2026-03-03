@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLORS } from './Constants.js';
+import { COLORS } from './Constants_v2.js';
 import { TextureGenerator } from './TextureGenerator.js';
 import { WeaponBuilder } from './WeaponBuilder.js';
 import { WEAPON_RECIPES } from './WeaponRecipes.js';

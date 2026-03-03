@@ -38,8 +38,8 @@ async function verify() {
     }
 
     // Summary
-    console.log("
---- VERIFICATION SUMMARY ---");
+    console.log(`
+--- VERIFICATION SUMMARY ---`);
     results.forEach(r => {
         console.log(`${r.name}: ${r.success ? '✅ SUCCESS' : '❌ FAILED'}`);
     });

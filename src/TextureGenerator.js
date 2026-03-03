@@ -219,54 +219,56 @@ export class TextureGenerator {
     }
 
 
-    static createCamoTexture(baseColor = '#556b2f', size = 256) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+    static createCamoTexture(name = 'camo_ct', baseColor = '#556b2f', size = 256) {
+        return this.getTexture(name, (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base color
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(0, 0, size, size);
+            // Base color
+            ctx.fillStyle = baseColor;
+            ctx.fillRect(0, 0, s, s);
 
-        // Add splotches
-        const colors = [
-            'rgba(0,0,0,0.2)',
-            'rgba(255,255,255,0.1)',
-            'rgba(50,30,10,0.3)',
-            'rgba(100,120,50,0.2)'
-        ];
+            // Add splotches
+            const colors = [
+                'rgba(0,0,0,0.2)',
+                'rgba(255,255,255,0.1)',
+                'rgba(50,30,10,0.3)',
+                'rgba(100,120,50,0.2)'
+            ];
 
-        colors.forEach(color => {
-            ctx.fillStyle = color;
-            for (let i = 0; i < 15; i++) {
-                ctx.beginPath();
-                let x = Math.random() * size;
-                let y = Math.random() * size;
-                ctx.moveTo(x, y);
-                
-                // Draw irregular blob
-                for (let j = 0; j < 8; j++) {
-                    x += (Math.random() - 0.5) * 60;
-                    y += (Math.random() - 0.5) * 60;
-                    ctx.lineTo(x, y);
+            colors.forEach(color => {
+                ctx.fillStyle = color;
+                for (let i = 0; i < 15; i++) {
+                    ctx.beginPath();
+                    let x = Math.random() * s;
+                    let y = Math.random() * s;
+                    ctx.moveTo(x, y);
+                    
+                    // Draw irregular blob
+                    for (let j = 0; j < 8; j++) {
+                        x += (Math.random() - 0.5) * 60;
+                        y += (Math.random() - 0.5) * 60;
+                        ctx.lineTo(x, y);
+                    }
+                    ctx.fill();
                 }
-                ctx.fill();
+            });
+
+            // Fabric texture noise
+            for (let i = 0; i < 5000; i++) {
+                const x = Math.random() * s;
+                const y = Math.random() * s;
+                ctx.fillStyle = `rgba(0,0,0,0.05)`;
+                ctx.fillRect(x, y, 1, 1);
             }
-        });
 
-        // Fabric texture noise
-        for (let i = 0; i < 5000; i++) {
-            const x = Math.random() * size;
-            const y = Math.random() * size;
-            ctx.fillStyle = `rgba(0,0,0,0.05)`;
-            ctx.fillRect(x, y, 1, 1);
-        }
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }, size);
     }
 
     static createSkinTexture(baseColor = '#dbac82', size = 128) {
@@ -315,64 +317,68 @@ export class TextureGenerator {
         }, size);
     }
 
-    static createMetalTexture(baseColor = '#222222', size = 256) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+    static createMetalTexture(name = 'steel', baseColor = '#222222', size = 256) {
+        return this.getTexture(name, (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base metal
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(0, 0, size, size);
+            // Base metal
+            ctx.fillStyle = baseColor;
+            ctx.fillRect(0, 0, s, s);
 
-        // Metallic grain/brushed effect
-        for (let i = 0; i < 10000; i++) {
-            const x = Math.random() * size;
-            const y = Math.random() * size;
-            const h = Math.random() * 2;
-            ctx.fillStyle = `rgba(255,255,255,0.05)`;
-            ctx.fillRect(x, y, Math.random() * 20, h);
-        }
+            // Metallic grain/brushed effect
+            for (let i = 0; i < 10000; i++) {
+                const x = Math.random() * s;
+                const y = Math.random() * s;
+                const h = Math.random() * 2;
+                ctx.fillStyle = `rgba(255,255,255,0.05)`;
+                ctx.fillRect(x, y, Math.random() * 20, h);
+            }
 
-        // Wear and tear on edges
-        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(2, 2, size - 4, size - 4);
+            // Wear and tear on edges
+            ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(2, 2, s - 4, s - 4);
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }, size);
     }
 
-    static createPolymerTexture(baseColor = '#111111', size = 128) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+    static createPolymerTexture(name = 'polymer', baseColor = '#111111', size = 128) {
+        return this.getTexture(name, (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base polymer
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(0, 0, size, size);
+            // Base polymer
+            ctx.fillStyle = baseColor;
+            ctx.fillRect(0, 0, s, s);
 
-        // Stippling/Grip texture - more varied
-        for (let i = 0; i < size; i += 1) {
-            for (let j = 0; j < size; j += 1) {
-                const rand = Math.random();
-                if (rand > 0.95) {
-                    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-                    ctx.fillRect(i, j, 1, 1);
-                } else if (rand < 0.1) {
-                    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-                    ctx.fillRect(i, j, 1, 1);
+            // Stippling/Grip texture - more varied
+            for (let i = 0; i < s; i += 1) {
+                for (let j = 0; j < s; j += 1) {
+                    const rand = Math.random();
+                    if (rand > 0.95) {
+                        ctx.fillStyle = 'rgba(255,255,255,0.05)';
+                        ctx.fillRect(i, j, 1, 1);
+                    } else if (rand < 0.1) {
+                        ctx.fillStyle = 'rgba(0,0,0,0.15)';
+                        ctx.fillRect(i, j, 1, 1);
+                    }
                 }
             }
-        }
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }, size);
     }
 
     static createGloveTexture(size = 256) {
@@ -436,76 +442,80 @@ export class TextureGenerator {
     }
 
     static createSteelTexture(size = 256) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+        return this.getTexture('steel', (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base steel gradient
-        const grad = ctx.createLinearGradient(0, 0, size, size);
-        grad.addColorStop(0, '#888');
-        grad.addColorStop(0.5, '#aaa');
-        grad.addColorStop(1, '#888');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, size, size);
+            // Base steel gradient
+            const grad = ctx.createLinearGradient(0, 0, s, s);
+            grad.addColorStop(0, '#888');
+            grad.addColorStop(0.5, '#aaa');
+            grad.addColorStop(1, '#888');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, s, s);
 
-        // Brushed lines
-        for (let i = 0; i < 500; i++) {
-            ctx.strokeStyle = `rgba(255,255,255,${Math.random() * 0.1})`;
-            ctx.beginPath();
-            const y = Math.random() * size;
-            ctx.moveTo(0, y);
-            ctx.lineTo(size, y + (Math.random() - 0.5) * 10);
-            ctx.stroke();
-        }
+            // Brushed lines
+            for (let i = 0; i < 500; i++) {
+                ctx.strokeStyle = `rgba(255,255,255,${Math.random() * 0.1})`;
+                ctx.beginPath();
+                const y = Math.random() * s;
+                ctx.moveTo(0, y);
+                ctx.lineTo(s, y + (Math.random() - 0.5) * 10);
+                ctx.stroke();
+            }
 
-        const texture = new THREE.CanvasTexture(canvas);
-        return texture;
+            const texture = new THREE.CanvasTexture(canvas);
+            return texture;
+        }, size);
     }
 
-    static createWoodTexture(baseColor = '#4a2c11', size = 512) {
-        const canvas = document.createElement('canvas');
-        canvas.width = size;
-        canvas.height = size;
-        const ctx = canvas.getContext('2d');
+    static createWoodTexture(name = 'wood', baseColor = '#4a2c11', size = 512) {
+        return this.getTexture(name, (s) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = s;
+            canvas.height = s;
+            const ctx = canvas.getContext('2d');
 
-        // Base wood color
-        ctx.fillStyle = baseColor;
-        ctx.fillRect(0, 0, size, size);
+            // Base wood color
+            ctx.fillStyle = baseColor;
+            ctx.fillRect(0, 0, s, s);
 
-        // Wood grain lines
-        for (let i = 0; i < 150; i++) {
-            ctx.strokeStyle = `rgba(0,0,0,${0.1 + Math.random() * 0.15})`;
-            ctx.lineWidth = 0.5 + Math.random() * 2;
-            ctx.beginPath();
-            let x = Math.random() * size;
-            let y = 0;
-            ctx.moveTo(x, y);
-            for (let j = 0; j < 15; j++) {
-                y += size / 15;
-                x += (Math.random() - 0.5) * 20;
-                ctx.lineTo(x, y);
+            // Wood grain lines
+            for (let i = 0; i < 150; i++) {
+                ctx.strokeStyle = `rgba(0,0,0,${0.1 + Math.random() * 0.15})`;
+                ctx.lineWidth = 0.5 + Math.random() * 2;
+                ctx.beginPath();
+                let x = Math.random() * s;
+                let y = 0;
+                ctx.moveTo(x, y);
+                for (let j = 0; j < 15; j++) {
+                    y += s / 15;
+                    x += (Math.random() - 0.5) * 20;
+                    ctx.lineTo(x, y);
+                }
+                ctx.stroke();
             }
-            ctx.stroke();
-        }
 
-        // Knots
-        for (let i = 0; i < 4; i++) {
-            const kx = Math.random() * size;
-            const ky = Math.random() * size;
-            const grad = ctx.createRadialGradient(kx, ky, 0, kx, ky, 40);
-            grad.addColorStop(0, 'rgba(0,0,0,0.3)');
-            grad.addColorStop(1, 'rgba(0,0,0,0)');
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.ellipse(kx, ky, 15, 35, Math.random() * Math.PI, 0, Math.PI * 2);
-            ctx.fill();
-        }
+            // Knots
+            for (let i = 0; i < 4; i++) {
+                const kx = Math.random() * s;
+                const ky = Math.random() * s;
+                const grad = ctx.createRadialGradient(kx, ky, 0, kx, ky, 40);
+                grad.addColorStop(0, 'rgba(0,0,0,0.3)');
+                grad.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.ellipse(kx, ky, 15, 35, Math.random() * Math.PI, 0, Math.PI * 2);
+                ctx.fill();
+            }
 
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        return texture;
+            const texture = new THREE.CanvasTexture(canvas);
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            return texture;
+        }, size);
     }
 
     static createSkyTexture(size = 1024) {

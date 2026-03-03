@@ -1,22 +1,30 @@
-# Browser Strike Texture Generation Guide
+# Browser Strike Texture Generation Guide (Remaining Assets)
 
-Use the following prompts in your image generator (like Google AI Studio, Midjourney, or DALL-E) to create high-quality seamless textures for the environment.
+Use the following prompts in your image generator (like Google AI Studio, Midjourney, or DALL-E) to create high-quality seamless textures for the remaining weapons and characters.
 
-## 1. Sand Texture (Ground)
-Prompt: Fine desert sand texture, warm beige and tan colors, subtle dunes and ripple patterns, detailed grains, seamless tiling, top-down orthographic view, high resolution.
-Save as: sand.png
+## --- WEAPONS & ITEMS ---
 
-## 2. Wall Texture (Buildings/Obstacles)
-Prompt: Weathered tan brick wall texture, old sun-bleached stone, subtle mortar lines, rough architectural surface, seamless tiling, flat front-on view, 4k detail.
-Save as: wall.png
+## 1. Gun Metal / Steel Texture
+Prompt: Brushed gunmetal steel texture, dark charcoal grey, subtle metallic sheen, fine horizontal scratches and industrial wear, clean oil finish, seamless tiling, flat orthographic view.
+Save as: steel.png
 
-## 3. Concrete Texture (Industrial areas)
-Prompt: Rough grey industrial concrete texture, subtle cracks and weathering, dark spots and noise, weathered cement surface, seamless tiling, flat top-down view.
-Save as: concrete.png
+## 2. Tactical Polymer Texture
+Prompt: Tactical black polymer plastic texture, matte finish, fine stippled grip pattern, rugged military-grade composite material, seamless tiling, flat orthographic view.
+Save as: polymer.png
 
-## 4. Glove Texture (Player Hands)
-Prompt: Tactical combat glove fabric texture, dark charcoal grey leather and nylon weave, hexagonal reinforcement patterns, rugged military material, seamless tiling.
-Save as: glove.png
+## 3. Weapon Wood Texture
+Prompt: Dark walnut wood grain texture, polished semi-gloss finish, deep brown colors with fine linear grain, high quality furniture wood for rifle stocks, seamless tiling, flat orthographic view.
+Save as: wood.png
+
+## --- CHARACTERS ---
+
+## 4. CT Camo (Counter-Terrorist)
+Prompt: Urban digital camouflage pattern, shades of navy blue, dark grey, and charcoal, tactical military fabric texture, seamless tiling, flat orthographic view.
+Save as: camo_ct.png
+
+## 5. T Camo (Terrorist)
+Prompt: Desert digital camouflage pattern, shades of tan, khaki, and light brown, rugged military canvas texture, seamless tiling, flat orthographic view.
+Save as: camo_t.png
 
 ---
 
@@ -28,9 +36,10 @@ Save as: glove.png
    /mnt/c/Users/Jaymes/Github Repos/browser-strike/assets/textures/
 
 ### File Names (Case Sensitive):
-- assets/textures/sand.png
-- assets/textures/wall.png
-- assets/textures/concrete.png
-- assets/textures/glove.png
+- assets/textures/steel.png
+- assets/textures/polymer.png
+- assets/textures/wood.png
+- assets/textures/camo_ct.png
+- assets/textures/camo_t.png
 
 Once these files are in place, the game's `TextureGenerator.js` will automatically detect them on the next reload and swap out the simple procedural colors for your high-quality textures!

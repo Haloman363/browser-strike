@@ -5,11 +5,11 @@ export class UISystem extends System {
     constructor(engine) {
         super(engine);
         this.domElements = {
-            health: document.getElementById('health-val'),
-            ammo: document.getElementById('ammo-val'),
-            weapon: document.getElementById('weapon-name'),
-            kills: document.getElementById('kills-val'),
-            cash: document.getElementById('cash-val')
+            health: document.getElementById('health'),
+            ammo: document.getElementById('ammo'),
+            weapon: document.getElementById('weapon-name'), // This might be null, but we'll check later
+            kills: document.getElementById('alive-count'),
+            cash: document.getElementById('wallet')
         };
     }
 

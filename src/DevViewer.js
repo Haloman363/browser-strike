@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createGunModel, createGrenadeModel, createHumanoidModel, createWall, createCrate } from './Factory.js';
 import { WEAPON_RECIPES } from './WeaponRecipes.js';
-import { COLORS } from './Constants.js';
+import { COLORS } from './Constants_v2.js';
 
 let scene, camera, renderer, controls, currentMesh;
 let categories = {

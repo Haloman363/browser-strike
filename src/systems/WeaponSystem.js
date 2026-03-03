@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { System } from '../core/System.js';
 import { GameState } from '../GameState.js';
-import { WEAPONS_DATA, GRENADES_DATA } from '../Constants.js';
+import { WEAPONS_DATA, GRENADES_DATA } from '../Constants_v2.js';
 import { createBloodSplatter, createImpactEffect } from '../Weapon.js';
 
 export class WeaponSystem extends System {
@@ -83,7 +83,7 @@ export class WeaponSystem extends System {
         
         // Play Shoot Sound
         if (this.engine.context.soundEngine) {
-            this.engine.context.soundEngine.playShoot();
+            this.engine.context.soundEngine.playShoot(weaponData);
         }
 
         // Notify systems
@@ -147,7 +147,10 @@ export class WeaponSystem extends System {
             
             createImpactEffect(point, scene, impactParticles, impactColor);
             if (this.engine.context.soundEngine) {
-                this.engine.context.soundEngine.playImpact();
+                let surface = 'concrete';
+                if (hitPart.userData.isCrate) surface = 'wood';
+                if (hitPart.userData.isGround) surface = 'sand';
+                this.engine.context.soundEngine.playImpact(surface);
             }
         }
     }

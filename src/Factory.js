@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLORS } from './Constants.js';
+import { COLORS } from './Constants_v2.js';
 import { TextureGenerator } from './TextureGenerator.js';
 import { WeaponBuilder } from './WeaponBuilder.js';
 import { WEAPON_RECIPES } from './WeaponRecipes.js';
@@ -329,7 +329,7 @@ export function createHumanoidModel(team = 'TERRORIST') {
     const skinColor = COLORS.SKIN;
     const vestColor = COLORS.VEST_COLOR;
 
-    const clothTex = TextureGenerator.createCamoTexture(`#${new THREE.Color(clothColor).getHexString()}`);
+    const clothTex = TextureGenerator.createCamoTexture(isCT ? 'camo_ct' : 'camo_t', `#${new THREE.Color(clothColor).getHexString()}`);
     const skinTex = TextureGenerator.createSkinTexture(`#${new THREE.Color(skinColor).getHexString()}`);
     const vestTex = TextureGenerator.createMetalTexture(`#${new THREE.Color(vestColor).getHexString()}`);
     const bootTex = TextureGenerator.createPolymerTexture('#111111');

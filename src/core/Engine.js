@@ -7,6 +7,7 @@ import { EventEmitter } from './EventEmitter.js';
 export class Engine extends EventEmitter {
     constructor() {
         super();
+        console.log("Engine constructor called - has update method:", typeof this.update === 'function');
         this.systems = new Map();
         this.scene = null;
         this.camera = null;
@@ -76,6 +77,19 @@ export class Engine extends EventEmitter {
         this.isRunning = true;
         this.clock.start();
         this.loop();
+    }
+
+    /**
+     * Updates all registered systems.
+     * @param {number} delta 
+     * @param {number} time 
+     */
+    update(delta, time) {
+        for (const system of this.systems.values()) {
+            if (system.enabled) {
+                system.update(delta, time);
+            }
+        }
     }
 
     /**
