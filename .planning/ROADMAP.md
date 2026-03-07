@@ -1,0 +1,147 @@
+# Roadmap: Browser Strike
+
+## Phases
+
+- [ ] **Phase 1: Networking Core** - Establish host-authoritative foundation
+- [ ] **Phase 2: Game Feel** - Client-side prediction and server reconciliation
+- [ ] **Phase 3: Hit Registration** - Lag compensation and hit confirmation
+- [ ] **Phase 4: WebGPU Foundation** - Migrate to Three.js WebGPURenderer
+- [ ] **Phase 5: Visual Fidelity** - TSL materials and post-processing
+- [ ] **Phase 6: FX Overhaul** - WebGPU compute-shader particle systems
+- [ ] **Phase 7: Gunplay Refinement** - Recoil patterns and movement inaccuracy
+- [ ] **Phase 8: Game Mode** - Competitive bomb defusal loop
+- [ ] **Phase 9: Strategic Layer** - Buy menu and tactical economy
+- [ ] **Phase 10: Tactical Utility** - Grenades and area-of-effect items
+- [ ] **Phase 11: World Interaction** - Dynamic and destructible map elements
+- [ ] **Phase 12: Polish & Performance** - Optimization and final stabilization
+
+## Progress Table
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Networking Core | 0/0 | Not started | - |
+| 2. Game Feel | 0/0 | Not started | - |
+| 3. Hit Registration | 0/0 | Not started | - |
+| 4. WebGPU Foundation | 0/0 | Not started | - |
+| 5. Visual Fidelity | 0/0 | Not started | - |
+| 6. FX Overhaul | 0/0 | Not started | - |
+| 7. Gunplay Refinement | 0/0 | Not started | - |
+| 8. Game Mode | 0/0 | Not started | - |
+| 9. Strategic Layer | 0/0 | Not started | - |
+| 10. Tactical Utility | 0/0 | Not started | - |
+| 11. World Interaction | 0/0 | Not started | - |
+| 12. Polish & Performance | 0/0 | Not started | - |
+
+## Phase Details
+
+### Phase 1: Networking Core
+**Goal**: Establish a stable, host-authoritative P2P networking foundation.
+**Depends on**: Nothing
+**Requirements**: NET-01
+**Success Criteria**:
+  1. Host can spawn and control a player character.
+  2. Client can join the host's session via PeerJS and see the host moving.
+  3. Host maintains the "source of truth" for all player positions and states.
+**Plans**: TBD
+
+### Phase 2: Game Feel
+**Goal**: Implement client-side prediction and server reconciliation to eliminate perceived latency.
+**Depends on**: Phase 1
+**Requirements**: NET-02, NET-03
+**Success Criteria**:
+  1. Client movement feels instantaneous even with simulated network latency (e.g., 100ms).
+  2. Client position is corrected by the host only when a significant desync occurs.
+  3. Other players' movements appear smooth via interpolation.
+**Plans**: TBD
+
+### Phase 3: Hit Registration
+**Goal**: Implement lag compensation (backtracking) for fair and accurate hit registration.
+**Depends on**: Phase 2
+**Requirements**: NET-04
+**Success Criteria**:
+  1. Host correctly registers hits when a client shoots at their local visual representation of a moving target.
+  2. Blood splatters and damage numbers appear correctly on both client and host upon impact.
+**Plans**: TBD
+
+### Phase 4: WebGPU Foundation
+**Goal**: Complete the migration of the rendering engine from WebGL to WebGPU.
+**Depends on**: Nothing (parallelizable)
+**Requirements**: WGPU-01
+**Success Criteria**:
+  1. The game successfully initializes and runs using the Three.js `WebGPURenderer`.
+  2. Basic scene lighting and shadow mapping work without WebGL fallback errors.
+**Plans**: TBD
+
+### Phase 5: Visual Fidelity
+**Goal**: Implement advanced materials and post-processing using Three Shading Language (TSL).
+**Depends on**: Phase 4
+**Requirements**: WGPU-02, WGPU-03
+**Success Criteria**:
+  1. Weapons and characters use node-based materials with realistic metallic/roughness properties.
+  2. Body-cam and CRT distortion post-processing effects can be toggled via debug menu.
+**Plans**: TBD
+
+### Phase 6: FX Overhaul
+**Goal**: Develop performant, high-fidelity particle systems optimized for WebGPU.
+**Depends on**: Phase 4
+**Requirements**: WGPU-04
+**Success Criteria**:
+  1. Muzzle flashes produce high-performance sparks using WebGPU compute shaders.
+  2. Smoke grenades produce dense, performant volumetric-style particles.
+**Plans**: TBD
+
+### Phase 7: Gunplay Refinement
+**Goal**: Implement advanced weapon mechanics for a competitive feel.
+**Depends on**: Phase 3
+**Requirements**: GAME-03, GAME-04
+**Success Criteria**:
+  1. Firing weapons results in consistent, learnable recoil patterns.
+  2. Movement (running/jumping) significantly increases crosshair size and shot spread.
+**Plans**: TBD
+
+### Phase 8: Game Mode
+**Goal**: Build the core competitive bomb defusal loop.
+**Depends on**: Phase 7
+**Requirements**: GAME-01
+**Success Criteria**:
+  1. Rounds begin with a countdown and allow for C4 planting at designated sites.
+  2. Round ends when C4 explodes, is defused, or a team is eliminated.
+  3. Scoreboard updates automatically at the end of each round.
+**Plans**: TBD
+
+### Phase 9: Strategic Layer
+**Goal**: Implement the tactical economy and buy menu system.
+**Depends on**: Phase 8
+**Requirements**: GAME-02
+**Success Criteria**:
+  1. Players can access a Buy Menu during the buy period at round start.
+  2. Currency is granted for kills and round completions, which can be spent on equipment.
+**Plans**: TBD
+
+### Phase 10: Tactical Utility
+**Goal**: Implement functional and networked tactical utility items.
+**Depends on**: Phase 8, Phase 6
+**Requirements**: UTIL-01, UTIL-02, UTIL-03
+**Success Criteria**:
+  1. Smoke grenades bloom and correctly block line-of-sight for players and bots.
+  2. Flashbangs blind players based on proximity and orientation to the blast.
+  3. Molotovs create fire patches that deal damage-over-time to players.
+**Plans**: TBD
+
+### Phase 11: World Interaction
+**Goal**: Add dynamic and destructible elements to the environment.
+**Depends on**: Phase 8
+**Requirements**: GAME-05
+**Success Criteria**:
+  1. Players can interact with doors to open/close them.
+  2. Designated environment objects (e.g., crates) can be destroyed by gunfire or explosives.
+**Plans**: TBD
+
+### Phase 12: Polish & Performance
+**Goal**: Finalize optimization and polish for the v1 release.
+**Depends on**: Phase 1 through 11
+**Requirements**: All v1 requirements
+**Success Criteria**:
+  1. Game maintains 60 FPS on target hardware with all features enabled.
+  2. No major memory leaks or crashes during extended play sessions.
+**Plans**: TBD

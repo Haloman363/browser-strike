@@ -45,4 +45,22 @@
 - **MMO-01**: Large-scale matches > 16 players (Focus on 5v5 / DM)
 
 ## Traceability (Mapping to Roadmap)
-(To be filled by Roadmap creation)
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| NET-01 | Phase 1 | Pending |
+| NET-02 | Phase 2 | Pending |
+| NET-03 | Phase 2 | Pending |
+| NET-04 | Phase 3 | Pending |
+| WGPU-01 | Phase 4 | Pending |
+| WGPU-02 | Phase 5 | Pending |
+| WGPU-03 | Phase 5 | Pending |
+| WGPU-04 | Phase 6 | Pending |
+| GAME-01 | Phase 8 | Pending |
+| GAME-02 | Phase 9 | Pending |
+| GAME-03 | Phase 7 | Pending |
+| GAME-04 | Phase 7 | Pending |
+| GAME-05 | Phase 11 | Pending |
+| UTIL-01 | Phase 10 | Pending |
+| UTIL-02 | Phase 10 | Pending |
+| UTIL-03 | Phase 10 | Pending |
