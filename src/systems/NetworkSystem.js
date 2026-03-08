@@ -230,6 +230,9 @@ export class NetworkSystem extends System {
                     console.log(`Clock sync: RTT=${rtt.toFixed(2)}ms, offset=${this.clockOffset.toFixed(2)}ms`);
                 }
                 break;
+            case 'HIT_CONFIRMED':
+                this.engine.emit('weapon:hit_confirmed', data);
+                break;
             default:
                 console.log('Unknown message type:', type, 'from', peerId);
         }

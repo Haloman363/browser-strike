@@ -32,6 +32,10 @@ export class WeaponSystem extends System {
                 this.setFiring(false);
             }
         });
+
+        this.engine.on('weapon:hit_confirmed', (data) => {
+            this.handleHitConfirmed(data);
+        });
     }
 
     update(delta, time) {
@@ -58,7 +62,7 @@ export class WeaponSystem extends System {
     shoot() {
         const currentSlot = GameState.get('currentSlot');
         const ammoInClip = GameState.get('ammoInClip');
-        const weaponKey = GameState.get('currentWeaponName'); // Or some key to WEAPONS_DATA
+        const weaponKey = GameState.get('currentWeaponKey'); // Use the machine key for data lookup
         const weaponData = WEAPONS_DATA[weaponKey] || WEAPONS_DATA['GLOCK'];
 
         if (ammoInClip <= 0) {
@@ -94,34 +98,39 @@ export class WeaponSystem extends System {
         this.recoil = Math.min(this.recoil + weaponData.recoil, 0.2);
         this.cameraRecoilX += weaponData.recoil * 0.5;
 
-        // Raycasting for hits
-        const numPellets = weaponData.pellets || 1;
-        const scene = this.engine.scene;
-        const camera = this.engine.camera;
-        const bloodParticles = this.engine.context.bloodParticles || [];
-        const impactParticles = this.engine.context.impactParticles || [];
+        // Authoritative Shooting: Send SHOOT request to NetworkSystem
+        const network = this.engine.getSystem('NetworkSystem');
+        if (network) {
+            const timestamp = network.getServerTime();
+            const camera = this.engine.camera;
+            const origin = camera.position.clone();
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
 
-        for (let i = 0; i < numPellets; i++) {
-            const shootRaycaster = new THREE.Raycaster();
-            
-            const spreadVal = weaponData.spread || 0.02;
-            const spread = new THREE.Vector2(
-                (Math.random() - 0.5) * spreadVal,
-                (Math.random() - 0.5) * spreadVal
-            );
-            
-            shootRaycaster.setFromCamera(spread, camera);
-            const intersects = shootRaycaster.intersectObjects(this.objects);
-
-            if (intersects.length > 0) {
-                const hitPart = intersects[0].object;
-                this.handleHit(hitPart, intersects[0].point, weaponData);
-            }
+            network.send('SHOOT', {
+                timestamp,
+                origin,
+                direction,
+                weaponKey
+            }, true);
         }
 
         if (!weaponData.isAutomatic) {
             this.isFiring = false;
         }
+    }
+
+    handleHitConfirmed(data) {
+        const { targetId, damage, point, isHeadshot, weaponKey } = data;
+        const scene = this.engine.scene;
+        const bloodParticles = this.engine.context.bloodParticles || [];
+        const impactParticles = this.engine.context.impactParticles || [];
+
+        // Visual confirmation of hit (blood)
+        createBloodSplatter(point, scene, bloodParticles);
+        
+        // If we want to show damage or other feedback locally:
+        console.log(`Confirmed hit on ${targetId} for ${damage} damage (headshot: ${isHeadshot})`);
     }
 
     handleHit(hitPart, point, weaponData) {
