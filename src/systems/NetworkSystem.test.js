@@ -23,6 +23,10 @@ vi.mock('@geckos.io/snapshot-interpolation', () => {
                 })),
                 add: vi.fn()
             };
+            this.vault = {
+                add: vi.fn(),
+                get: vi.fn()
+            };
             this.calcInterpolation = vi.fn();
         })
     };
@@ -281,7 +285,11 @@ describe('NetworkSystem', () => {
             vi.useFakeTimers();
             const sendSpy = vi.spyOn(system, 'send');
             system.isHost = false;
-            
+            system.connections.set('host-peer', { 
+                reliable: { open: true, send: vi.fn() }, 
+                unreliable: { open: true, send: vi.fn() } 
+            });
+
             // Re-call host/join to trigger timers if needed, or check if init triggers it
             // For now let's assume it starts on join or init.
             system.init();

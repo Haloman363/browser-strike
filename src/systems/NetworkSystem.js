@@ -15,6 +15,16 @@ export class NetworkSystem extends System {
         this.broadcastInterval = null;
         this.SI = new SnapshotInterpolation();
         this.localPeerId = null;
+        this.lastReconciledSeq = 0;
+        this.clockOffset = 0;
+        this.syncInterval = null;
+    }
+
+    /**
+     * Returns the synchronized server time.
+     */
+    getServerTime() {
+        return performance.now() + this.clockOffset;
     }
 
     /**
@@ -23,7 +33,20 @@ export class NetworkSystem extends System {
     init() {
         if (!this.peer) {
             this.peer = new Peer();
+            this.peer.on('open', (id) => {
+                this.localPeerId = id;
+                console.log('PeerJS initialized with ID:', id);
+            });
             this._setupPeerListeners();
+        }
+
+        // Periodic clock sync for clients
+        if (!this.syncInterval) {
+            this.syncInterval = setInterval(() => {
+                if (!this.isHost && this.connections.size > 0) {
+                    this.send('TIME_SYNC', { t1: performance.now() }, true);
+                }
+            }, 5000);
         }
     }
 
@@ -33,6 +56,10 @@ export class NetworkSystem extends System {
     host(code) {
         this.isHost = true;
         this.peer = new Peer(code);
+        this.peer.on('open', (id) => {
+            this.localPeerId = id;
+            console.log('Hosting with ID:', id);
+        });
         this._setupPeerListeners();
 
         // Start broadcast loop at 20Hz (50ms)
@@ -59,12 +86,17 @@ export class NetworkSystem extends System {
             qy: entity.quaternion ? entity.quaternion.y : 0,
             qz: entity.quaternion ? entity.quaternion.z : 0,
             qw: entity.quaternion ? entity.quaternion.w : 1,
+            isCrouched: !!entity.isCrouched,
             lastSeq: entity.lastProcessedSeq || 0
         }));
 
         if (state.length === 0) return;
 
         const snapshot = this.SI.snapshot.create(state);
+        
+        // Host-side State Vaulting
+        this.SI.vault.add(snapshot);
+
         this.send('SNAPSHOT', snapshot, false);
     }
 
@@ -182,6 +214,22 @@ export class NetworkSystem extends System {
                     this.engine.emit('network:input_ack', data);
                 }
                 break;
+            case 'TIME_SYNC':
+                if (this.isHost) {
+                    this.send('TIME_ACK', { 
+                        t1: data.t1, 
+                        hostTime: performance.now() 
+                    }, true);
+                }
+                break;
+            case 'TIME_ACK':
+                if (!this.isHost) {
+                    const t2 = performance.now();
+                    const rtt = t2 - data.t1;
+                    this.clockOffset = (data.hostTime + rtt / 2) - t2;
+                    console.log(`Clock sync: RTT=${rtt.toFixed(2)}ms, offset=${this.clockOffset.toFixed(2)}ms`);
+                }
+                break;
             default:
                 console.log('Unknown message type:', type, 'from', peerId);
         }
@@ -192,6 +240,24 @@ export class NetworkSystem extends System {
      */
     update(dt) {
         if (this.isHost) return;
+
+        // --- CLIENT-SIDE RECONCILIATION TRIGGER ---
+        // Find the latest authoritative state from the vault
+        if (this.SI && this.SI.vault) {
+            const latestSnapshot = this.SI.vault.get();
+            if (latestSnapshot && latestSnapshot.state) {
+                const localState = latestSnapshot.state.find(s => s.id === this.localPeerId);
+                if (localState && localState.lastSeq > this.lastReconciledSeq) {
+                    this.lastReconciledSeq = localState.lastSeq;
+                    
+                    const entity = (this.engine.entities || []).find(e => e.id === this.localPeerId);
+                    const controller = entity?.getSystem ? entity.getSystem('PlayerControllerSystem') : null;
+                    if (controller) {
+                        controller.reconcile(localState);
+                    }
+                }
+            }
+        }
 
         const snapshot = this.SI.calcInterpolation('x y z qx qy qz qw');
         if (snapshot) {
