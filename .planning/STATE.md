@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 3: Hit Registration COMPLETE. Transitioning to Phase 4: WebGPU Foundation.
+**Current Focus**: Executing Phase 4: WebGPU Foundation.
 
 ## Current Position
 **Phase**: 04 - WebGPU Foundation
-**Plan**: TBD
-**Status**: Not started
-**Progress**: [▓▓▓▓▓░░░░░░░░░░░░░░░] 33%
+**Plan**: 04-02 - TSL Material Overhaul
+**Status**: In Progress
+**Progress**: [▓▓▓▓▓▓░░░░░░░░░░░░░░] 35%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Lag compensation (backtracking) for fair hit registration. Confirmed hit feedback loop.
+- **New Decision**: Use `WebGPURenderer` with automatic WebGL 2 fallback. Set build target to `esnext`.
 
 ### Learnings
-- NTP clock sync is stable enough for sub-50ms backtracking precision.
-- SnapshotInterpolation Vault is a performant choice for storing entity history on the host.
+- Top-level await in renderer initialization requires Vite `esnext` target.
+- `WebGPURenderer` simplifies backend fallback management.
 
 ## Session Continuity
-**Current Session**: Phase 3 COMPLETE.
+**Current Session**: Phase 4: Wave 1 complete. Wave 2 started.
 **Next Steps**:
-1. Begin Phase 4: WebGPU Migration.
-2. Initialize WebGPURenderer and TSL foundations.
+1. Convert materials in `Factory.js` to `NodeMaterial` (TSL).
+2. Implement HUD backend indicator.
 
 ---
 *Last updated: 2026-03-08*

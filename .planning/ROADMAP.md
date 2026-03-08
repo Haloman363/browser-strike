@@ -22,7 +22,7 @@
 | 1. Networking Core | 3/3 | Complete   | 2026-03-08 |
 | 2. Game Feel | 2/2 | Complete   | 2026-03-08 |
 | 3. Hit Registration | 2/2 | Complete   | 2026-03-08 |
-| 4. WebGPU Foundation | 0/0 | Not started | - |
+| 4. WebGPU Foundation | 1/2 | In Progress|  |
 | 5. Visual Fidelity | 0/0 | Not started | - |
 | 6. FX Overhaul | 0/0 | Not started | - |
 | 7. Gunplay Refinement | 0/0 | Not started | - |
@@ -73,11 +73,13 @@
 ### Phase 4: WebGPU Foundation
 **Goal**: Complete the migration of the rendering engine from WebGL to WebGPU.
 **Depends on**: Nothing (parallelizable)
-**Requirements**: WGPU-01
+**Requirements**: WGPU-01, WGPU-03
 **Success Criteria**:
   1. The game successfully initializes and runs using the Three.js `WebGPURenderer`.
   2. Basic scene lighting and shadow mapping work without WebGL fallback errors.
-**Plans**: TBD
+**Plans**:
+- [ ] 04-01-PLAN.md — Core Infrastructure & Renderer Migration
+- [ ] 04-02-PLAN.md — TSL Material Overhaul
 
 ### Phase 5: Visual Fidelity
 **Goal**: Implement advanced materials and post-processing using Three Shading Language (TSL).
