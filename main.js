@@ -70,12 +70,12 @@ const direction = new THREE.Vector3();
 let gun, knife, grenade, c4, muzzleFlash, muzzleLight, playerWorldGun, playerBody;
 let currentWeapon = 'gun'; // 'gun', 'knife', or 'grenade'
 let currentSlot = 2;
-let currentWeaponData = WEAPONS_DATA['GLOCK'];
+let currentWeaponData = WEAPONS_DATA['AK47'];
 
 const inventory = {
     1: { type: 'knife', weaponKey: 'KNIFE', model: null },
-    2: { type: 'gun', weaponKey: 'GLOCK', model: null, ammoInClip: 20, ammoTotal: 120 },
-    3: { type: 'gun', weaponKey: 'AK47', model: null, ammoInClip: 30, ammoTotal: 90 },
+    2: { type: 'gun', weaponKey: 'AK47', model: null, ammoInClip: 30, ammoTotal: 90 },
+    3: { type: 'none', model: null },
     4: { type: 'grenade', weaponKey: 'HE', model: null, count: 1 },
     5: { type: 'none', model: null },
     6: { type: 'grenade', weaponKey: 'FLASH', model: null, count: 2 },
@@ -178,25 +178,17 @@ const aliveCountUI = document.getElementById('alive-count');
 const damageFlash = document.getElementById('damage-flash');
 
 // Global one-time initialization
-try {
-    renderer = new THREE.WebGLRenderer({
-        antialias: false,
-        powerPreference: 'high-performance',
-        failIfMajorPerformanceCaveat: false
-    });
-    
-    if (renderer) {
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFShadowMap;
-        document.body.appendChild(renderer.domElement);
-    }
-} catch (e) {
-    console.error("WebGL initialization failed:", e);
-}
-
 camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 2000);
+
+// Setup Engine Context with async WebGPU initialization
+await engine.init({ 
+    camera, 
+    container: document.body 
+});
+
+// Sync global renderer reference
+renderer = engine.renderer;
+
 if (renderer) {
     controls = new PointerLockControls(camera, renderer.domElement);
 } else {
@@ -204,14 +196,6 @@ if (renderer) {
     controls = { isLocked: false, lock: () => {}, unlock: () => {}, addEventListener: () => {} };
 }
 
-// Setup Engine Context
-if (renderer) {
-    engine.init({ renderer, camera });
-} else {
-    // If WebGL failed, at least init engine with camera to avoid system crashes
-    engine.camera = camera;
-    engine.scene = new THREE.Scene();
-}
 engine.context.objects = objects;
 engine.context.enemies = enemies;
 engine.context.bloodParticles = bloodParticles;
@@ -1610,6 +1594,8 @@ function updateUI() {
     GameState.ammoInClip = ammoInClip;
     GameState.ammoTotal = ammoTotal;
     GameState.currentWeaponName = currentWeaponData ? currentWeaponData.name : "";
+    const item = inventory[currentSlot];
+    GameState.currentWeaponKey = item ? item.weaponKey : "";
     GameState.isReloading = isReloading;
     GameState.selectedMode = selectedMode;
     GameState.gameTimeLeft = gameTimeLeft;

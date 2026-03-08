@@ -3,8 +3,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { createGunModel, createGrenadeModel, createHumanoidModel, createWall, createCrate } from './Factory.js';
 import { WEAPON_RECIPES } from './WeaponRecipes.js';
 import { COLORS } from './Constants_v2.js';
+import { Engine } from './core/Engine.js';
 
 let scene, camera, renderer, controls, currentMesh;
+const engine = new Engine();
+
 let categories = {
     weapons: Object.keys(WEAPON_RECIPES).filter(key => key !== 'COMBAT_KNIFE'),
     grenades: ['HE', 'FLASH', 'SMOKE', 'MOLOTOV'],
@@ -58,24 +61,21 @@ window.resetCamera = () => {
     }
 };
 
-function init() {
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
-
+async function init() {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
     camera.position.set(1, 1, 2);
     camera.layers.enable(1); // Show player body layer in dev view
 
-    try {
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-    } catch (e) {
-        console.error("WebGL initialization failed:", e);
-    }    
-    if (renderer) {
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
-    }
+    // Async engine initialization
+    await engine.init({ 
+        camera, 
+        container: document.body 
+    });
+
+    scene = engine.scene;
+    renderer = engine.renderer;
+    
+    scene.background = new THREE.Color(0x111111);
 
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -94,7 +94,7 @@ function init() {
 
     loadItem();
 
-    window.addEventListener('resize', onWindowResize);
+    // Resize is handled by Engine
     animate();
 }
 
@@ -139,12 +139,6 @@ function updateUI(key) {
     if (nameEl) {
         nameEl.innerText = `${currentIndex + 1}/${items.length}: ${key}${vmText}`;
     }
-}
-
-function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function animate() {

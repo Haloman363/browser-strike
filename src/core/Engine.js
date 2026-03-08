@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WebGPURenderer } from 'three/webgpu';
 import { EventEmitter } from './EventEmitter.js';
 
 /**
@@ -12,6 +13,7 @@ export class Engine extends EventEmitter {
         this.scene = null;
         this.camera = null;
         this.renderer = null;
+        this.backend = null;
         this.clock = new THREE.Clock();
         this.isRunning = false;
         this.context = {}; // Global context for systems to share resources
@@ -21,17 +23,20 @@ export class Engine extends EventEmitter {
      * Initializes the core Three.js components.
      * @param {Object} options Scene/Camera/Renderer configuration.
      */
-    init(options = {}) {
+    async init(options = {}) {
         this.scene = options.scene || new THREE.Scene();
         this.camera = options.camera || new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
-        this.renderer = options.renderer || new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = options.renderer || new WebGPURenderer({ antialias: true });
         
         if (!options.renderer) {
             this.renderer.setPixelRatio(window.devicePixelRatio);
             this.renderer.setSize(window.innerWidth, window.innerHeight);
-            this.renderer.shadowMap.enabled = true;
-            this.renderer.shadowMap.type = THREE.PCFShadowMap;
         }
+
+        // Initialize WebGPU backend
+        await this.renderer.init();
+        this.backend = this.renderer.isWebGPU ? 'WebGPU' : 'WebGL';
+        console.log(`Renderer initialized with ${this.backend} backend`);
 
         // Add renderer to DOM if not already present
         if (!this.renderer.domElement.parentElement && options.container) {
