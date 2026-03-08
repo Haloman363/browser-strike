@@ -1,5 +1,6 @@
 import { System } from '../core/System.js';
 import { Peer } from 'peerjs';
+import { SnapshotInterpolation } from '@geckos.io/snapshot-interpolation';
 
 /**
  * NetworkSystem manages P2P connectivity via PeerJS.
@@ -11,6 +12,8 @@ export class NetworkSystem extends System {
         this.peer = null;
         this.isHost = false;
         this.connections = new Map(); // PeerID -> { reliable, unreliable }
+        this.broadcastInterval = null;
+        this.SI = new SnapshotInterpolation();
     }
 
     /**
@@ -30,6 +33,37 @@ export class NetworkSystem extends System {
         this.isHost = true;
         this.peer = new Peer(code);
         this._setupPeerListeners();
+
+        // Start broadcast loop at 20Hz (50ms)
+        this.broadcastInterval = setInterval(() => {
+            this.broadcastSnapshot();
+        }, 50);
+    }
+
+    /**
+     * Broadcasts a snapshot of the current world state to all peers.
+     */
+    broadcastSnapshot() {
+        if (!this.isHost) return;
+
+        // Gather state from networked entities (players)
+        // In the final game, this would query specific networked components.
+        // For now, we assume engine.entities is the source of truth.
+        const state = (this.engine.entities || []).map(entity => ({
+            id: entity.id,
+            x: entity.position.x,
+            y: entity.position.y,
+            z: entity.position.z,
+            qx: entity.quaternion.x,
+            qy: entity.quaternion.y,
+            qz: entity.quaternion.z,
+            qw: entity.quaternion.w
+        }));
+
+        if (state.length === 0) return;
+
+        const snapshot = this.SI.snapshot.create(state);
+        this.send('SNAPSHOT', snapshot, false);
     }
 
     /**
@@ -95,9 +129,11 @@ export class NetworkSystem extends System {
             }
         });
 
-        conn.on('data', (data) => {
-            console.log('Data received from', conn.peer, ':', data);
-            // Will be handled by a message dispatcher in a later task
+        conn.on('data', (payload) => {
+            // payload is { type, data, timestamp }
+            if (payload && payload.type) {
+                this._handleMessage(payload.type, payload.data, conn.peer);
+            }
         });
 
         conn.on('close', () => {
@@ -107,9 +143,56 @@ export class NetworkSystem extends System {
     }
 
     /**
+     * Internal message dispatcher.
+     */
+    _handleMessage(type, data, peerId) {
+        switch (type) {
+            case 'SNAPSHOT':
+                if (!this.isHost) {
+                    this.SI.snapshot.add(data);
+                }
+                break;
+            case 'JOIN':
+                console.log('Player joined:', data.peerId);
+                break;
+            default:
+                console.log('Unknown message type:', type, 'from', peerId);
+        }
+    }
+
+    /**
+     * Updates interpolation on client.
+     */
+    update(dt) {
+        if (this.isHost) return;
+
+        const snapshot = this.SI.calcInterpolation('x y z qx qy qz qw');
+        if (snapshot) {
+            const { state } = snapshot;
+            state.forEach((s) => {
+                const entity = (this.engine.entities || []).find(e => e.id === s.id);
+                if (entity) {
+                    entity.position.x = s.x;
+                    entity.position.y = s.y;
+                    entity.position.z = s.z;
+                    if (entity.quaternion) {
+                        entity.quaternion.x = s.qx;
+                        entity.quaternion.y = s.qy;
+                        entity.quaternion.z = s.qz;
+                        entity.quaternion.w = s.qw;
+                    }
+                }
+            });
+        }
+    }
+
+    /**
      * Clean up peer on destroy.
      */
     destroy() {
+        if (this.broadcastInterval) {
+            clearInterval(this.broadcastInterval);
+        }
         if (this.peer) {
             this.peer.destroy();
             this.peer = null;

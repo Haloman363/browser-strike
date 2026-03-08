@@ -11,7 +11,23 @@ vi.mock('peerjs', () => {
     };
 });
 
+// Mock SnapshotInterpolation
+vi.mock('@geckos.io/snapshot-interpolation', () => {
+    return {
+        SnapshotInterpolation: vi.fn().mockImplementation(() => {
+            return {
+                snapshot: {
+                    create: vi.fn().mockReturnValue({ id: 'snap-id', state: [], timestamp: Date.now() }),
+                    add: vi.fn()
+                },
+                calcInterpolation: vi.fn()
+            };
+        })
+    };
+});
+
 import { Peer } from 'peerjs';
+import { SnapshotInterpolation } from '@geckos.io/snapshot-interpolation';
 
 describe('NetworkSystem', () => {
     let mockEngine;
@@ -60,5 +76,75 @@ describe('NetworkSystem', () => {
 
         system.send('UNRELIABLE_TYPE', { bar: 'baz' }, false);
         expect(unreliableConn.send).toHaveBeenCalledWith(expect.objectContaining({ type: 'UNRELIABLE_TYPE' }));
+    });
+
+    it('host(code) should start a broadcast loop', () => {
+        vi.useFakeTimers();
+        const broadcastSpy = vi.spyOn(system, 'broadcastSnapshot');
+        
+        system.host('test-code');
+        
+        vi.advanceTimersByTime(50);
+        expect(broadcastSpy).toHaveBeenCalled();
+        
+        vi.useRealTimers();
+    });
+
+    it('broadcastSnapshot should send snapshot message via unreliable channel', () => {
+        const unreliableConn = { send: vi.fn(), open: true };
+        system.connections.set('client-1', { reliable: { open: true }, unreliable: unreliableConn });
+        system.isHost = true;
+        
+        // Mock state to broadcast
+        system.engine.entities = [{
+            id: 'player-1',
+            position: { x: 1, y: 2, z: 3 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 }
+        }];
+
+        system.broadcastSnapshot();
+
+        expect(unreliableConn.send).toHaveBeenCalledWith(expect.objectContaining({
+            type: 'SNAPSHOT',
+            data: expect.objectContaining({
+                state: expect.arrayContaining([
+                    expect.objectContaining({ id: 'player-1' })
+                ])
+            })
+        }));
+    });
+
+    it('receiving SNAPSHOT should add it to SI instance', () => {
+        const addSnapshotSpy = vi.spyOn(system.SI.snapshot, 'add');
+        const snapshot = { id: 'snap-1', state: [{ id: 'p1', x: 10, y: 0, z: 10 }] };
+        
+        // Simulate data reception
+        system._handleMessage('SNAPSHOT', snapshot, 'host-peer');
+        
+        expect(addSnapshotSpy).toHaveBeenCalledWith(snapshot);
+    });
+
+    it('update() should interpolate entity positions on client', () => {
+        system.isHost = false;
+        const mockEntity = {
+            id: 'p1',
+            position: { x: 0, y: 0, z: 0 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 }
+        };
+        system.engine.entities = [mockEntity];
+
+        // Setup mock to return an interpolated snapshot
+        system.SI.calcInterpolation.mockReturnValue({
+            state: [{ id: 'p1', x: 5, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 }]
+        });
+
+        // Call update
+        system.update(0.016); // 60fps delta
+
+        // Check if calcInterpolation was called
+        expect(system.SI.calcInterpolation).toHaveBeenCalledWith('x y z qx qy qz qw');
+
+        // Check if position was updated
+        expect(mockEntity.position.x).toBe(5);
     });
 });
