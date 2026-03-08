@@ -55,10 +55,11 @@ export class NetworkSystem extends System {
             x: entity.position.x,
             y: entity.position.y,
             z: entity.position.z,
-            qx: entity.quaternion.x,
-            qy: entity.quaternion.y,
-            qz: entity.quaternion.z,
-            qw: entity.quaternion.w
+            qx: entity.quaternion ? entity.quaternion.x : 0,
+            qy: entity.quaternion ? entity.quaternion.y : 0,
+            qz: entity.quaternion ? entity.quaternion.z : 0,
+            qw: entity.quaternion ? entity.quaternion.w : 1,
+            lastSeq: entity.lastProcessedSeq || 0
         }));
 
         if (state.length === 0) return;
@@ -155,6 +156,31 @@ export class NetworkSystem extends System {
                 break;
             case 'JOIN':
                 console.log('Player joined:', data.peerId);
+                // On host, assign an entity or create one for this peer
+                if (this.isHost) {
+                    // For now, if an entity with this ID doesn't exist, we'll assume it's created elsewhere
+                    // or we could emit an event for the Factory to handle.
+                    this.engine.emit('network:player_joined', { peerId: data.peerId });
+                }
+                break;
+            case 'INPUT':
+                if (this.isHost) {
+                    // Find entity for this peer
+                    const entity = (this.engine.entities || []).find(e => e.id === peerId);
+                    if (entity) {
+                        const controller = entity.getSystem ? entity.getSystem('PlayerControllerSystem') : null;
+                        if (controller) {
+                            controller.applyInput(data, data.dt);
+                        }
+                        entity.lastProcessedSeq = data.seq;
+                    }
+                }
+                break;
+            case 'INPUT_ACK':
+                if (!this.isHost) {
+                    // Client received an explicit ACK (optional, snapshots also carry lastSeq)
+                    this.engine.emit('network:input_ack', data);
+                }
                 break;
             default:
                 console.log('Unknown message type:', type, 'from', peerId);
@@ -171,6 +197,11 @@ export class NetworkSystem extends System {
         if (snapshot) {
             const { state } = snapshot;
             state.forEach((s) => {
+                // Skip local player interpolation
+                if (this.localPeerId && s.id === this.localPeerId) {
+                    return;
+                }
+
                 const entity = (this.engine.entities || []).find(e => e.id === s.id);
                 if (entity) {
                     entity.position.x = s.x;

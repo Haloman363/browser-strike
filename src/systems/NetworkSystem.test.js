@@ -36,7 +36,11 @@ describe('NetworkSystem', () => {
     let system;
 
     beforeEach(() => {
-        mockEngine = {};
+        mockEngine = {
+            emit: vi.fn(),
+            getSystem: vi.fn(),
+            entities: []
+        };
         system = new NetworkSystem(mockEngine);
     });
 
@@ -189,5 +193,22 @@ describe('NetworkSystem', () => {
         system._handleMessage('INPUT_ACK', ackData, 'host-peer');
         
         expect(emitSpy).toHaveBeenCalledWith('network:input_ack', ackData);
+    });
+
+    it('should handle INPUT from client on host', () => {
+        system.isHost = true;
+        const mockController = { applyInput: vi.fn() };
+        const mockEntity = {
+            id: 'client-peer',
+            getSystem: vi.fn().mockReturnValue(mockController),
+            position: { x: 0, y: 0, z: 0 }
+        };
+        system.engine.entities = [mockEntity];
+
+        const inputData = { seq: 10, dt: 0.016, keys: { KeyW: true } };
+        system._handleMessage('INPUT', inputData, 'client-peer');
+
+        expect(mockController.applyInput).toHaveBeenCalledWith(inputData, 0.016);
+        expect(mockEntity.lastProcessedSeq).toBe(10);
     });
 });
