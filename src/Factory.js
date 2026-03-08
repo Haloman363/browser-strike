@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { MeshPhongNodeMaterial, MeshStandardNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu';
+import { texture, color, float, vec3 } from 'three/tsl';
 import { COLORS } from './Constants_v2.js';
 import { TextureGenerator } from './TextureGenerator.js';
 import { WeaponBuilder } from './WeaponBuilder.js';
@@ -25,7 +27,10 @@ function addEjectionPort(group, position, size, material) {
     
     // Bolt inside
     const boltGeo = new THREE.BoxGeometry(size.x * 0.9, size.y * 0.9, size.z * 0.9);
-    const bolt = new THREE.Mesh(boltGeo, new THREE.MeshPhongMaterial({ color: 0x555555, shininess: 80 }));
+    const boltMat = new MeshPhongNodeMaterial();
+    boltMat.colorNode = color(0x555555);
+    boltMat.shininessNode = float(80);
+    const bolt = new THREE.Mesh(boltGeo, boltMat);
     bolt.position.copy(position);
     bolt.position.x -= 0.005; 
     group.add(bolt);
@@ -73,7 +78,8 @@ function createViewModelArms(group, skinMat, gloveMat, side = 'both', overrides 
 
         // Sleeve (Upper part of forearm)
         const sleeveGeo = new THREE.CylinderGeometry(0.052, 0.052, forearmLen * 0.6, 8);
-        const sleeveMat = new THREE.MeshPhongMaterial({ color: isRight ? 0x222222 : 0x252525 }); // Dark fabric
+        const sleeveMat = new MeshPhongNodeMaterial();
+        sleeveMat.colorNode = color(isRight ? 0x222222 : 0x252525); // Dark fabric
         const sleeve = new THREE.Mesh(sleeveGeo, sleeveMat);
         sleeve.rotation.x = Math.PI / 2;
         sleeve.position.z = forearmLen * 0.7 + handSize.d / 2;
@@ -92,16 +98,24 @@ function createViewModelArms(group, skinMat, gloveMat, side = 'both', overrides 
             watchGroup.rotation.x = Math.PI / 2;
             
             // Strap
-            const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 8), new THREE.MeshPhongMaterial({ color: 0x111111 }));
+            const strapMat = new MeshPhongNodeMaterial();
+            strapMat.colorNode = color(0x111111);
+            const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 8), strapMat);
             watchGroup.add(strap);
             
             // Face
-            const face = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.04), new THREE.MeshPhongMaterial({ color: 0x222222 }));
+            const faceMat = new MeshPhongNodeMaterial();
+            faceMat.colorNode = color(0x222222);
+            const face = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.01, 0.04), faceMat);
             face.position.y = 0.04;
             watchGroup.add(face);
             
             // Screen
-            const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.03), new THREE.MeshBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 }));
+            const screenMat = new MeshBasicNodeMaterial();
+            screenMat.colorNode = color(0x00ff00);
+            screenMat.opacityNode = float(0.5);
+            screenMat.transparent = true;
+            const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.03), screenMat);
             screen.rotation.x = -Math.PI / 2;
             screen.position.y = 0.046;
             watchGroup.add(screen);
@@ -183,9 +197,15 @@ export function createKnifeModel(isViewModel = false) {
     const builder = new WeaponBuilder();
     const group = builder.getGroup();
     
-    const bladeMat = new THREE.MeshPhongMaterial({ map: bladeTex, shininess: 100 });
-    const gripMat = new THREE.MeshPhongMaterial({ map: gunGripTex });
-    const metalMat = new THREE.MeshPhongMaterial({ map: gunBodyTex });
+    const bladeMat = new MeshPhongNodeMaterial();
+    bladeMat.colorNode = texture(bladeTex);
+    bladeMat.shininessNode = float(100);
+
+    const gripMat = new MeshPhongNodeMaterial();
+    gripMat.colorNode = texture(gunGripTex);
+
+    const metalMat = new MeshPhongNodeMaterial();
+    metalMat.colorNode = texture(gunBodyTex);
 
     // Blade
     if (recipe.bladePoints) {
@@ -194,7 +214,9 @@ export function createKnifeModel(isViewModel = false) {
     }
 
     // Fuller (Groove) - refined
-    builder.addBox({x: 0.005, y: 0.01, z: 0.15}, new THREE.MeshPhongMaterial({ color: 0x111111 }), {x: 0, y: 0, z: -0.12});
+    const fullerMat = new MeshPhongNodeMaterial();
+    fullerMat.colorNode = color(0x111111);
+    builder.addBox({x: 0.005, y: 0.01, z: 0.15}, fullerMat, {x: 0, y: 0, z: -0.12});
 
     // Serrations - refined
     for (let i = 0; i < 6; i++) {
@@ -216,15 +238,19 @@ export function createKnifeModel(isViewModel = false) {
     builder.addBox(gSize, metalMat, {x: 0, y: 0, z: 0});
     
     // Add some holes to the guard for detail
-    const holeMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
+    const holeMat = new MeshPhongNodeMaterial();
+    holeMat.colorNode = color(0x111111);
     builder.addCylinder(0.005, 0.005, 0.03, holeMat, {x: 0, y: 0.035, z: 0}, {x: Math.PI/2, y: 0, z: 0});
     builder.addCylinder(0.005, 0.005, 0.03, holeMat, {x: 0, y: -0.035, z: 0}, {x: Math.PI/2, y: 0, z: 0});
 
     if (isViewModel) {
         // --- VIEWMODEL ARMS ---
         const skinTex = TextureGenerator.createSkinTexture(`#${new THREE.Color(COLORS.SKIN).getHexString()}`);
-        const skinMat = new THREE.MeshPhongMaterial({ map: skinTex });
-        const gloveMat = new THREE.MeshPhongMaterial({ map: gloveTex });
+        const skinMat = new MeshPhongNodeMaterial();
+        skinMat.colorNode = texture(skinTex);
+
+        const gloveMat = new MeshPhongNodeMaterial();
+        gloveMat.colorNode = texture(gloveTex);
         
         const overrides = {
             right: recipe.vmRightHand
@@ -252,12 +278,14 @@ export function createGrenadeModel(isViewModel = false, type = 'HE') {
     let body;
     if (type === 'MOLOTOV') {
         const bodyGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.15, 8);
-        const bodyMat = new THREE.MeshPhongMaterial({ map: nadeTex });
+        const bodyMat = new MeshPhongNodeMaterial();
+        bodyMat.colorNode = texture(nadeTex);
         body = new THREE.Mesh(bodyGeo, bodyMat);
     } else {
         const bodyGeo = new THREE.SphereGeometry(0.05, 12, 12);
         bodyGeo.scale(1, 1.2, 1);
-        const bodyMat = new THREE.MeshPhongMaterial({ map: nadeTex });
+        const bodyMat = new MeshPhongNodeMaterial();
+        bodyMat.colorNode = texture(nadeTex);
         body = new THREE.Mesh(bodyGeo, bodyMat);
         
         // Fragmentation ribs
@@ -276,14 +304,16 @@ export function createGrenadeModel(isViewModel = false, type = 'HE') {
     if (type === 'MOLOTOV') {
         // Rag in bottle
         const ragGeo = new THREE.BoxGeometry(0.02, 0.1, 0.02);
-        const ragMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const ragMat = new MeshBasicNodeMaterial();
+        ragMat.colorNode = color(0xffffff);
         const rag = new THREE.Mesh(ragGeo, ragMat);
         rag.position.y = 0.1;
         group.add(rag);
     } else {
         // Top Fuse Assembly
         const topGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8);
-        const topMat = new THREE.MeshPhongMaterial({ map: gunBodyTex });
+        const topMat = new MeshPhongNodeMaterial();
+        topMat.colorNode = texture(gunBodyTex);
         const top = new THREE.Mesh(topGeo, topMat);
         top.position.y = 0.06;
         group.add(top);
@@ -305,8 +335,10 @@ export function createGrenadeModel(isViewModel = false, type = 'HE') {
     if (isViewModel) {
         // --- VIEWMODEL ARMS ---
         const skinTex = TextureGenerator.createSkinTexture(`#${new THREE.Color(COLORS.SKIN).getHexString()}`);
-        const skinMat = new THREE.MeshPhongMaterial({ map: skinTex });
-        const gloveMat = new THREE.MeshPhongMaterial({ map: gloveTex });
+        const skinMat = new MeshPhongNodeMaterial();
+        skinMat.colorNode = texture(skinTex);
+        const gloveMat = new MeshPhongNodeMaterial();
+        gloveMat.colorNode = texture(gloveTex);
         
         // Default grenade position (slightly centered)
         const overrides = {
@@ -334,12 +366,18 @@ export function createHumanoidModel(team = 'TERRORIST') {
     const vestTex = TextureGenerator.createMetalTexture(`#${new THREE.Color(vestColor).getHexString()}`);
     const bootTex = TextureGenerator.createPolymerTexture('#111111');
 
-    const clothMat = new THREE.MeshPhongMaterial({ map: clothTex });
-    const skinMat = new THREE.MeshPhongMaterial({ map: skinTex });
-    const vestMat = new THREE.MeshPhongMaterial({ map: vestTex });
-    const bootMat = new THREE.MeshPhongMaterial({ map: bootTex });
-    const metalMat = new THREE.MeshPhongMaterial({ color: 0x333333 });
-    const jointMat = new THREE.MeshPhongMaterial({ color: 0x111111 });
+    const clothMat = new MeshPhongNodeMaterial();
+    clothMat.colorNode = texture(clothTex);
+    const skinMat = new MeshPhongNodeMaterial();
+    skinMat.colorNode = texture(skinTex);
+    const vestMat = new MeshPhongNodeMaterial();
+    vestMat.colorNode = texture(vestTex);
+    const bootMat = new MeshPhongNodeMaterial();
+    bootMat.colorNode = texture(bootTex);
+    const metalMat = new MeshPhongNodeMaterial();
+    metalMat.colorNode = color(0x333333);
+    const jointMat = new MeshPhongNodeMaterial();
+    jointMat.colorNode = color(0x111111);
 
     // --- TORSO & VEST ---
     // Inner Torso
@@ -418,7 +456,12 @@ export function createHumanoidModel(team = 'TERRORIST') {
         headGroup.add(nvgMount);
 
         // Goggles
-        const goggles = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.2, 0.6), new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 100, transparent: true, opacity: 0.9 }));
+        const gogglesMat = new MeshPhongNodeMaterial();
+        gogglesMat.colorNode = color(0x111111);
+        gogglesMat.shininessNode = float(100);
+        gogglesMat.transparent = true;
+        gogglesMat.opacityNode = float(0.9);
+        const goggles = new THREE.Mesh(new THREE.BoxGeometry(3.5, 1.2, 0.6), gogglesMat);
         goggles.position.set(0, 0.5, 2.1);
         headGroup.add(goggles);
 
@@ -446,7 +489,10 @@ export function createHumanoidModel(team = 'TERRORIST') {
         headGroup.add(eyes);
         
         // Sunglasses/Tactical glasses for Terrorist
-        const glasses = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.6, 0.2), new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 100 }));
+        const glassesMat = new MeshPhongNodeMaterial();
+        glassesMat.colorNode = color(0x111111);
+        glassesMat.shininessNode = float(100);
+        const glasses = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.6, 0.2), glassesMat);
         glasses.position.set(0, 0.7, 2.1);
         headGroup.add(glasses);
     }
@@ -604,7 +650,8 @@ export function createC4Model(isViewModel = false) {
     group.name = "c4";
 
     const c4Tex = TextureGenerator.createC4Texture();
-    const material = new THREE.MeshPhongMaterial({ map: c4Tex });
+    const material = new MeshPhongNodeMaterial();
+    material.colorNode = texture(c4Tex);
 
     // Main Body (Plastic blocks)
     const bodyGeo = new THREE.BoxGeometry(0.12, 0.08, 0.18);
@@ -619,7 +666,8 @@ export function createC4Model(isViewModel = false) {
 
     // Small Red LED
     const ledGeo = new THREE.SphereGeometry(0.005, 8, 8);
-    const ledMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+    const ledMat = new MeshBasicNodeMaterial();
+    ledMat.colorNode = color(0xff0000);
     const led = new THREE.Mesh(ledGeo, ledMat);
     led.position.set(0.04, 0.07, 0.05);
     led.name = "led";
@@ -627,9 +675,11 @@ export function createC4Model(isViewModel = false) {
 
     if (isViewModel) {
         const skinTex = TextureGenerator.createSkinTexture(`#${new THREE.Color(COLORS.SKIN).getHexString()}`);
-        const skinMat = new THREE.MeshPhongMaterial({ map: skinTex });
+        const skinMat = new MeshPhongNodeMaterial();
+        skinMat.colorNode = texture(skinTex);
         const gloveTex = TextureGenerator.createGloveTexture();
-        const gloveMat = new THREE.MeshPhongMaterial({ map: gloveTex });
+        const gloveMat = new MeshPhongNodeMaterial();
+        gloveMat.colorNode = texture(gloveTex);
         
         // C4 in hands position
         const overrides = {
@@ -649,12 +699,11 @@ export function createBombSiteMarker(siteLabel = 'A') {
 
     const tex = TextureGenerator.createBombSiteTexture(siteLabel);
     const geo = new THREE.PlaneGeometry(100, 100);
-    const mat = new THREE.MeshBasicMaterial({ 
-        map: tex, 
-        transparent: true, 
-        side: THREE.DoubleSide,
-        depthWrite: false
-    });
+    const mat = new MeshBasicNodeMaterial();
+    mat.colorNode = texture(tex);
+    mat.transparent = true;
+    mat.side = THREE.DoubleSide;
+    mat.depthWrite = false;
     
     const plane = new THREE.Mesh(geo, mat);
     plane.rotation.x = -Math.PI / 2;
@@ -663,11 +712,10 @@ export function createBombSiteMarker(siteLabel = 'A') {
 
     // Glow effect
     const glowGeo = new THREE.SphereGeometry(30, 16, 16);
-    const glowMat = new THREE.MeshBasicMaterial({
-        color: 0x00ff00,
-        transparent: true,
-        opacity: 0.1
-    });
+    const glowMat = new MeshBasicNodeMaterial();
+    glowMat.colorNode = color(0x00ff00);
+    glowMat.transparent = true;
+    glowMat.opacityNode = float(0.1);
     const glow = new THREE.Mesh(glowGeo, glowMat);
     glow.position.y = 10;
     group.add(glow);
@@ -694,10 +742,14 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
         ? TextureGenerator.createWoodTexture(recipe.gripColor || '#4a2c11') 
         : TextureGenerator.createCrateTexture();
 
-    const bodyMat = new THREE.MeshPhongMaterial({ map: bodyTex });
-    const gripMat = new THREE.MeshPhongMaterial({ map: gripTex });
-    const accentMat = new THREE.MeshPhongMaterial({ map: accentTex });
-    const woodMat = new THREE.MeshPhongMaterial({ map: woodTex });
+    const bodyMat = new MeshPhongNodeMaterial();
+    bodyMat.colorNode = texture(bodyTex);
+    const gripMat = new MeshPhongNodeMaterial();
+    gripMat.colorNode = texture(gripTex);
+    const accentMat = new MeshPhongNodeMaterial();
+    accentMat.colorNode = texture(accentTex);
+    const woodMat = new MeshPhongNodeMaterial();
+    woodMat.colorNode = texture(woodTex);
 
     // 1. Receiver / Slide
     let slideGroup = group;
@@ -1075,7 +1127,10 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
         
         if (recipe.p90MagazineDetails) {
             // Translucent magazine body overlay
-            const transMat = new THREE.MeshPhongMaterial({ color: 0x888888, transparent: true, opacity: 0.5 });
+            const transMat = new MeshPhongNodeMaterial();
+            transMat.colorNode = color(0x888888);
+            transMat.transparent = true;
+            transMat.opacityNode = float(0.5);
             builder.addBox({x: 0.065, y: 0.035, z: 0.3}, transMat, recipe.magPos);
             // Cartridge indicators (small brass boxes inside)
             for (let i = 0; i < 5; i++) {
@@ -1228,7 +1283,8 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
                 
                 if (recipe.m4HeatShieldDetails) {
                     // Visible inner aluminum heat shield (lighter color)
-                    const shieldMat = new THREE.MeshPhongMaterial({ color: 0x999999 });
+                    const shieldMat = new MeshPhongNodeMaterial();
+                    shieldMat.colorNode = color(0x999999);
                     builder.addCylinder(0.04, 0.04, 0.28, shieldMat, {x: 0, y: 0.035, z: -0.25});
                 }
 
@@ -2355,7 +2411,8 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
         }
     } else if (recipe.pistolDetails) {
         // Low-profile white dot sights for Glock/USP
-        const whiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const whiteMat = new MeshBasicNodeMaterial();
+        whiteMat.colorNode = color(0xffffff);
         // Rear
         const rear = builder.addBox({x: 0.05, y: 0.015, z: 0.01}, accentMat, {x: 0, y: 0.05, z: 0.1});
         
@@ -2499,40 +2556,44 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
     }
 
     if (recipe.bipod) {
-        const bipodColor = new THREE.MeshPhongMaterial({ color: 0x111111 });
+        const bipodMat = new MeshPhongNodeMaterial();
+        bipodMat.colorNode = color(0x111111);
         if (recipe.awpDetails) {
             // Detailed AWP Bipod
-            builder.addBox({x: 0.04, y: 0.04, z: 0.06}, bipodColor, {x: 0, y: -0.02, z: -0.4}); // Mount
+            builder.addBox({x: 0.04, y: 0.04, z: 0.06}, bipodMat, {x: 0, y: -0.02, z: -0.4}); // Mount
             
             if (recipe.awpBipodDetails) {
                 // Mounting pin
-                builder.addCylinder(0.01, 0.01, 0.05, bipodColor, {x: 0, y: -0.02, z: -0.4}, {x: 0, y: 0, z: Math.PI/2});
+                builder.addCylinder(0.01, 0.01, 0.05, bipodMat, {x: 0, y: -0.02, z: -0.4}, {x: 0, y: 0, z: Math.PI/2});
             }
 
             // Leg 1
-            builder.addCylinder(0.008, 0.008, 0.35, bipodColor, {x: 0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: 0.4});
+            builder.addCylinder(0.008, 0.008, 0.35, bipodMat, {x: 0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: 0.4});
             if (recipe.awpBipodDetails) {
-                builder.addCylinder(0.012, 0.012, 0.02, bipodColor, {x: 0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: 0.4}); // Adj ring 1
+                builder.addCylinder(0.012, 0.012, 0.02, bipodMat, {x: 0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: 0.4}); // Adj ring 1
             }
-            builder.addBox({x: 0.03, y: 0.01, z: 0.04}, bipodColor, {x: 0.12, y: -0.25, z: -0.48}); // Foot 1
+            builder.addBox({x: 0.03, y: 0.01, z: 0.04}, bipodMat, {x: 0.12, y: -0.25, z: -0.48}); // Foot 1
             // Leg 2
-            builder.addCylinder(0.008, 0.008, 0.35, bipodColor, {x: -0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: -0.4});
+            builder.addCylinder(0.008, 0.008, 0.35, bipodMat, {x: -0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: -0.4});
             if (recipe.awpBipodDetails) {
-                builder.addCylinder(0.012, 0.012, 0.02, bipodColor, {x: -0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: -0.4}); // Adj ring 2
+                builder.addCylinder(0.012, 0.012, 0.02, bipodMat, {x: -0.06, y: -0.12, z: -0.42}, {x: 0.4, y: 0, z: -0.4}); // Adj ring 2
             }
-            builder.addBox({x: 0.03, y: 0.01, z: 0.04}, bipodColor, {x: -0.12, y: -0.25, z: -0.48}); // Foot 2
+            builder.addBox({x: 0.03, y: 0.01, z: 0.04}, bipodMat, {x: -0.12, y: -0.25, z: -0.48}); // Foot 2
         } else {
             // Leg 1
-            builder.addCylinder(0.01, 0.01, 0.3, bipodColor, {x: 0.04, y: -0.1, z: -0.4}, {x: 0.3, y: 0, z: 0.4});
+            builder.addCylinder(0.01, 0.01, 0.3, bipodMat, {x: 0.04, y: -0.1, z: -0.4}, {x: 0.3, y: 0, z: 0.4});
             // Leg 2
-            builder.addCylinder(0.01, 0.01, 0.3, bipodColor, {x: -0.04, y: -0.1, z: -0.4}, {x: 0.3, y: 0, z: -0.4});
+            builder.addCylinder(0.01, 0.01, 0.3, bipodMat, {x: -0.04, y: -0.1, z: -0.4}, {x: 0.3, y: 0, z: -0.4});
         }
     }
 
     if (isViewModel) {
         const skinTex = TextureGenerator.createSkinTexture(`#${new THREE.Color(COLORS.SKIN).getHexString()}`);
-        const skinMat = new THREE.MeshPhongMaterial({ map: skinTex });
-        const gloveMat = new THREE.MeshPhongMaterial({ map: gloveTex });
+        const skinMat = new MeshPhongNodeMaterial();
+        skinMat.colorNode = texture(skinTex);
+
+        const gloveMat = new MeshPhongNodeMaterial();
+        gloveMat.colorNode = texture(gloveTex);
         
         const overrides = {
             right: recipe.vmRightHand,
@@ -2547,8 +2608,8 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
 
 
 
-export function createWall(width, height, depth, x, y, z, color = COLORS.WALL_DEFAULT, scene, objects) {
-    const tex = color === 0xaaaaaa ? concreteTexture.clone() : wallTexture.clone();
+export function createWall(width, height, depth, x, y, z, colorVal = COLORS.WALL_DEFAULT, scene, objects) {
+    const tex = colorVal === 0xaaaaaa ? concreteTexture.clone() : wallTexture.clone();
     
     // Scale texture based on wall size for tiling
     const repeatX = Math.max(width / 40, 1);
@@ -2562,10 +2623,10 @@ export function createWall(width, height, depth, x, y, z, color = COLORS.WALL_DE
         tex.repeat.set(repeatZ, repeatY);
     }
     
-    const wall = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), new THREE.MeshPhongMaterial({ 
-        map: tex,
-        color: color 
-    }));
+    const wallMat = new MeshPhongNodeMaterial();
+    wallMat.colorNode = texture(tex).mul(color(colorVal));
+
+    const wall = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMat);
     wall.position.set(x, y, z);
     wall.castShadow = true;
     wall.receiveShadow = true;
@@ -2586,9 +2647,10 @@ export function createWall(width, height, depth, x, y, z, color = COLORS.WALL_DE
 }
 
 export function createCrate(size, x, y, z, scene, objects) {
-    const crate = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshPhongMaterial({ 
-        map: crateTexture 
-    }));
+    const crateMat = new MeshPhongNodeMaterial();
+    crateMat.colorNode = texture(crateTexture);
+
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), crateMat);
     crate.position.set(x, y, z);
     crate.castShadow = true;
     crate.receiveShadow = true;
@@ -2608,7 +2670,8 @@ export function createCrate(size, x, y, z, scene, objects) {
 
 export function createPillar(radius, height, x, y, z, scene, objects) {
     const geo = new THREE.CylinderGeometry(radius, radius, height, 8);
-    const mat = new THREE.MeshPhongMaterial({ map: concreteTexture });
+    const mat = new MeshPhongNodeMaterial();
+    mat.colorNode = texture(concreteTexture);
     const pillar = new THREE.Mesh(geo, mat);
     pillar.position.set(x, y + height / 2, z);
     pillar.castShadow = true;

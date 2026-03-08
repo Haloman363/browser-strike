@@ -15,12 +15,18 @@ export class UISystem extends System {
             bombTimer: document.getElementById('timer'),
             plantContainer: document.getElementById('plant-progress-container'),
             plantBar: document.getElementById('plant-progress-bar'),
-            pickupPrompt: document.getElementById('pickup-prompt')
+            pickupPrompt: document.getElementById('pickup-prompt'),
+            backend: document.getElementById('backend-label')
         };
     }
 
     init() {
         console.log("UISystem initialized");
+
+        if (this.domElements.backend) {
+            this.domElements.backend.innerText = `Backend: ${this.engine.backend}`;
+            this.domElements.backend.style.color = this.engine.backend === 'WebGPU' ? '#00ff00' : '#ff9d00';
+        }
         
         GameState.on('change:health', (val) => this.updateElement('health', val));
         GameState.on('change:ammoInClip', () => this.updateAmmo());
