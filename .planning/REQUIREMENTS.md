@@ -6,7 +6,7 @@
 - [x] **NET-01**: Host-Authoritative P2P Networking (Input-based state sync)
 - [x] **NET-02**: Client-Side Prediction (CSP) for zero-latency player movement
 - [x] **NET-03**: Server Reconciliation (correction of CSP mispredictions)
-- [ ] **NET-04**: Lag Compensation (Rewind) for accurate hit registration
+- [x] **NET-04**: Lag Compensation (Rewind) for accurate hit registration
 
 ### Rendering & Visuals (WGPU)
 - [ ] **WGPU-01**: Migration to Three.js `WebGPURenderer`
@@ -51,7 +51,7 @@
 | NET-01 | Phase 1 | Complete |
 | NET-02 | Phase 2 | Complete |
 | NET-03 | Phase 2 | Complete |
-| NET-04 | Phase 3 | Pending |
+| NET-04 | Phase 3 | Complete |
 | WGPU-01 | Phase 4 | Pending |
 | WGPU-02 | Phase 5 | Pending |
 | WGPU-03 | Phase 5 | Pending |

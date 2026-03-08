@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Executing Phase 3: Hit Registration.
+**Current Focus**: Phase 3: Hit Registration COMPLETE. Transitioning to Phase 4: WebGPU Foundation.
 
 ## Current Position
-**Phase**: 03 - Hit Registration
-**Plan**: 03-02 - Authoritative Hit-Scan & Backtracking
-**Status**: In Progress
-**Progress**: [▓▓▓▓░░░░░░░░░░░░░░░░] 30%
+**Phase**: 04 - WebGPU Foundation
+**Plan**: TBD
+**Status**: Not started
+**Progress**: [▓▓▓▓▓░░░░░░░░░░░░░░░] 33%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: NTP-style clock sync for shared game time. Host-side state history (200ms+) for backtracking.
+- **New Decision**: Lag compensation (backtracking) for fair hit registration. Confirmed hit feedback loop.
 
 ### Learnings
-- NTP algorithm reliably aligns client clocks within 10ms over WebRTC.
-- Historical snapshots must include all movement-affecting state (like crouching) for accurate hit validation.
+- NTP clock sync is stable enough for sub-50ms backtracking precision.
+- SnapshotInterpolation Vault is a performant choice for storing entity history on the host.
 
 ## Session Continuity
-**Current Session**: Phase 3: Wave 1 complete. Wave 2 started.
+**Current Session**: Phase 3 COMPLETE.
 **Next Steps**:
-1. Refactor shooting to `SHOOT` command flow.
-2. Implement host-side rewind and hit validation logic.
+1. Begin Phase 4: WebGPU Migration.
+2. Initialize WebGPURenderer and TSL foundations.
 
 ---
 *Last updated: 2026-03-08*
