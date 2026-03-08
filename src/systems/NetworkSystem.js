@@ -38,12 +38,28 @@ export class NetworkSystem extends System {
     join(code) {
         this.isHost = false;
         if (!this.peer) {
-            this.peer = new Peer();
-            this._setupPeerListeners();
+            this.init();
         }
 
-        // We'll connect in Task 2 properly, but for Task 1:
-        this.peer.connect(code, { reliable: true });
+        const reliable = this.peer.connect(code, { label: 'reliable', reliable: true });
+        const unreliable = this.peer.connect(code, { label: 'unreliable', reliable: false });
+
+        this._setupConnection(reliable);
+        this._setupConnection(unreliable);
+    }
+
+    /**
+     * Sends a message to all connected peers (if host) or to the host (if client).
+     */
+    send(type, data, reliable = true) {
+        const payload = { type, data, timestamp: Date.now() };
+
+        this.connections.forEach((conns) => {
+            const conn = reliable ? conns.reliable : conns.unreliable;
+            if (conn && conn.open) {
+                conn.send(payload);
+            }
+        });
     }
 
     _setupPeerListeners() {
@@ -52,8 +68,41 @@ export class NetworkSystem extends System {
         });
 
         this.peer.on('connection', (conn) => {
-            console.log('Incoming connection:', conn.peer);
-            // Will handle in Task 2
+            console.log('Incoming connection:', conn.peer, conn.label);
+            this._setupConnection(conn);
+        });
+    }
+
+    _setupConnection(conn) {
+        conn.on('open', () => {
+            console.log('Connection open:', conn.peer, conn.label);
+            
+            // Store connection in map
+            if (!this.connections.has(conn.peer)) {
+                this.connections.set(conn.peer, { reliable: null, unreliable: null });
+            }
+            
+            const peerConns = this.connections.get(conn.peer);
+            if (conn.label === 'reliable') {
+                peerConns.reliable = conn;
+            } else if (conn.label === 'unreliable') {
+                peerConns.unreliable = conn;
+            }
+
+            // Client handshake: if both are open, send JOIN
+            if (!this.isHost && peerConns.reliable?.open && peerConns.unreliable?.open) {
+                this.send('JOIN', { peerId: this.peer.id }, true);
+            }
+        });
+
+        conn.on('data', (data) => {
+            console.log('Data received from', conn.peer, ':', data);
+            // Will be handled by a message dispatcher in a later task
+        });
+
+        conn.on('close', () => {
+            console.log('Connection closed:', conn.peer);
+            this.connections.delete(conn.peer);
         });
     }
 
