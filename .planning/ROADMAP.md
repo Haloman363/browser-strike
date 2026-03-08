@@ -21,7 +21,7 @@
 |-------|----------------|--------|-----------|
 | 1. Networking Core | 3/3 | Complete   | 2026-03-08 |
 | 2. Game Feel | 2/2 | Complete   | 2026-03-08 |
-| 3. Hit Registration | 0/0 | Not started | - |
+| 3. Hit Registration | 2/2 | In Progress | - |
 | 4. WebGPU Foundation | 0/0 | Not started | - |
 | 5. Visual Fidelity | 0/0 | Not started | - |
 | 6. FX Overhaul | 0/0 | Not started | - |
@@ -66,7 +66,9 @@
 **Success Criteria**:
   1. Host correctly registers hits when a client shoots at their local visual representation of a moving target.
   2. Blood splatters and damage numbers appear correctly on both client and host upon impact.
-**Plans**: TBD
+**Plans**:
+- [ ] 03-01-PLAN.md — Clock Synchronization and State Vaulting
+- [ ] 03-02-PLAN.md — Authoritative Hit Registration (Backtracking)
 
 ### Phase 4: WebGPU Foundation
 **Goal**: Complete the migration of the rendering engine from WebGL to WebGPU.
