@@ -9,17 +9,51 @@ export class NetworkSystem extends System {
         super(engine);
         this.name = 'NetworkSystem';
         this.peer = null;
+        this.isHost = false;
+        this.connections = new Map(); // PeerID -> { reliable, unreliable }
     }
 
     /**
      * Initializes PeerJS.
      */
     init() {
-        this.peer = new Peer();
-        
-        // Error handling for PeerJS
+        if (!this.peer) {
+            this.peer = new Peer();
+            this._setupPeerListeners();
+        }
+    }
+
+    /**
+     * Starts as a host with the given lobby code.
+     */
+    host(code) {
+        this.isHost = true;
+        this.peer = new Peer(code);
+        this._setupPeerListeners();
+    }
+
+    /**
+     * Joins a host with the given lobby code.
+     */
+    join(code) {
+        this.isHost = false;
+        if (!this.peer) {
+            this.peer = new Peer();
+            this._setupPeerListeners();
+        }
+
+        // We'll connect in Task 2 properly, but for Task 1:
+        this.peer.connect(code, { reliable: true });
+    }
+
+    _setupPeerListeners() {
         this.peer.on('error', (err) => {
             console.error('PeerJS error:', err);
+        });
+
+        this.peer.on('connection', (conn) => {
+            console.log('Incoming connection:', conn.peer);
+            // Will handle in Task 2
         });
     }
 
