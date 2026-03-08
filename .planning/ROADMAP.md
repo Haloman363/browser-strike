@@ -20,7 +20,7 @@
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Networking Core | 3/3 | Complete   | 2026-03-08 |
-| 2. Game Feel | 0/0 | Not started | - |
+| 2. Game Feel | 1/2 | In Progress|  |
 | 3. Hit Registration | 0/0 | Not started | - |
 | 4. WebGPU Foundation | 0/0 | Not started | - |
 | 5. Visual Fidelity | 0/0 | Not started | - |
@@ -55,7 +55,9 @@
   1. Client movement feels instantaneous even with simulated network latency (e.g., 100ms).
   2. Client position is corrected by the host only when a significant desync occurs.
   3. Other players' movements appear smooth via interpolation.
-**Plans**: TBD
+**Plans**:
+- [ ] 02-01-PLAN.md — Client-Side Prediction & Input Buffering
+- [ ] 02-02-PLAN.md — Server Reconciliation & Host Echo
 
 ### Phase 3: Hit Registration
 **Goal**: Implement lag compensation (backtracking) for fair and accurate hit registration.
