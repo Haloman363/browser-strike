@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 2: Game Feel COMPLETE. Transitioning to Phase 3: Hit Registration.
+**Current Focus**: Executing Phase 3: Hit Registration.
 
 ## Current Position
 **Phase**: 03 - Hit Registration
-**Plan**: TBD
-**Status**: Not started
-**Progress**: [▓▓▓▓░░░░░░░░░░░░░░░░] 25%
+**Plan**: 03-02 - Authoritative Hit-Scan & Backtracking
+**Status**: In Progress
+**Progress**: [▓▓▓▓░░░░░░░░░░░░░░░░] 30%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Server reconciliation with "Rewind and Replay" for movement stability.
+- **New Decision**: NTP-style clock sync for shared game time. Host-side state history (200ms+) for backtracking.
 
 ### Learnings
-- Client-side prediction requires skipping interpolation for the local player to avoid visual feedback delay.
-- Deterministic `applyInput` is crucial for accurate reconciliation.
+- NTP algorithm reliably aligns client clocks within 10ms over WebRTC.
+- Historical snapshots must include all movement-affecting state (like crouching) for accurate hit validation.
 
 ## Session Continuity
-**Current Session**: Phase 2 COMPLETE.
+**Current Session**: Phase 3: Wave 1 complete. Wave 2 started.
 **Next Steps**:
-1. Begin Phase 3: Hit Registration (Lag Compensation).
-2. Research hit-scan backtracking patterns.
+1. Refactor shooting to `SHOOT` command flow.
+2. Implement host-side rewind and hit validation logic.
 
 ---
 *Last updated: 2026-03-08*

@@ -21,7 +21,7 @@
 |-------|----------------|--------|-----------|
 | 1. Networking Core | 3/3 | Complete   | 2026-03-08 |
 | 2. Game Feel | 2/2 | Complete   | 2026-03-08 |
-| 3. Hit Registration | 2/2 | In Progress | - |
+| 3. Hit Registration | 1/2 | In Progress|  |
 | 4. WebGPU Foundation | 0/0 | Not started | - |
 | 5. Visual Fidelity | 0/0 | Not started | - |
 | 6. FX Overhaul | 0/0 | Not started | - |
