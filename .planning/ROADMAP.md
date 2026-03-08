@@ -7,7 +7,7 @@
 - [x] **Phase 3: Hit Registration** - Lag compensation and hit confirmation (completed 2026-03-08)
 - [x] **Phase 4: WebGPU Foundation** - Migrate to Three.js WebGPURenderer (completed 2026-03-08)
 - [x] **Phase 5: Visual Fidelity** - TSL materials and post-processing (completed 2026-03-08)
-- [ ] **Phase 6: FX Overhaul** - WebGPU compute-shader particle systems
+- [x] **Phase 6: FX Overhaul** - WebGPU compute-shader particle systems (completed 2026-03-08)
 - [ ] **Phase 7: Gunplay Refinement** - Recoil patterns and movement inaccuracy
 - [ ] **Phase 8: Game Mode** - Competitive bomb defusal loop
 - [ ] **Phase 9: Strategic Layer** - Buy menu and tactical economy
@@ -24,7 +24,7 @@
 | 3. Hit Registration | 2/2 | Complete   | 2026-03-08 |
 | 4. WebGPU Foundation | 2/2 | Complete   | 2026-03-08 |
 | 5. Visual Fidelity | 1/1 | Complete   | 2026-03-08 |
-| 6. FX Overhaul | 1/2 | In Progress|  |
+| 6. FX Overhaul | 2/2 | Complete   | 2026-03-08 |
 | 7. Gunplay Refinement | 0/0 | Not started | - |
 | 8. Game Mode | 0/0 | Not started | - |
 | 9. Strategic Layer | 0/0 | Not started | - |

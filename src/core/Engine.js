@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
-import { pass, film } from 'three/tsl';
+import { pass } from 'three/tsl';
+import { film } from 'three/addons/tsl/display/FilmNode.js';
 import { EventEmitter } from './EventEmitter.js';
 import { FXSystem } from '../systems/FXSystem.js';
 

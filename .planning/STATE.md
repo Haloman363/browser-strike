@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Executing Phase 6: FX Overhaul.
+**Current Focus**: Phase 6: FX Overhaul COMPLETE. Transitioning to Phase 7: Gunplay Refinement.
 
 ## Current Position
-**Phase**: 06 - FX Overhaul
-**Plan**: 06-02 - Smoke Tech & Soft Particles
-**Status**: In Progress
-**Progress**: [▓▓▓▓▓▓▓▓▓░░░░░░░░░░░] 45%
+**Phase**: 07 - Gunplay Refinement
+**Plan**: TBD
+**Status**: Not started
+**Progress**: [▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░] 50%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Centralized `FXSystem` for managing all GPU-side particle simulations. Use TSL `PointsNodeMaterial` for spark visualization.
+- **New Decision**: TSL compute-shader particle systems for sparks and smoke. Soft-particle depth blending for volumetric effects.
 
 ### Learnings
-- TSL compute shaders allow for massive particle counts (10k+) with minimal CPU overhead.
-- `instancedArray` is the preferred way to store and share particle state between compute and render passes in Three.js WebGPU.
+- TSL `film()` node from addons provides an easy way to add CRT-style overlays.
+- Soft-particle blending requires accurate viewport depth nodes (`viewportLinearDepth`) to work correctly in WebGPU.
 
 ## Session Continuity
-**Current Session**: Phase 6: Wave 1 complete. Wave 2 started.
+**Current Session**: Phase 6 COMPLETE.
 **Next Steps**:
-1. Implement smoke particle simulation in `FXSystem.js`.
-2. Add TSL soft-particle depth fading for smooth smoke blooms.
+1. Begin Phase 7: Gunplay Refinement.
+2. Research deterministic recoil patterns and spread logic.
 
 ---
 *Last updated: 2026-03-08*
