@@ -185,6 +185,33 @@ describe('NetworkSystem', () => {
         expect(localEntity.position.x).toBe(0);
     });
 
+    it('should trigger reconciliation for the local player in update()', () => {
+        system.isHost = false;
+        system.localPeerId = 'p-local';
+        
+        const mockController = { reconcile: vi.fn() };
+        const localEntity = {
+            id: 'p-local',
+            getSystem: vi.fn().mockReturnValue(mockController),
+            position: { x: 0, y: 0, z: 0 }
+        };
+        system.engine.entities = [localEntity];
+
+        // Mock SI.vault.get() to return the latest snapshot
+        const latestSnapshot = {
+            id: 'latest',
+            state: [{ id: 'p-local', x: 5, y: 0, z: 0, lastSeq: 100 }]
+        };
+        system.SI.vault = { get: vi.fn().mockReturnValue(latestSnapshot) };
+        
+        // Mock calcInterpolation to return something
+        system.SI.calcInterpolation.mockReturnValue({ state: [] });
+
+        system.update(0.016);
+
+        expect(mockController.reconcile).toHaveBeenCalledWith(latestSnapshot.state[0]);
+    });
+
     it('should handle INPUT_ACK from host (for reconciliation)', () => {
         // This test will initially fail as the handler is not yet implemented
         const ackData = { lastProcessedSeq: 42, position: { x: 1, y: 2, z: 3 } };
@@ -210,5 +237,98 @@ describe('NetworkSystem', () => {
 
         expect(mockController.applyInput).toHaveBeenCalledWith(inputData, 0.016);
         expect(mockEntity.lastProcessedSeq).toBe(10);
+    });
+
+    describe('Clock Synchronization', () => {
+        it('should handle TIME_SYNC on host and respond with TIME_ACK', () => {
+            system.isHost = true;
+            const reliableConn = { send: vi.fn(), open: true };
+            system.connections.set('client-peer', { reliable: reliableConn, unreliable: { open: true } });
+
+            const now = 1000;
+            vi.spyOn(performance, 'now').mockReturnValue(now);
+
+            system._handleMessage('TIME_SYNC', { t1: 500 }, 'client-peer');
+
+            expect(reliableConn.send).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'TIME_ACK',
+                data: { t1: 500, hostTime: now }
+            }));
+        });
+
+        it('should handle TIME_ACK on client and calculate clockOffset', () => {
+            system.isHost = false;
+            const t1 = 500;
+            const hostTime = 1000;
+            const t2 = 600; // Received at client time 600
+            
+            vi.spyOn(performance, 'now').mockReturnValue(t2);
+
+            system._handleMessage('TIME_ACK', { t1, hostTime }, 'host-peer');
+
+            // RTT = t2 - t1 = 600 - 500 = 100
+            // Offset = (hostTime + RTT/2) - t2 = (1000 + 50) - 600 = 450
+            expect(system.clockOffset).toBe(450);
+        });
+
+        it('getServerTime() should return current time plus offset', () => {
+            system.clockOffset = 100;
+            vi.spyOn(performance, 'now').mockReturnValue(500);
+            expect(system.getServerTime()).toBe(600);
+        });
+
+        it('should start periodic sync on client', () => {
+            vi.useFakeTimers();
+            const sendSpy = vi.spyOn(system, 'send');
+            system.isHost = false;
+            
+            // Re-call host/join to trigger timers if needed, or check if init triggers it
+            // For now let's assume it starts on join or init.
+            system.init();
+            
+            vi.advanceTimersByTime(5000);
+            expect(sendSpy).toHaveBeenCalledWith('TIME_SYNC', expect.any(Object), true);
+            vi.useRealTimers();
+        });
+    });
+
+    describe('State Vaulting', () => {
+        it('should include isCrouched in broadcastSnapshot', () => {
+            const unreliableConn = { send: vi.fn(), open: true };
+            system.connections.set('client-1', { reliable: { open: true }, unreliable: unreliableConn });
+            system.isHost = true;
+            
+            system.engine.entities = [{
+                id: 'player-1',
+                position: { x: 1, y: 2, z: 3 },
+                quaternion: { x: 0, y: 0, z: 0, w: 1 },
+                isCrouched: true
+            }];
+
+            system.broadcastSnapshot();
+
+            expect(unreliableConn.send).toHaveBeenCalledWith(expect.objectContaining({
+                type: 'SNAPSHOT',
+                data: expect.objectContaining({
+                    state: expect.arrayContaining([
+                        expect.objectContaining({ isCrouched: true })
+                    ])
+                })
+            }));
+        });
+
+        it('should save snapshots to SI.vault on host', () => {
+            system.isHost = true;
+            system.SI.vault = { add: vi.fn() };
+            
+            system.engine.entities = [{
+                id: 'p1',
+                position: { x: 1, y: 2, z: 3 }
+            }];
+
+            system.broadcastSnapshot();
+
+            expect(system.SI.vault.add).toHaveBeenCalled();
+        });
     });
 });
