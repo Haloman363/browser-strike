@@ -24,7 +24,7 @@
 | 3. Hit Registration | 2/2 | Complete   | 2026-03-08 |
 | 4. WebGPU Foundation | 2/2 | Complete   | 2026-03-08 |
 | 5. Visual Fidelity | 1/1 | Complete   | 2026-03-08 |
-| 6. FX Overhaul | 0/0 | Not started | - |
+| 6. FX Overhaul | 2/2 | In progress | - |
 | 7. Gunplay Refinement | 0/0 | Not started | - |
 | 8. Game Mode | 0/0 | Not started | - |
 | 9. Strategic Layer | 0/0 | Not started | - |
@@ -92,13 +92,15 @@
 - [ ] 05-01-PLAN.md — PBR Materials & CRT Post-processing
 
 ### Phase 6: FX Overhaul
-**Goal**: Develop performant, high-fidelity particle systems optimized for WebGPU.
+**Goal**: Develop performant, high-fidelity particle systems optimized for WebGPU compute shaders.
 **Depends on**: Phase 4
 **Requirements**: WGPU-04
 **Success Criteria**:
   1. Muzzle flashes produce high-performance sparks using WebGPU compute shaders.
   2. Smoke grenades produce dense, performant volumetric-style particles.
-**Plans**: TBD
+**Plans**:
+- [ ] 06-01-PLAN.md — Foundation & Muzzle Flash (Wave 1)
+- [ ] 06-02-PLAN.md — Smoke Tech & Soft Particles (Wave 2)
 
 ### Phase 7: Gunplay Refinement
 **Goal**: Implement advanced weapon mechanics for a competitive feel.
