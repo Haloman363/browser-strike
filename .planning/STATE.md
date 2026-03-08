@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Executing Phase 1: Networking Core.
+**Current Focus**: Phase 1: Networking Core COMPLETE. Transitioning to Phase 2: Game Feel.
 
 ## Current Position
-**Phase**: 01 - Networking Core
-**Plan**: 01-03 - State Sync & Snapshots
-**Status**: In Progress
-**Progress**: [▓▓░░░░░░░░░░░░░░░░░░] 16%
+**Phase**: 02 - Game Feel
+**Plan**: TBD
+**Status**: Not started
+**Progress**: [▓▓▓░░░░░░░░░░░░░░░░░] 16%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Mixed reliability channels (reliable for events, unreliable for state).
+- **New Decision**: Snapshot interpolation (20Hz) for smooth networked movement.
 
 ### Learnings
-- PeerJS data channel labels are crucial for distinguishing streams.
-- Automating handshakes on 'open' and 'connection' events ensures consistency.
+- Fixed-rate intervals (20Hz) provide stable snapshots regardless of frame rate.
+- Snapshot interpolation library significantly reduces jitter in P2P WebRTC data channels.
 
 ## Session Continuity
-**Current Session**: Phase 1: Wave 2 complete. Wave 3 started.
+**Current Session**: Phase 1 COMPLETE.
 **Next Steps**:
-1. Implement host-authoritative broadcast loop (20Hz).
-2. Integrate snapshot-interpolation on the client.
+1. Begin Phase 2: Game Feel (Prediction & Reconciliation).
+2. Validate Networking Core with a manual E2E test.
 
 ---
 *Last updated: 2026-03-07*

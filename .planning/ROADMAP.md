@@ -2,7 +2,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Networking Core** - Establish host-authoritative foundation
+- [x] **Phase 1: Networking Core** - Establish host-authoritative foundation (completed 2026-03-08)
 - [ ] **Phase 2: Game Feel** - Client-side prediction and server reconciliation
 - [ ] **Phase 3: Hit Registration** - Lag compensation and hit confirmation
 - [ ] **Phase 4: WebGPU Foundation** - Migrate to Three.js WebGPURenderer
@@ -19,7 +19,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Networking Core | 2/3 | In Progress|  |
+| 1. Networking Core | 3/3 | Complete   | 2026-03-08 |
 | 2. Game Feel | 0/0 | Not started | - |
 | 3. Hit Registration | 0/0 | Not started | - |
 | 4. WebGPU Foundation | 0/0 | Not started | - |

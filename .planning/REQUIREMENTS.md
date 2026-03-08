@@ -3,7 +3,7 @@
 ## v1 Requirements
 
 ### Core & Networking (NET)
-- [ ] **NET-01**: Host-Authoritative P2P Networking (Input-based state sync)
+- [x] **NET-01**: Host-Authoritative P2P Networking (Input-based state sync)
 - [ ] **NET-02**: Client-Side Prediction (CSP) for zero-latency player movement
 - [ ] **NET-03**: Server Reconciliation (correction of CSP mispredictions)
 - [ ] **NET-04**: Lag Compensation (Rewind) for accurate hit registration
@@ -48,7 +48,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| NET-01 | Phase 1 | Pending |
+| NET-01 | Phase 1 | Complete |
 | NET-02 | Phase 2 | Pending |
 | NET-03 | Phase 2 | Pending |
 | NET-04 | Phase 3 | Pending |
