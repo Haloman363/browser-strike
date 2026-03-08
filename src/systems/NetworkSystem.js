@@ -14,6 +14,7 @@ export class NetworkSystem extends System {
         this.connections = new Map(); // PeerID -> { reliable, unreliable }
         this.broadcastInterval = null;
         this.SI = new SnapshotInterpolation();
+        this.localPeerId = null;
     }
 
     /**

@@ -18,6 +18,10 @@ export class PlayerControllerSystem extends System {
         this.isPlayerDead = false;
         this.isPlanting = false;
         this.plantStartTime = 0;
+        
+        // Input buffering for client-side prediction
+        this.inputBuffer = [];
+        this.sequenceNumber = 0;
     }
 
     init() {
@@ -127,7 +131,40 @@ export class PlayerControllerSystem extends System {
             }
         }
 
-        const speed = this.isCrouching ? PHYSICS.CROUCH_SPEED : PHYSICS.MOVE_SPEED;
+        // --- LOCAL PREDICTION & INPUT BUFFERING ---
+        this.sequenceNumber++;
+        const inputState = {
+            seq: this.sequenceNumber,
+            dt: delta,
+            keys: {
+                KeyW: this.moveForward,
+                KeyS: this.moveBackward,
+                KeyA: this.moveLeft,
+                KeyD: this.moveRight,
+                Space: false, // Jump is handled via handleKeyDown/applyInput state
+                ControlLeft: this.isCrouching
+            }
+        };
+
+        // Buffer the input
+        this.inputBuffer.push(inputState);
+        
+        // Predict locally
+        this.applyInput(inputState, delta);
+
+        // Send to host
+        const network = this.engine.getSystem('NetworkSystem');
+        if (network) {
+            network.send('INPUT', inputState, false);
+        }
+    }
+
+    applyInput(inputState, delta) {
+        const camera = this.engine.camera;
+        if (!camera || !this.physics) return;
+
+        const keys = inputState.keys || {};
+        const speed = keys.ControlLeft ? PHYSICS.CROUCH_SPEED : PHYSICS.MOVE_SPEED;
 
         // Apply Friction
         this.velocity.x -= this.velocity.x * 10.0 * delta;
@@ -135,18 +172,20 @@ export class PlayerControllerSystem extends System {
         this.velocity.y -= PHYSICS.GRAVITY * delta;
 
         // Calculate local direction
-        this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
-        this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
-        this.direction.normalize();
+        const dirZ = Number(!!keys.KeyW) - Number(!!keys.KeyS);
+        const dirX = Number(!!keys.KeyD) - Number(!!keys.KeyA);
+        
+        const direction = new THREE.Vector3(dirX, 0, dirZ);
+        if (direction.lengthSq() > 0) {
+            direction.normalize();
+        }
 
         // Apply movement to velocity
-        if (this.moveForward || this.moveBackward) this.velocity.z -= this.direction.z * speed * delta;
-        if (this.moveLeft || this.moveRight) this.velocity.x -= this.direction.x * speed * delta;
+        if (keys.KeyW || keys.KeyS) this.velocity.z -= direction.z * speed * delta;
+        if (keys.KeyA || keys.KeyD) this.velocity.x -= direction.x * speed * delta;
 
         // --- CAMERA-RELATIVE MOVEMENT MATH ---
         // Get the horizontal forward and right vectors from the camera
-        const tempVec = new THREE.Vector3();
-        
         // Right vector (local X)
         const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
         right.y = 0;
@@ -180,7 +219,7 @@ export class PlayerControllerSystem extends System {
         const nextY = camera.position.clone();
         nextY.y += this.velocity.y * delta;
         
-        const currentHeight = this.isCrouching ? PHYSICS.CROUCHING_HEIGHT : PHYSICS.STANDING_HEIGHT;
+        const currentHeight = keys.ControlLeft ? PHYSICS.CROUCHING_HEIGHT : PHYSICS.STANDING_HEIGHT;
         if (this.physics.checkCollision(nextY)) {
             if (this.velocity.y <= 0) {
                 this.velocity.y = 0;

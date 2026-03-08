@@ -45,12 +45,14 @@ describe('PlayerControllerSystem', () => {
             // ... any input methods if needed
         };
 
+        const mockNetwork = { send: vi.fn() };
+
         mockEngine = {
             camera: mockCamera,
             getSystem: vi.fn((name) => {
                 if (name === 'PhysicsSystem') return mockPhysics;
                 if (name === 'InputSystem') return mockInput;
-                if (name === 'NetworkSystem') return { send: vi.fn() };
+                if (name === 'NetworkSystem') return mockNetwork;
                 return null;
             }),
             on: vi.fn(),
