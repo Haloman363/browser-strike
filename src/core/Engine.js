@@ -1,6 +1,8 @@
 import * as THREE from 'three';
-import { WebGPURenderer } from 'three/webgpu';
+import { WebGPURenderer, PostProcessing } from 'three/webgpu';
+import { pass, film } from 'three/tsl';
 import { EventEmitter } from './EventEmitter.js';
+import { FXSystem } from '../systems/FXSystem.js';
 
 /**
  * The core engine class that orchestrates systems and the game loop.
@@ -13,6 +15,7 @@ export class Engine extends EventEmitter {
         this.scene = null;
         this.camera = null;
         this.renderer = null;
+        this.postProcessing = null;
         this.backend = null;
         this.clock = new THREE.Clock();
         this.isRunning = false;
@@ -37,6 +40,16 @@ export class Engine extends EventEmitter {
         await this.renderer.init();
         this.backend = this.renderer.isWebGPU ? 'WebGPU' : 'WebGL';
         console.log(`Renderer initialized with ${this.backend} backend`);
+
+        // Register core systems
+        this.registerSystem(FXSystem);
+
+        // Setup Post-processing
+        this.postProcessing = new PostProcessing(this.renderer);
+        const scenePass = pass(this.scene, this.camera);
+        // film(intensity, scanlinesIntensity, scanlinesCount, grayscale)
+        const crtPass = film(scenePass, 0.15, 0.25, 1024, false);
+        this.postProcessing.outputNode = crtPass;
 
         // Add renderer to DOM if not already present
         if (!this.renderer.domElement.parentElement && options.container) {
@@ -118,7 +131,11 @@ export class Engine extends EventEmitter {
 
         // Render the scene
         if (this.scene && this.camera && this.renderer) {
-            this.renderer.render(this.scene, this.camera);
+            if (this.postProcessing) {
+                this.postProcessing.render();
+            } else {
+                this.renderer.render(this.scene, this.camera);
+            }
         }
     }
 
