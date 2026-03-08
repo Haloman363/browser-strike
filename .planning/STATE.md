@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 4: WebGPU Foundation COMPLETE. Transitioning to Phase 5: Environment Overhaul.
+**Current Focus**: Phase 5: Visual Fidelity COMPLETE. Transitioning to Phase 6: Core Gameplay Loop.
 
 ## Current Position
-**Phase**: 05 - Environment Overhaul
+**Phase**: 06 - Core Gameplay Loop
 **Plan**: TBD
 **Status**: Not started
-**Progress**: [▓▓▓▓▓▓▓░░░░░░░░░░░░░] 35%
+**Progress**: [▓▓▓▓▓▓▓▓░░░░░░░░░░░░] 40%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Complete overhaul of materials to TSL `NodeMaterial` for WebGPU optimization.
+- **New Decision**: Full PBR workflow using `MeshStandardNodeMaterial`. Full-screen CRT post-processing using TSL `film()` node.
 
 ### Learnings
-- `MeshPhongNodeMaterial` provides a seamless upgrade path from legacy `MeshPhongMaterial` while enabling TSL node logic.
-- HUD indicators are essential for confirming hardware acceleration in WebGPU-based projects.
+- TSL `PostProcessing` and `pass()` simplify complex shader chains.
+- `MeshStandardNodeMaterial` provides much better visual results for weapons and characters compared to Phong.
 
 ## Session Continuity
-**Current Session**: Phase 4 COMPLETE.
+**Current Session**: Phase 5 COMPLETE.
 **Next Steps**:
-1. Begin Phase 5: Environment Overhaul.
-2. Implement TSL-based terrain and sky systems.
+1. Begin Phase 6: Core Gameplay Loop.
+2. Implement round timers and bomb defusal logic.
 
 ---
 *Last updated: 2026-03-08*

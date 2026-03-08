@@ -10,7 +10,7 @@
 
 ### Rendering & Visuals (WGPU)
 - [x] **WGPU-01**: Migration to Three.js `WebGPURenderer`
-- [ ] **WGPU-02**: TSL-based Post-processing (Body-cam / CRT distortion effects)
+- [x] **WGPU-02**: TSL-based Post-processing (Body-cam / CRT distortion effects)
 - [x] **WGPU-03**: Node-based Material system (TSL) for all weapons and characters
 - [ ] **WGPU-04**: WebGPU-optimized particle systems (Muzzle flash, Smokes)
 
@@ -53,7 +53,7 @@
 | NET-03 | Phase 2 | Complete |
 | NET-04 | Phase 3 | Complete |
 | WGPU-01 | Phase 4 | Complete |
-| WGPU-02 | Phase 5 | Pending |
+| WGPU-02 | Phase 5 | Complete |
 | WGPU-03 | Phase 5 | Complete |
 | WGPU-04 | Phase 6 | Pending |
 | GAME-01 | Phase 8 | Pending |
