@@ -9,9 +9,9 @@
 - [x] **NET-04**: Lag Compensation (Rewind) for accurate hit registration
 
 ### Rendering & Visuals (WGPU)
-- [ ] **WGPU-01**: Migration to Three.js `WebGPURenderer`
+- [x] **WGPU-01**: Migration to Three.js `WebGPURenderer`
 - [ ] **WGPU-02**: TSL-based Post-processing (Body-cam / CRT distortion effects)
-- [ ] **WGPU-03**: Node-based Material system (TSL) for all weapons and characters
+- [x] **WGPU-03**: Node-based Material system (TSL) for all weapons and characters
 - [ ] **WGPU-04**: WebGPU-optimized particle systems (Muzzle flash, Smokes)
 
 ### Gameplay Mechanics (GAME)
@@ -52,9 +52,9 @@
 | NET-02 | Phase 2 | Complete |
 | NET-03 | Phase 2 | Complete |
 | NET-04 | Phase 3 | Complete |
-| WGPU-01 | Phase 4 | Pending |
+| WGPU-01 | Phase 4 | Complete |
 | WGPU-02 | Phase 5 | Pending |
-| WGPU-03 | Phase 5 | Pending |
+| WGPU-03 | Phase 5 | Complete |
 | WGPU-04 | Phase 6 | Pending |
 | GAME-01 | Phase 8 | Pending |
 | GAME-02 | Phase 9 | Pending |

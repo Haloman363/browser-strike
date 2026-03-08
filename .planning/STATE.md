@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Executing Phase 4: WebGPU Foundation.
+**Current Focus**: Phase 4: WebGPU Foundation COMPLETE. Transitioning to Phase 5: Environment Overhaul.
 
 ## Current Position
-**Phase**: 04 - WebGPU Foundation
-**Plan**: 04-02 - TSL Material Overhaul
-**Status**: In Progress
-**Progress**: [▓▓▓▓▓▓░░░░░░░░░░░░░░] 35%
+**Phase**: 05 - Environment Overhaul
+**Plan**: TBD
+**Status**: Not started
+**Progress**: [▓▓▓▓▓▓▓░░░░░░░░░░░░░] 35%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Use `WebGPURenderer` with automatic WebGL 2 fallback. Set build target to `esnext`.
+- **New Decision**: Complete overhaul of materials to TSL `NodeMaterial` for WebGPU optimization.
 
 ### Learnings
-- Top-level await in renderer initialization requires Vite `esnext` target.
-- `WebGPURenderer` simplifies backend fallback management.
+- `MeshPhongNodeMaterial` provides a seamless upgrade path from legacy `MeshPhongMaterial` while enabling TSL node logic.
+- HUD indicators are essential for confirming hardware acceleration in WebGPU-based projects.
 
 ## Session Continuity
-**Current Session**: Phase 4: Wave 1 complete. Wave 2 started.
+**Current Session**: Phase 4 COMPLETE.
 **Next Steps**:
-1. Convert materials in `Factory.js` to `NodeMaterial` (TSL).
-2. Implement HUD backend indicator.
+1. Begin Phase 5: Environment Overhaul.
+2. Implement TSL-based terrain and sky systems.
 
 ---
 *Last updated: 2026-03-08*
