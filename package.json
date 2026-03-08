@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "npx kill-port 5173 5174 && rm -rf node_modules/.vite && vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",

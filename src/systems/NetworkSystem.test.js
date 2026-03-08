@@ -14,14 +14,16 @@ vi.mock('peerjs', () => {
 // Mock SnapshotInterpolation
 vi.mock('@geckos.io/snapshot-interpolation', () => {
     return {
-        SnapshotInterpolation: vi.fn().mockImplementation(() => {
-            return {
-                snapshot: {
-                    create: vi.fn().mockReturnValue({ id: 'snap-id', state: [], timestamp: Date.now() }),
-                    add: vi.fn()
-                },
-                calcInterpolation: vi.fn()
+        SnapshotInterpolation: vi.fn().mockImplementation(function() {
+            this.snapshot = {
+                create: vi.fn().mockImplementation((state) => ({ 
+                    id: 'snap-id', 
+                    state: state, 
+                    timestamp: Date.now() 
+                })),
+                add: vi.fn()
             };
+            this.calcInterpolation = vi.fn();
         })
     };
 });
@@ -146,5 +148,46 @@ describe('NetworkSystem', () => {
 
         // Check if position was updated
         expect(mockEntity.position.x).toBe(5);
+    });
+
+    it('should skip interpolation for the local player entity', () => {
+        system.isHost = false;
+        system.localPeerId = 'p-local';
+        
+        const localEntity = {
+            id: 'p-local',
+            position: { x: 0, y: 0, z: 0 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 }
+        };
+        const remoteEntity = {
+            id: 'p-remote',
+            position: { x: 0, y: 0, z: 0 },
+            quaternion: { x: 0, y: 0, z: 0, w: 1 }
+        };
+        system.engine.entities = [localEntity, remoteEntity];
+
+        system.SI.calcInterpolation.mockReturnValue({
+            state: [
+                { id: 'p-local', x: 5, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 },
+                { id: 'p-remote', x: 10, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 }
+            ]
+        });
+
+        system.update(0.016);
+
+        // Remote player should be interpolated
+        expect(remoteEntity.position.x).toBe(10);
+        // Local player should NOT be interpolated (prediction handles it)
+        expect(localEntity.position.x).toBe(0);
+    });
+
+    it('should handle INPUT_ACK from host (for reconciliation)', () => {
+        // This test will initially fail as the handler is not yet implemented
+        const ackData = { lastProcessedSeq: 42, position: { x: 1, y: 2, z: 3 } };
+        const emitSpy = vi.spyOn(system.engine, 'emit');
+        
+        system._handleMessage('INPUT_ACK', ackData, 'host-peer');
+        
+        expect(emitSpy).toHaveBeenCalledWith('network:input_ack', ackData);
     });
 });
