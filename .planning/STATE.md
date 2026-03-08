@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Executing Phase 2: Game Feel.
+**Current Focus**: Phase 2: Game Feel COMPLETE. Transitioning to Phase 3: Hit Registration.
 
 ## Current Position
-**Phase**: 02 - Game Feel
-**Plan**: 02-02 - Server Reconciliation & Host Echo
-**Status**: In Progress
-**Progress**: [▓▓▓░░░░░░░░░░░░░░░░░] 20%
+**Phase**: 03 - Hit Registration
+**Plan**: TBD
+**Status**: Not started
+**Progress**: [▓▓▓▓░░░░░░░░░░░░░░░░] 25%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Client-side prediction for movement (W/A/S/D), Jump, and Crouch.
+- **New Decision**: Server reconciliation with "Rewind and Replay" for movement stability.
 
 ### Learnings
-- Decoupling input handling from movement logic allows for re-simulation during reconciliation.
-- Sequence numbers are essential for matching host snapshots to client input history.
+- Client-side prediction requires skipping interpolation for the local player to avoid visual feedback delay.
+- Deterministic `applyInput` is crucial for accurate reconciliation.
 
 ## Session Continuity
-**Current Session**: Phase 2: Wave 1 complete. Wave 2 started.
+**Current Session**: Phase 2 COMPLETE.
 **Next Steps**:
-1. Implement host authoritative echo of sequence numbers.
-2. Implement client-side reconciliation (rewind and replay).
+1. Begin Phase 3: Hit Registration (Lag Compensation).
+2. Research hit-scan backtracking patterns.
 
 ---
-*Last updated: 2026-03-07*
+*Last updated: 2026-03-08*

@@ -4,8 +4,8 @@
 
 ### Core & Networking (NET)
 - [x] **NET-01**: Host-Authoritative P2P Networking (Input-based state sync)
-- [ ] **NET-02**: Client-Side Prediction (CSP) for zero-latency player movement
-- [ ] **NET-03**: Server Reconciliation (correction of CSP mispredictions)
+- [x] **NET-02**: Client-Side Prediction (CSP) for zero-latency player movement
+- [x] **NET-03**: Server Reconciliation (correction of CSP mispredictions)
 - [ ] **NET-04**: Lag Compensation (Rewind) for accurate hit registration
 
 ### Rendering & Visuals (WGPU)
@@ -49,8 +49,8 @@
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | NET-01 | Phase 1 | Complete |
-| NET-02 | Phase 2 | Pending |
-| NET-03 | Phase 2 | Pending |
+| NET-02 | Phase 2 | Complete |
+| NET-03 | Phase 2 | Complete |
 | NET-04 | Phase 3 | Pending |
 | WGPU-01 | Phase 4 | Pending |
 | WGPU-02 | Phase 5 | Pending |
