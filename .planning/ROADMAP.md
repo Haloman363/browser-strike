@@ -24,7 +24,7 @@
 | 3. Hit Registration | 2/2 | Complete   | 2026-03-08 |
 | 4. WebGPU Foundation | 2/2 | Complete   | 2026-03-08 |
 | 5. Visual Fidelity | 1/1 | Complete   | 2026-03-08 |
-| 6. FX Overhaul | 2/2 | In progress | - |
+| 6. FX Overhaul | 1/2 | In Progress|  |
 | 7. Gunplay Refinement | 0/0 | Not started | - |
 | 8. Game Mode | 0/0 | Not started | - |
 | 9. Strategic Layer | 0/0 | Not started | - |
