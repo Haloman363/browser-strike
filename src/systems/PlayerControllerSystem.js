@@ -43,10 +43,23 @@ export class PlayerControllerSystem extends System {
         
         this.engine.on('input:keydown', (code) => this.handleKeyDown(code));
         this.engine.on('input:keyup', (code) => this.handleKeyUp(code));
+        this.engine.on('round:reset', () => this.onRoundReset());
         
         GameState.on('change:isPlayerDead', (dead) => {
             this.isPlayerDead = dead;
         });
+    }
+
+    onRoundReset() {
+        this.velocity.set(0, 0, 0);
+        this.moveForward = false;
+        this.moveBackward = false;
+        this.moveLeft = false;
+        this.moveRight = false;
+        this.canJump = false;
+        this.isCrouching = false;
+        this.isPlanting = false;
+        this.jumpPressed = false;
     }
 
     handleKeyDown(code) {

@@ -1,5 +1,7 @@
+import * as THREE from 'three';
 import { System } from '../core/System.js';
 import { GameState } from '../GameState.js';
+import { Maps } from '../Maps_v2.js';
 
 /**
  * Manages the competitive round lifecycle (FSM).
@@ -20,6 +22,9 @@ export class RoundSystem extends System {
     init() {
         console.log("RoundSystem initialized");
         
+        this.engine.on('bomb:defused', () => this.onRoundWin('A')); // CT win
+        this.engine.on('bomb:exploded', () => this.onRoundWin('B')); // T win
+        
         // Listen for network ROUND_STATE updates if we're a client
         this.engine.on('network:round_state', (data) => {
             if (!GameState.get('isHost')) {
@@ -29,6 +34,27 @@ export class RoundSystem extends System {
                 });
             }
         });
+    }
+
+    onRoundWin(winner) {
+        // Only host/local handles win conditions
+        if (!GameState.get('isHost') && GameState.get('lobbyCode') !== "") return;
+        if (GameState.get('roundState') === 'POST_ROUND') return;
+
+        const scores = { ...GameState.get('teamScores') };
+        scores[winner]++;
+        
+        GameState.set({ 
+            teamScores: scores,
+            roundState: 'POST_ROUND',
+            roundTimeLeft: this.roundStates.POST_ROUND
+        });
+
+        console.log(`Team ${winner} wins the round!`);
+        this.engine.emit('round:win', { winner });
+        
+        // Broadcast win to clients
+        this.broadcastState();
     }
 
     update(delta) {
@@ -43,12 +69,21 @@ export class RoundSystem extends System {
         let timeLeft = GameState.get('roundTimeLeft');
         let currentState = GameState.get('roundState');
 
-        timeLeft -= delta;
-        
-        if (timeLeft <= 0) {
-            this.transition(currentState);
+        // CS logic: Round timer stops when bomb is planted
+        const isBombPlanted = GameState.get('bombPlanted');
+        const isBombActive = isBombPlanted && !GameState.get('bombExploded') && !GameState.get('bombDefused');
+
+        if (currentState === 'ROUND_RUNNING' && isBombActive) {
+            // Timer is effectively the bomb timer now, which is handled by BombSystem
+            // We just keep the round state as ROUND_RUNNING
         } else {
-            GameState.set({ roundTimeLeft: timeLeft });
+            timeLeft -= delta;
+            
+            if (timeLeft <= 0) {
+                this.transition(currentState);
+            } else {
+                GameState.set({ roundTimeLeft: timeLeft });
+            }
         }
     }
 
@@ -62,16 +97,13 @@ export class RoundSystem extends System {
                 nextTime = this.roundStates.ROUND_RUNNING;
                 break;
             case 'ROUND_RUNNING':
-                // In a real game, this would be triggered by bomb explosion, 
-                // all players dead, or time out. For now, we just loop on timeout.
-                nextState = 'POST_ROUND';
-                nextTime = this.roundStates.POST_ROUND;
-                break;
+                // Timer hit 0 before bomb plant -> CT win
+                this.onRoundWin('A');
+                return; // onRoundWin handles transition to POST_ROUND
             case 'POST_ROUND':
+                this.resetRound();
                 nextState = 'PREROUND';
                 nextTime = this.roundStates.PREROUND;
-                // Signal a round reset (players back to spawn, reset health, etc.)
-                this.engine.emit('round:reset');
                 break;
             default:
                 nextState = 'PREROUND';
@@ -86,12 +118,61 @@ export class RoundSystem extends System {
         console.log(`Round transitioned to ${nextState}`);
 
         // Broadcast state if we are in a network lobby
+        this.broadcastState();
+    }
+
+    broadcastState() {
         const network = this.engine.getSystem('NetworkSystem');
         if (network && GameState.get('isHost')) {
             network.send('ROUND_STATE', {
-                roundState: nextState,
-                roundTimeLeft: nextTime
+                roundState: GameState.get('roundState'),
+                roundTimeLeft: GameState.get('roundTimeLeft')
             }, true);
+        }
+    }
+
+    resetRound() {
+        console.log("Resetting round...");
+        
+        // 1. Teleport Player
+        this.teleportToSpawn();
+
+        // 2. Reset Health/Ammo/State
+        GameState.set({
+            health: 100,
+            bombPlanted: false,
+            bombExploded: false,
+            bombDefused: false,
+            bombTimeLeft: 40,
+            defuseProgress: 0,
+            isDefusing: false,
+            isPlayerDead: false
+        });
+
+        // 3. Emit reset for other systems (bots, dropped guns, FX)
+        this.engine.emit('round:reset');
+    }
+
+    teleportToSpawn() {
+        const team = GameState.get('playerTeam') || 'A'; // 'A' (CT), 'B' (T)
+        const mapName = GameState.get('selectedMap') || 'dust2';
+        const mapData = Maps[mapName];
+        
+        let spawnPos = new THREE.Vector3(0, 18, 0);
+        
+        if (mapName === 'dust2') {
+            const isT = team === 'B';
+            // Simple deterministic spawn or random within zone
+            const spawnX = (Math.random() * 200 - 100);
+            const spawnZ = isT ? -1600 + (Math.random() * 100) : 800 + (Math.random() * 100);
+            spawnPos.set(spawnX, 18, spawnZ);
+        } else if (mapData && mapData.spawnPoint) {
+            spawnPos.set(mapData.spawnPoint.x, mapData.spawnPoint.y, mapData.spawnPoint.z);
+        }
+
+        // Teleport camera (player)
+        if (this.engine.camera) {
+            this.engine.camera.position.copy(spawnPos);
         }
     }
 }
