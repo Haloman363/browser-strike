@@ -27,7 +27,7 @@
 | 6. FX Overhaul | 2/2 | Complete   | 2026-03-08 |
 | 7. Gunplay Refinement | 2/2 | Complete   | 2026-03-10 |
 | 8. Game Mode | 2/2 | Complete   | 2026-03-10 |
-| 9. Strategic Layer | 0/0 | Not started | - |
+| 9. Strategic Layer | 1/2 | In Progress|  |
 | 10. Tactical Utility | 0/0 | Not started | - |
 | 11. World Interaction | 0/0 | Not started | - |
 | 12. Polish & Performance | 0/0 | Not started | - |
@@ -132,7 +132,9 @@
 **Success Criteria**:
   1. Players can access a Buy Menu during the buy period at round start.
   2. Currency is granted for kills and round completions, which can be spent on equipment.
-**Plans**: TBD
+**Plans**:
+- [ ] 09-01-PLAN.md — Economy Logic & Persistence (Wave 1)
+- [ ] 09-02-PLAN.md — Radial Buy Menu UI (Wave 2)
 
 ### Phase 10: Tactical Utility
 **Goal**: Implement functional and networked tactical utility items.
