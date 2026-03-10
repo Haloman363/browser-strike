@@ -26,7 +26,7 @@
 | 5. Visual Fidelity | 1/1 | Complete   | 2026-03-08 |
 | 6. FX Overhaul | 2/2 | Complete   | 2026-03-08 |
 | 7. Gunplay Refinement | 2/2 | Complete   | 2026-03-10 |
-| 8. Game Mode | 0/0 | Not started | - |
+| 8. Game Mode | 2/2 | Planned | - |
 | 9. Strategic Layer | 0/0 | Not started | - |
 | 10. Tactical Utility | 0/0 | Not started | - |
 | 11. World Interaction | 0/0 | Not started | - |
@@ -121,7 +121,9 @@
   1. Rounds begin with a countdown and allow for C4 planting at designated sites.
   2. Round ends when C4 explodes, is defused, or a team is eliminated.
   3. Scoreboard updates automatically at the end of each round.
-**Plans**: TBD
+**Plans**:
+- [ ] 08-01-PLAN.md — Round FSM & Movement Locking (Wave 1)
+- [ ] 08-02-PLAN.md — Bomb Defusal & Reset (Wave 2)
 
 ### Phase 9: Strategic Layer
 **Goal**: Implement the tactical economy and buy menu system.
