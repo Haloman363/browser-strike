@@ -1,6 +1,8 @@
+import * as THREE from 'three';
 import { System } from '../core/System.js';
 import { Peer } from 'peerjs';
 import { SnapshotInterpolation } from '@geckos.io/snapshot-interpolation';
+import { WEAPONS_DATA } from '../Constants_v2.js';
 
 /**
  * NetworkSystem manages P2P connectivity via PeerJS.
@@ -177,6 +179,114 @@ export class NetworkSystem extends System {
     }
 
     /**
+     * Handles authoritative shooting on the host with lag compensation.
+     */
+    _handleHostShoot(shootData, shooterId) {
+        const { timestamp, origin, direction, weaponKey } = shootData;
+        const weaponData = WEAPONS_DATA[weaponKey] || WEAPONS_DATA['GLOCK'];
+
+        // Get past state from vault for lag compensation
+        const pastSnapshot = this.SI.vault.get(timestamp);
+        if (!pastSnapshot) {
+            console.warn(`No snapshot found for shooting timestamp: ${timestamp}`);
+            return;
+        }
+
+        // 1. REWIND: Move entities to past positions
+        const entities = this.engine.entities || [];
+        const currentStates = new Map(); // entityId -> { pos, quat, isCrouched }
+
+        pastSnapshot.state.forEach(s => {
+            const entity = entities.find(e => e.id === s.id);
+            if (entity && entity.id !== shooterId) { // Don't hit yourself
+                // Save current state
+                currentStates.set(entity.id, {
+                    position: entity.position.clone(),
+                    quaternion: entity.quaternion ? entity.quaternion.clone() : null,
+                    isCrouched: !!entity.isCrouched
+                });
+
+                // Apply past state
+                entity.position.set(s.x, s.y, s.z);
+                if (entity.quaternion) {
+                    entity.quaternion.set(s.qx, s.qy, s.qz, s.qw);
+                }
+                entity.isCrouched = !!s.isCrouched;
+
+                // Sync the visual representation/hitboxes if needed
+                entity.updateMatrixWorld?.(true);
+            }
+        });
+
+        // 2. RAYCAST: Check for hits in the rewound state
+        const raycaster = new THREE.Raycaster();
+        raycaster.set(
+            new THREE.Vector3(origin.x, origin.y, origin.z),
+            new THREE.Vector3(direction.x, direction.y, direction.z)
+        );
+
+        // We need to raycast against hitboxes.
+        // In this architecture, hitboxes are meshes in the scene.
+        // Let's use the objects provided in the context.
+        const objects = this.engine.context.objects || [];
+        const intersects = raycaster.intersectObjects(objects, true);
+
+        let hitData = null;
+        if (intersects.length > 0) {
+            const intersect = intersects[0];
+            const hitPart = intersect.object;
+
+            if (hitPart.userData.isEnemy) {
+                const targetId = hitPart.userData.parentPlayerId || (hitPart.userData.parentEnemy ? hitPart.userData.parentEnemy.id : null);
+                
+                if (targetId && targetId !== shooterId) {
+                    let damage = weaponData.damage;
+                    if (hitPart.userData.isHeadshot) damage *= (weaponData.headshotMultiplier || 4);
+
+                    hitData = {
+                        targetId,
+                        damage,
+                        point: intersect.point,
+                        isHeadshot: !!hitPart.userData.isHeadshot,
+                        weaponKey
+                    };
+
+                    // Apply damage on host side
+                    const targetEntity = entities.find(e => e.id === targetId);
+                    if (targetEntity) {
+                        this.engine.emit('entity:hit', {
+                            entity: targetEntity,
+                            damage,
+                            point: intersect.point,
+                            isHeadshot: hitData.isHeadshot,
+                            attackerId: shooterId
+                        });
+                    }
+                }
+            }
+        }
+
+        // 3. RESTORE: Move entities back to current positions
+        currentStates.forEach((state, id) => {
+            const entity = entities.find(e => e.id === id);
+            if (entity) {
+                entity.position.copy(state.position);
+                if (entity.quaternion && state.quaternion) {
+                    entity.quaternion.copy(state.quaternion);
+                }
+                entity.isCrouched = state.isCrouched;
+                entity.updateMatrixWorld?.(true);
+            }
+        });
+
+        // 4. CONFIRM: Broadcast hit if confirmed
+        if (hitData) {
+            this.send('HIT_CONFIRMED', hitData, true);
+            console.log(`Host confirmed hit: ${shooterId} hit ${hitData.targetId} for ${hitData.damage} damage`);
+        }
+    }
+
+    /**
      * Internal message dispatcher.
      */
     _handleMessage(type, data, peerId) {
@@ -230,8 +340,16 @@ export class NetworkSystem extends System {
                     console.log(`Clock sync: RTT=${rtt.toFixed(2)}ms, offset=${this.clockOffset.toFixed(2)}ms`);
                 }
                 break;
+            case 'SHOOT':
+                if (this.isHost) {
+                    this._handleHostShoot(data, peerId);
+                }
+                break;
             case 'HIT_CONFIRMED':
                 this.engine.emit('weapon:hit_confirmed', data);
+                break;
+            case 'ROUND_STATE':
+                this.engine.emit('network:round_state', data);
                 break;
             default:
                 console.log('Unknown message type:', type, 'from', peerId);

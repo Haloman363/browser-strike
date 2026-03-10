@@ -26,6 +26,7 @@ import { UISystem } from './src/systems/UISystem.js';
 import { AISystem } from './src/systems/AISystem.js';
 import { ViewSystem } from './src/systems/ViewSystem.js';
 import { BombSystem } from './src/systems/BombSystem.js';
+import { RoundSystem } from './src/systems/RoundSystem.js';
 
 console.log("Script starting...");
 
@@ -211,6 +212,7 @@ engine.registerSystem(UISystem);
 engine.registerSystem(AISystem);
 engine.registerSystem(ViewSystem);
 engine.registerSystem(BombSystem);
+engine.registerSystem(RoundSystem);
 
 engine.on('player:damage', (data) => {
     takeDamage(data.amount, data.source);

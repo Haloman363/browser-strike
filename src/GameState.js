@@ -16,15 +16,19 @@ export class GameStateManager extends EventEmitter {
             teamsEnabled: false,
             playerTeam: 'A',
             teamScores: { A: 0, B: 0 },
+            roundState: 'PREROUND',
+            roundTimeLeft: 15,
+            hasDefuseKit: false,
             botsEnabled: true,
             isGameStarted: false,
             gameTimeLeft: 600,
             isPlayerDead: false,
             health: 100,
             cash: 800,
-            ammoInClip: 20,
-            ammoTotal: 120,
-            currentWeaponName: "Glock-18",
+            ammoInClip: 30,
+            ammoTotal: 90,
+            currentWeaponName: "AK47",
+            currentWeaponKey: "AK47",
             grenadeCount: 2,
             maxGrenades: 4,
             isReloading: false,
@@ -86,7 +90,11 @@ export class GameStateManager extends EventEmitter {
             ammoTotal: 120,
             grenadeCount: 2,
             isPlayerDead: false,
-            isGameStarted: false
+            isGameStarted: false,
+            roundState: 'PREROUND',
+            roundTimeLeft: 15,
+            hasDefuseKit: false,
+            teamScores: { A: 0, B: 0 }
         });
     }
 }
