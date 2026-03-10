@@ -2,12 +2,12 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 6: FX Overhaul COMPLETE. Transitioning to Phase 7: Gunplay Refinement.
+**Current Focus**: Phase 7: Gunplay Refinement.
 
 ## Current Position
 **Phase**: 07 - Gunplay Refinement
-**Plan**: TBD
-**Status**: Not started
+**Plan**: 07-01 - Foundation & Data
+**Status**: In Progress
 **Progress**: [▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░] 50%
 
 ## Performance Metrics
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: TSL compute-shader particle systems for sparks and smoke. Soft-particle depth blending for volumetric effects.
+- **New Decision**: Deterministic recoil patterns and Gaussian spread for competitive feel.
 
 ### Learnings
-- TSL `film()` node from addons provides an easy way to add CRT-style overlays.
-- Soft-particle blending requires accurate viewport depth nodes (`viewportLinearDepth`) to work correctly in WebGPU.
+- Box-Muller transform is efficient for GPU-side or CPU-side Gaussian randomness.
+- Recoil coordinates should be stored as normalized offsets to be applied as camera punch and trajectory deviation.
 
 ## Session Continuity
-**Current Session**: Phase 6 COMPLETE.
+**Current Session**: Resumed work on Phase 7. Plans 07-01 and 07-02 detected.
 **Next Steps**:
-1. Begin Phase 7: Gunplay Refinement.
-2. Research deterministic recoil patterns and spread logic.
+1. Execute Phase 7 Plan 01 (Math & Data).
+2. Execute Phase 7 Plan 02 (System Refactor & UI).
 
 ---
-*Last updated: 2026-03-08*
+*Last updated: 2026-03-09*
