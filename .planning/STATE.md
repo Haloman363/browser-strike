@@ -2,40 +2,37 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Project v1 COMPLETE.
+**Current Focus**: Phase 13 - Map Expansion (Mirage & Inferno).
 
 ## Current Position
-**Phase**: 12 - Polish & Performance
-**Plan**: 12-02 - Build & Asset Optimization
-**Status**: COMPLETE
-**Progress**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
+**Phase**: 13 - Map Expansion
+**Plan**: 13-01 - Mirage Layout & Geometry
+**Status**: IN_PROGRESS
+**Progress**: [░░░░░░░░░░░░░░░░░░░░] 0% (of current phase)
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
-- **Initial Load Time**: Optimized via manual chunking and bandwidth-aware texture loading.
-- **Memory Stability**: Verified via explicit `deepDispose` implementation.
-- **Frame Rate**: Target 60 FPS achieved on WebGPU hardware.
+- **Initial Load Time**: Optimized (manual chunks + bandwidth-aware textures).
+- **Memory Stability**: High (verified with deepDispose).
+- **Frame Rate**: Target 60 FPS on WebGPU.
 
 ## Accumulated Context
-### Final Decisions
-- **WebGPU & TSL**: Foundation for high-fidelity particles and post-processing.
-- **Modular Systems**: Clean separation of Input, Physics, Weaponry, UI, and Networking.
-- **Optimized Factory**: Split massive procedural logic into specialized modules for better build performance.
-- **Smart Asset Management**: Users can toggle high-res textures to save 50MB+ of bandwidth.
-- **Host-Authoritative P2P**: Stable multiplayer foundation using PeerJS.
+### Final Decisions (v1)
+- **WebGPU & TSL**: High-fidelity particles and post-processing.
+- **Modular Systems**: Clean separation of core loops.
+- **Optimized Factory**: Specialized procedural model builders.
+- **Bandwidth Aware**: User-toggleable high-res assets.
 
-### Final Learnings
-- Procedural texture generation remains the most bandwidth-efficient way to deliver high-quality visuals in the browser.
-- Manual chunking in Vite is essential for managing large dependencies like Three.js and complex procedural model builders.
+### New Decisions (Phase 13)
+- **Scale Standardization**: Adopting 1 unit = 1 inch (CSGO standard) for new map layouts.
+- **Procedural Stairs**: Planned addition to `EnvironmentFactory.js` to handle verticality better than just ladders.
 
 ## Session Continuity
-**Current Session**: Phase 12 Complete. v1 Release candidate ready.
+**Current Session**: Promoted "Map Creation" todo to Phase 13. Defined Context and Research.
 **Next Steps**:
-1. Final verification of all maps and weapons.
-2. Deploy to production environment.
-3. Implement additional Counter-Strike map layouts (Mirage, Inferno).
-4. Begin processing raw assets (weapons, characters, Italy map) from resources folders.
-5. Implement advanced Counter-Strike game modes (Hostage Rescue) and mechanics (Economy).
+1. Implement `13-01-PLAN.md` for Mirage Layout.
+2. Extend `EnvironmentFactory.js` with a `createStairs()` helper.
+3. Begin blocking out Mirage geometry in `Maps_v2.js`.
 
 ---
 *Last updated: 2026-03-10*
