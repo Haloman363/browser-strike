@@ -26,7 +26,7 @@
 | 5. Visual Fidelity | 1/1 | Complete   | 2026-03-08 |
 | 6. FX Overhaul | 2/2 | Complete   | 2026-03-08 |
 | 7. Gunplay Refinement | 2/2 | Complete   | 2026-03-10 |
-| 8. Game Mode | 2/2 | Planned | - |
+| 8. Game Mode | 1/2 | In Progress|  |
 | 9. Strategic Layer | 0/0 | Not started | - |
 | 10. Tactical Utility | 0/0 | Not started | - |
 | 11. World Interaction | 0/0 | Not started | - |

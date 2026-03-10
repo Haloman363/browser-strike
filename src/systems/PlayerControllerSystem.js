@@ -15,6 +15,7 @@ export class PlayerControllerSystem extends System {
         this.moveRight = false;
         this.canJump = false;
         this.isCrouching = false;
+        this.jumpPressed = false;
         this.isPlayerDead = false;
         this.isPlanting = false;
         this.plantStartTime = 0;
@@ -60,9 +61,8 @@ export class PlayerControllerSystem extends System {
             case 'KeyA': this.moveLeft = true; break;
             case 'KeyD': this.moveRight = true; break;
             case 'Space': 
-                if (!isMovementLocked && this.canJump) {
-                    this.velocity.y += PHYSICS.JUMP_FORCE; 
-                    this.canJump = false;
+                if (!isMovementLocked) {
+                    this.jumpPressed = true;
                 }
                 break;
             case 'ControlLeft': this.isCrouching = true; break;
@@ -150,10 +150,13 @@ export class PlayerControllerSystem extends System {
                 KeyS: this.moveBackward,
                 KeyA: this.moveLeft,
                 KeyD: this.moveRight,
-                Space: false, // Jump is handled via handleKeyDown/applyInput state
+                Space: this.jumpPressed, // Capture jump state
                 ControlLeft: this.isCrouching
             }
         };
+
+        // Reset jumpPressed after capturing it for the input buffer
+        this.jumpPressed = false;
 
         // Buffer the input
         this.inputBuffer.push(inputState);
@@ -224,6 +227,12 @@ export class PlayerControllerSystem extends System {
         if (!isMovementLocked) {
             if (keys.KeyW || keys.KeyS) this.velocity.z -= direction.z * speed * delta;
             if (keys.KeyA || keys.KeyD) this.velocity.x -= direction.x * speed * delta;
+
+            // Apply Jump
+            if (keys.Space && this.canJump) {
+                this.velocity.y = PHYSICS.JUMP_FORCE;
+                this.canJump = false;
+            }
         }
 
         // --- CAMERA-RELATIVE MOVEMENT MATH ---
