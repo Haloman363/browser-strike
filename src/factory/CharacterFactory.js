@@ -3,11 +3,38 @@ import { MeshStandardNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu';
 import { texture, color, float } from 'three/tsl';
 import { COLORS } from '../Constants_v2.js';
 import { TextureGenerator } from '../TextureGenerator.js';
+import { assetManager } from '../core/AssetManager.js';
 
 export function createHumanoidModel(team = 'TERRORIST') {
     const isCT = (team === 'COUNTER_TERRORIST' || team === 'CT');
     const group = new THREE.Group();
     group.name = "humanoid";
+
+    // --- EXTERNAL ASSET LOADING (Optional) ---
+    const isHighRes = localStorage.getItem('bs_low_res_textures') !== 'true';
+    if (isHighRes && !isCT) {
+        const baseUrl = import.meta.env.BASE_URL;
+        const modelPath = `${baseUrl}assets/models/characters/arctic/TERRORIST_Arctic Avenger.obj`;
+        const mtlPath = `${baseUrl}assets/models/characters/arctic/TERRORIST_Arctic Avenger.mtl`;
+        
+        assetManager.loadOBJ(modelPath, mtlPath).then(externalGroup => {
+            // Remove procedural children
+            while(group.children.length > 0) {
+                group.remove(group.children[0]);
+            }
+            
+            // Align external model
+            // 1.6 models are usually huge (units are small). Scale down to match our ~20 unit height.
+            externalGroup.scale.set(0.15, 0.15, 0.15); 
+            externalGroup.position.y = 0; // Feet at ground
+            externalGroup.rotation.y = Math.PI; // Face forward
+            
+            group.add(externalGroup);
+            console.log("Swapped Terrorist with high-res Arctic Avenger.");
+        }).catch(err => {
+            console.error("Failed to load external character model, keeping procedural.", err);
+        });
+    }
     
     // Create specific camo/skin textures
     const clothColor = isCT ? COLORS.CLOTH_CT : COLORS.CLOTH_T;

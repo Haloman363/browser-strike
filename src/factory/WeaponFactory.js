@@ -9,6 +9,7 @@ import {
     gunBodyTex, gunSlideTex, gunGripTex, gloveTex, bladeTex, nadeTex,
     addEjectionPort, addBoltDetails, createViewModelArms
 } from './FactoryUtils.js';
+import { assetManager } from '../core/AssetManager.js';
 
 export function createKnifeModel(isViewModel = false) {
     const recipe = WEAPON_RECIPES['COMBAT_KNIFE'];
@@ -274,6 +275,57 @@ export function createGunModel(weaponKey = 'GLOCK', isViewModel = false) {
     woodMat.colorNode = texture(woodTexLocal);
     woodMat.roughnessNode = float(0.9);
     woodMat.metalnessNode = float(0.0);
+
+    // --- EXTERNAL ASSET LOADING (Optional) ---
+    const isHighRes = localStorage.getItem('bs_low_res_textures') !== 'true';
+    if (isHighRes) {
+        const baseUrl = import.meta.env.BASE_URL;
+        let modelPath = null;
+        let mtlPath = null;
+        let scale = 0.05;
+        let rotationY = -Math.PI / 2;
+
+        if (weaponKey === 'DEAGLE') {
+            modelPath = `${baseUrl}assets/models/weapons/deagle/deagle.obj`;
+        } else if (weaponKey === 'AWP') {
+            modelPath = `${baseUrl}assets/models/weapons/awp/Model.obj`;
+            mtlPath = `${baseUrl}assets/models/weapons/awp/Model.mtl`;
+            scale = 0.04; // AWP is long, scale down slightly more
+        } else if (weaponKey === 'P250') {
+            modelPath = `${baseUrl}assets/models/weapons/fiveseven/w_pist_fiveseven.obj`;
+            mtlPath = `${baseUrl}assets/models/weapons/fiveseven/w_pist_fiveseven.mtl`;
+        }
+
+        if (modelPath) {
+            assetManager.loadOBJ(modelPath, mtlPath).then(externalGroup => {
+                // Remove procedural children
+                while(group.children.length > 0) {
+                    group.remove(group.children[0]);
+                }
+                
+                externalGroup.scale.set(scale, scale, scale); 
+                externalGroup.rotation.y = rotationY;
+                
+                if (isViewModel) {
+                    const skinTex = TextureGenerator.createSkinTexture(`#${new THREE.Color(COLORS.SKIN).getHexString()}`);
+                    const skinMat = new MeshStandardNodeMaterial();
+                    skinMat.colorNode = texture(skinTex);
+                    const gloveMat = new MeshStandardNodeMaterial();
+                    gloveMat.colorNode = texture(gloveTex);
+                    
+                    createViewModelArms(group, skinMat, gloveMat, 'both', {
+                        right: recipe.vmRightHand,
+                        left: recipe.vmLeftHand
+                    });
+                }
+
+                group.add(externalGroup);
+                console.log(`Swapped ${weaponKey} with external high-res model.`);
+            }).catch(err => {
+                console.error(`Failed to load external model for ${weaponKey}, keeping procedural.`, err);
+            });
+        }
+    }
 
     if (recipe.receiverPoints) {
         builder.addExtrudedShape(recipe.receiverPoints, recipe.receiverWidth, bodyMat);
