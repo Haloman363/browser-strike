@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 13 - Map Expansion (Mirage & Inferno).
+**Current Focus**: Phase 13 COMPLETE.
 
 ## Current Position
 **Phase**: 13 - Map Expansion
-**Plan**: 13-01 - Mirage Layout & Geometry
-**Status**: IN_PROGRESS
-**Progress**: [░░░░░░░░░░░░░░░░░░░░] 0% (of current phase)
+**Plan**: 13-03 - Global Map Optimization & Prop Dressing
+**Status**: COMPLETE
+**Progress**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -21,18 +21,17 @@
 - **WebGPU & TSL**: High-fidelity particles and post-processing.
 - **Modular Systems**: Clean separation of core loops.
 - **Optimized Factory**: Specialized procedural model builders.
-- **Bandwidth Aware**: User-toggleable high-res assets.
 
 ### New Decisions (Phase 13)
-- **Scale Standardization**: Adopting 1 unit = 1 inch (CSGO standard) for new map layouts.
-- **Procedural Stairs**: Planned addition to `EnvironmentFactory.js` to handle verticality better than just ladders.
+- **Map Suite**: Finalized layouts for Dust 2 (refined), Mirage, and Inferno.
+- **Procedural Detail**: Integrated `createStairs`, `createArch`, `createPipe`, and `createLamp` for a richer world.
+- **Optimized Lighting**: Individual map detail lamps use low-res shadow maps to preserve performance.
 
 ## Session Continuity
-**Current Session**: Promoted "Map Creation" todo to Phase 13. Defined Context and Research.
+**Current Session**: Phase 13 Complete. Map expansion goals achieved.
 **Next Steps**:
-1. Implement `13-01-PLAN.md` for Mirage Layout.
-2. Extend `EnvironmentFactory.js` with a `createStairs()` helper.
-3. Begin blocking out Mirage geometry in `Maps_v2.js`.
+1. Promote "Gameplay Mechanics" todo to Phase 14 (Economy, Modes, Movement).
+2. Final production verification.
 
 ---
 *Last updated: 2026-03-10*

@@ -14,7 +14,7 @@
 - [x] **Phase 10: Tactical Utility** - Grenades and area-of-effect items (completed 2026-03-10)
 - [x] **Phase 11: World Interaction** - Ladders and destructible environment elements (completed 2026-03-10)
 - [x] **Phase 12: Polish & Performance** - Optimization and final stabilization (completed 2026-03-10)
-- [ ] **Phase 13: Map Expansion** - Implementing Mirage and Inferno with enhanced procedural tools
+- [x] **Phase 13: Map Expansion** - Implementing Mirage and Inferno with enhanced procedural tools (completed 2026-03-10)
 
 ## Progress Table
 
@@ -32,7 +32,7 @@
 | 10. Tactical Utility | 2/2 | Complete   | 2026-03-10 |
 | 11. World Interaction | 2/2 | Complete   | 2026-03-10 |
 | 12. Polish & Performance | 2/2 | Complete   | 2026-03-10 |
-| 13. Map Expansion | 0/3 | Not Started | - |
+| 13. Map Expansion | 3/3 | Complete   | 2026-03-10 |
 
 ## Phase Details
 
