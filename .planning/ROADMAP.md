@@ -16,6 +16,7 @@
 - [x] **Phase 12: Polish & Performance** - Optimization and final stabilization (completed 2026-03-10)
 - [x] **Phase 13: Map Expansion** - Implementing Mirage and Inferno with enhanced procedural tools (completed 2026-03-10)
 - [x] **Phase 14: Gameplay Mechanics** - Economy overhaul, Hostage Rescue, and refined movement (completed 2026-03-10)
+- [/] **Phase 15: Asset Integration** - Transitioning to high-fidelity external GLTF models and textures
 
 ## Progress Table
 
@@ -35,6 +36,7 @@
 | 12. Polish & Performance | 2/2 | Complete   | 2026-03-10 |
 | 13. Map Expansion | 3/3 | Complete   | 2026-03-10 |
 | 14. Gameplay Mechanics | 3/3 | Complete   | 2026-03-10 |
+| 15. Asset Integration | 0/3 | In Progress | - |
 
 ## Phase Details
 

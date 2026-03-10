@@ -1,12 +1,13 @@
 ---
 area: assets
 slug: process-resources-assets
-status: todo
+status: in-progress
 priority: high
 created: 2026-03-10
+phase: 15
 ---
 
-# Process Assets from Resources Folders
+# Process Assets from Resources Folders (Phase 15)
 
 Convert and optimize raw 3D models (OBJ/MTL/DAE) and textures from the `resources/` and `process-models-textures/` folders for integration into the game engine.
 
