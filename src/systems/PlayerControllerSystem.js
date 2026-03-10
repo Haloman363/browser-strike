@@ -50,12 +50,21 @@ export class PlayerControllerSystem extends System {
 
     handleKeyDown(code) {
         if (this.isPlayerDead) return;
+        
+        const roundState = GameState.get('roundState');
+        const isMovementLocked = roundState === 'PREROUND' || roundState === 'POST_ROUND';
+
         switch (code) {
             case 'KeyW': this.moveForward = true; break;
             case 'KeyS': this.moveBackward = true; break;
             case 'KeyA': this.moveLeft = true; break;
             case 'KeyD': this.moveRight = true; break;
-            case 'Space': if (this.canJump) this.velocity.y += PHYSICS.JUMP_FORCE; this.canJump = false; break;
+            case 'Space': 
+                if (!isMovementLocked && this.canJump) {
+                    this.velocity.y += PHYSICS.JUMP_FORCE; 
+                    this.canJump = false;
+                }
+                break;
             case 'ControlLeft': this.isCrouching = true; break;
             case 'KeyE': this.startPlanting(); break;
         }
@@ -159,9 +168,35 @@ export class PlayerControllerSystem extends System {
         }
     }
 
+    reconcile(state) {
+        // Filter inputBuffer: remove all inputs with seq <= state.lastSeq
+        this.inputBuffer = this.inputBuffer.filter(i => i.seq > state.lastSeq);
+
+        const camera = this.engine.camera;
+        if (!camera) return;
+
+        // Check distance between local position and authoritative state
+        const authoritativePos = new THREE.Vector3(state.x, state.y, state.z);
+        const distance = camera.position.distanceTo(authoritativePos);
+
+        // If distance > 0.1: SNAP local position to state.pos and REPLAY
+        if (distance > 0.1) {
+            // console.log(`Reconciling: desync of ${distance.toFixed(4)} units. Snapping and replaying.`);
+            camera.position.copy(authoritativePos);
+            
+            // REPLAY all remaining inputs in inputBuffer
+            for (const input of this.inputBuffer) {
+                this.applyInput(input, input.dt);
+            }
+        }
+    }
+
     applyInput(inputState, delta) {
         const camera = this.engine.camera;
         if (!camera || !this.physics) return;
+
+        const roundState = GameState.get('roundState');
+        const isMovementLocked = roundState === 'PREROUND' || roundState === 'POST_ROUND';
 
         const keys = inputState.keys || {};
         const speed = keys.ControlLeft ? PHYSICS.CROUCH_SPEED : PHYSICS.MOVE_SPEED;
@@ -171,9 +206,14 @@ export class PlayerControllerSystem extends System {
         this.velocity.z -= this.velocity.z * 10.0 * delta;
         this.velocity.y -= PHYSICS.GRAVITY * delta;
 
-        // Calculate local direction
-        const dirZ = Number(!!keys.KeyW) - Number(!!keys.KeyS);
-        const dirX = Number(!!keys.KeyD) - Number(!!keys.KeyA);
+        // Calculate local direction (only if not movement locked)
+        let dirZ = 0;
+        let dirX = 0;
+        
+        if (!isMovementLocked) {
+            dirZ = Number(!!keys.KeyW) - Number(!!keys.KeyS);
+            dirX = Number(!!keys.KeyD) - Number(!!keys.KeyA);
+        }
         
         const direction = new THREE.Vector3(dirX, 0, dirZ);
         if (direction.lengthSq() > 0) {
@@ -181,8 +221,10 @@ export class PlayerControllerSystem extends System {
         }
 
         // Apply movement to velocity
-        if (keys.KeyW || keys.KeyS) this.velocity.z -= direction.z * speed * delta;
-        if (keys.KeyA || keys.KeyD) this.velocity.x -= direction.x * speed * delta;
+        if (!isMovementLocked) {
+            if (keys.KeyW || keys.KeyS) this.velocity.z -= direction.z * speed * delta;
+            if (keys.KeyA || keys.KeyD) this.velocity.x -= direction.x * speed * delta;
+        }
 
         // --- CAMERA-RELATIVE MOVEMENT MATH ---
         // Get the horizontal forward and right vectors from the camera
