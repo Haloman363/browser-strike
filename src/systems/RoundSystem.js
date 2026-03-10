@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { System } from '../core/System.js';
 import { GameState } from '../GameState.js';
 import { Maps } from '../Maps_v2.js';
+import { ECONOMY_SETTINGS, WEAPONS_DATA } from '../Constants_v2.js';
 
 /**
  * Manages the competitive round lifecycle (FSM).
@@ -22,14 +23,18 @@ export class RoundSystem extends System {
     init() {
         console.log("RoundSystem initialized");
         
-        this.engine.on('bomb:defused', () => this.onRoundWin('A')); // CT win
-        this.engine.on('bomb:exploded', () => this.onRoundWin('B')); // T win
+        this.engine.on('bomb:defused', () => this.onRoundWin('A', 'bomb')); // CT win
+        this.engine.on('bomb:exploded', () => this.onRoundWin('B', 'bomb')); // T win
         
         // Cash Reward for Kills
-        this.engine.on('entity:killed', ({ killer }) => {
+        this.engine.on('entity:killed', ({ killer, weaponKey }) => {
             if (killer === 'player') {
+                const weapon = WEAPONS_DATA[weaponKey] || {};
+                const reward = weapon.killReward || ECONOMY_SETTINGS.KILL_REWARD_DEFAULT;
                 const currentCash = GameState.get('cash');
-                GameState.set({ cash: currentCash + 300 });
+                
+                GameState.set({ cash: Math.min(currentCash + reward, ECONOMY_SETTINGS.MAX_CASH) });
+                console.log(`Kill reward: $${reward} (Weapon: ${weaponKey})`);
             }
         });
 
@@ -44,7 +49,7 @@ export class RoundSystem extends System {
         });
     }
 
-    onRoundWin(winner) {
+    onRoundWin(winner, type = 'elimination') {
         // Only host/local handles win conditions
         if (!GameState.get('isHost') && GameState.get('lobbyCode') !== "") return;
         if (GameState.get('roundState') === 'POST_ROUND') return;
@@ -54,11 +59,22 @@ export class RoundSystem extends System {
         
         // Grant Round Rewards
         const playerTeam = GameState.get('playerTeam');
-        const winReward = 3250;
-        const lossReward = 1400;
+        const isWinner = (playerTeam === winner);
+        
+        let reward = 0;
+        let currentLossStreak = GameState.get('lossStreak');
+
+        if (isWinner) {
+            reward = (type === 'bomb') ? ECONOMY_SETTINGS.ROUND_WIN_BOMB : ECONOMY_SETTINGS.ROUND_WIN_ELIMINATION;
+            GameState.set({ lossStreak: 0 }); // Reset loss streak on win
+        } else {
+            reward = ECONOMY_SETTINGS.ROUND_LOSS_BASE + (currentLossStreak * ECONOMY_SETTINGS.ROUND_LOSS_INCREMENT);
+            reward = Math.min(reward, ECONOMY_SETTINGS.ROUND_LOSS_MAX);
+            GameState.set({ lossStreak: currentLossStreak + 1 }); // Increment loss streak
+        }
+
         const currentCash = GameState.get('cash');
-        const reward = (playerTeam === winner) ? winReward : lossReward;
-        GameState.set({ cash: currentCash + reward });
+        GameState.set({ cash: Math.min(currentCash + reward, ECONOMY_SETTINGS.MAX_CASH) });
 
         GameState.set({ 
             teamScores: scores,
@@ -66,7 +82,7 @@ export class RoundSystem extends System {
             roundTimeLeft: this.roundStates.POST_ROUND
         });
 
-        console.log(`Team ${winner} wins the round!`);
+        console.log(`Team ${winner} wins the round! Reward: $${reward}. Loss streak: ${GameState.get('lossStreak')}`);
         this.engine.emit('round:win', { winner });
         
         // Broadcast win to clients

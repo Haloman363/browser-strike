@@ -7,6 +7,13 @@ export class TextureGenerator {
         // Create the procedural texture first as our immediate return value
         const texture = fallbackFn(size);
         
+        // Check for low-res preference (avoids 50MB+ downloads)
+        const isLowRes = localStorage.getItem('bs_low_res_textures') === 'true';
+        if (isLowRes) {
+            console.log(`Low-res mode: using procedural fallback for ${name}`);
+            return texture;
+        }
+
         // Use the base URL from Vite to ensure correct paths in both dev and prod.
         // import.meta.env.BASE_URL always has a trailing slash (e.g. '/' or '/browser-strike/').
         const baseUrl = import.meta.env.BASE_URL;
@@ -67,6 +74,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -119,6 +127,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -175,6 +184,7 @@ export class TextureGenerator {
             });
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             return texture;
         }, size);
     }
@@ -216,6 +226,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -269,6 +280,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -317,6 +329,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             return texture;
         }, size);
     }
@@ -347,6 +360,7 @@ export class TextureGenerator {
             ctx.strokeRect(2, 2, s - 4, s - 4);
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -379,6 +393,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -439,6 +454,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -471,6 +487,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             return texture;
         }, size);
     }
@@ -526,6 +543,7 @@ export class TextureGenerator {
             ctx.stroke();
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             return texture;
         }, size);
     }
@@ -561,6 +579,7 @@ export class TextureGenerator {
         ctx.fillText(siteLabel, size/2, size/2);
 
         const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
         return texture;
     }
 
@@ -605,6 +624,7 @@ export class TextureGenerator {
             }
 
             const texture = new THREE.CanvasTexture(canvas);
+            texture.colorSpace = THREE.SRGBColorSpace;
             texture.wrapS = THREE.RepeatWrapping;
             texture.wrapT = THREE.RepeatWrapping;
             return texture;
@@ -651,6 +671,7 @@ export class TextureGenerator {
         ctx.fillRect(0, canvas.height * 0.7, canvas.width, canvas.height * 0.3);
 
         const texture = new THREE.CanvasTexture(canvas);
+        texture.colorSpace = THREE.SRGBColorSpace;
         return texture;
     }
 }

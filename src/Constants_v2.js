@@ -38,7 +38,26 @@ export const PHYSICS = {
     PLAYER_RADIUS: 4.0,
     MOVE_SPEED: 1000.0,
     CROUCH_SPEED: 500.0,
-    JUMP_FORCE: 250.0
+    JUMP_FORCE: 250.0,
+    LADDER_CLIMB_SPEED: 600.0,
+    LADDER_SPREAD_MULTIPLIER: 5.0
+};
+
+export const ECONOMY_SETTINGS = {
+    MAX_CASH: 16000,
+    START_CASH: 800,
+    KILL_REWARD_DEFAULT: 300,
+    KILL_REWARD_KNIFE: 1500,
+    KILL_REWARD_AWP: 100,
+    KILL_REWARD_SMG: 600,
+    KILL_REWARD_SHOTGUN: 900,
+    ROUND_WIN_ELIMINATION: 3250,
+    ROUND_WIN_BOMB: 3500,
+    ROUND_LOSS_BASE: 1400,
+    ROUND_LOSS_INCREMENT: 500,
+    ROUND_LOSS_MAX: 3400,
+    UTILITY_LIMIT_TOTAL: 4,
+    UTILITY_LIMIT_FLASH: 2
 };
 
 export const WEAPON_SETTINGS = {
@@ -52,7 +71,8 @@ export const GRENADES_DATA = {
         damage: 100,
         radius: 60,
         color: '#4b5320',
-        effect: 'explode'
+        effect: 'explode',
+        price: 300
     },
     'FLASH': {
         name: 'Flashbang',
@@ -60,7 +80,8 @@ export const GRENADES_DATA = {
         damage: 0,
         radius: 150,
         color: '#888888',
-        effect: 'flash'
+        effect: 'flash',
+        price: 200
     },
     'SMOKE': {
         name: 'Smoke Grenade',
@@ -68,7 +89,8 @@ export const GRENADES_DATA = {
         damage: 0,
         radius: 80,
         color: '#222222',
-        effect: 'smoke'
+        effect: 'smoke',
+        price: 300
     },
     'MOLOTOV': {
         name: 'Molotov',
@@ -76,11 +98,28 @@ export const GRENADES_DATA = {
         damage: 15, // Damage per tick
         radius: 50,
         color: '#ffaa00',
-        effect: 'fire'
+        effect: 'fire',
+        price: 400
     }
 };
 
 export const WEAPONS_DATA = {
+    'KNIFE': {
+        name: 'Knife',
+        slot: 1,
+        damage: 34,
+        headshotMultiplier: 1,
+        magSize: 0,
+        reserveAmmo: 0,
+        reloadTime: 0,
+        fireRate: 60,
+        recoil: 0,
+        spread: 0,
+        isAutomatic: false,
+        price: 0,
+        type: 'knife',
+        killReward: 1500
+    },
     'GLOCK': {
         name: 'Glock-18',
         slot: 3,
@@ -94,7 +133,8 @@ export const WEAPONS_DATA = {
         spread: 0.02,
         isAutomatic: false,
         price: 200,
-        type: 'pistol'
+        type: 'pistol',
+        killReward: 300
     },
     'USP': {
         name: 'USP-S',
@@ -109,7 +149,8 @@ export const WEAPONS_DATA = {
         spread: 0.01,
         isAutomatic: false,
         price: 200,
-        type: 'pistol'
+        type: 'pistol',
+        killReward: 300
     },
     'DEAGLE': {
         name: 'Desert Eagle',
@@ -124,7 +165,8 @@ export const WEAPONS_DATA = {
         spread: 0.05,
         isAutomatic: false,
         price: 700,
-        type: 'pistol'
+        type: 'pistol',
+        killReward: 300
     },
     'AK47': {
         name: 'AK-47',
@@ -139,7 +181,8 @@ export const WEAPONS_DATA = {
         spread: 0.035,
         isAutomatic: true,
         price: 2700,
-        type: 'rifle'
+        type: 'rifle',
+        killReward: 300
     },
     'M4A4': {
         name: 'M4A4',
@@ -154,7 +197,8 @@ export const WEAPONS_DATA = {
         spread: 0.02,
         isAutomatic: true,
         price: 3100,
-        type: 'rifle'
+        type: 'rifle',
+        killReward: 300
     },
     'AWP': {
         name: 'AWP',
@@ -170,7 +214,8 @@ export const WEAPONS_DATA = {
         isAutomatic: false,
         isBoltAction: true,
         price: 4750,
-        type: 'sniper'
+        type: 'sniper',
+        killReward: 100
     },
     'P90': {
         name: 'P90',
@@ -185,7 +230,8 @@ export const WEAPONS_DATA = {
         spread: 0.04,
         isAutomatic: true,
         price: 2350,
-        type: 'smg'
+        type: 'smg',
+        killReward: 300
     },
     'XM1014': {
         name: 'XM1014',
@@ -201,7 +247,8 @@ export const WEAPONS_DATA = {
         spread: 0.1,
         isAutomatic: true,
         price: 2000,
-        type: 'shotgun'
+        type: 'shotgun',
+        killReward: 900
     },
     'P250': {
         name: 'P250',
@@ -216,7 +263,8 @@ export const WEAPONS_DATA = {
         spread: 0.02,
         isAutomatic: false,
         price: 300,
-        type: 'pistol'
+        type: 'pistol',
+        killReward: 300
     },
     'MAC10': {
         name: 'MAC-10',
@@ -231,7 +279,8 @@ export const WEAPONS_DATA = {
         spread: 0.05,
         isAutomatic: true,
         price: 1050,
-        type: 'smg'
+        type: 'smg',
+        killReward: 600
     },
     'MP9': {
         name: 'MP9',
@@ -246,7 +295,8 @@ export const WEAPONS_DATA = {
         spread: 0.04,
         isAutomatic: true,
         price: 1250,
-        type: 'smg'
+        type: 'smg',
+        killReward: 600
     },
     'GALIL': {
         name: 'Galil AR',
@@ -261,7 +311,8 @@ export const WEAPONS_DATA = {
         spread: 0.03,
         isAutomatic: true,
         price: 1800,
-        type: 'rifle'
+        type: 'rifle',
+        killReward: 300
     },
     'FAMAS': {
         name: 'FAMAS',
@@ -276,7 +327,8 @@ export const WEAPONS_DATA = {
         spread: 0.02,
         isAutomatic: true,
         price: 2050,
-        type: 'rifle'
+        type: 'rifle',
+        killReward: 300
     },
     'AUG': {
         name: 'AUG',
@@ -291,7 +343,8 @@ export const WEAPONS_DATA = {
         spread: 0.015,
         isAutomatic: true,
         price: 3300,
-        type: 'rifle'
+        type: 'rifle',
+        killReward: 300
     },
     'SG553': {
         name: 'SG 553',
@@ -306,7 +359,8 @@ export const WEAPONS_DATA = {
         spread: 0.015,
         isAutomatic: true,
         price: 3000,
-        type: 'rifle'
+        type: 'rifle',
+        killReward: 300
     },
     'SSG08': {
         name: 'SSG 08',
@@ -322,7 +376,8 @@ export const WEAPONS_DATA = {
         isAutomatic: false,
         isBoltAction: true,
         price: 1700,
-        type: 'sniper'
+        type: 'sniper',
+        killReward: 300
     },
     'NEGEV': {
         name: 'Negev',
@@ -337,7 +392,8 @@ export const WEAPONS_DATA = {
         spread: 0.06,
         isAutomatic: true,
         price: 1700,
-        type: 'heavy'
+        type: 'heavy',
+        killReward: 300
     },
     'MP7': {
         name: 'MP7',
@@ -352,7 +408,8 @@ export const WEAPONS_DATA = {
         spread: 0.03,
         isAutomatic: true,
         price: 1500,
-        type: 'smg'
+        type: 'smg',
+        killReward: 600
     },
     'M249': {
         name: 'M249',
@@ -367,9 +424,10 @@ export const WEAPONS_DATA = {
         spread: 0.05,
         isAutomatic: true,
         price: 5200,
-        type: 'heavy'
+        type: 'heavy',
+        killReward: 300
     },
-    NOVA: {
+    'NOVA': {
         name: 'Nova',
         slot: 2,
         damage: 26,
@@ -383,9 +441,10 @@ export const WEAPONS_DATA = {
         spread: 0.08,
         isAutomatic: false,
         price: 1050,
-        type: 'shotgun'
+        type: 'shotgun',
+        killReward: 900
     },
-    C4: {
+    'C4': {
         name: 'C4 Explosive',
         slot: 5,
         damage: 0,
@@ -396,8 +455,7 @@ export const WEAPONS_DATA = {
         price: 0,
         type: 'utility'
     }
-    };
-
+};
 
 
 

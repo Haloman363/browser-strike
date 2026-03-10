@@ -46,7 +46,10 @@ export class GameStateManager extends EventEmitter {
             canPlant: false,
             atBombSite: null, // 'A' or 'B'
             bombExploded: false,
-            inventory: { 1: null, 2: 'GLOCK', 3: 'KNIFE', 4: [], 5: null }
+            inventory: { 1: null, 2: 'GLOCK', 3: 'KNIFE', 4: [], 5: null },
+            // Economy & Match Progression
+            lossStreak: 0,
+            utilityCount: { HE: 0, FLASH: 0, SMOKE: 0, MOLOTOV: 0 }
         };
     }
 
@@ -115,7 +118,8 @@ export class GameStateManager extends EventEmitter {
                 3: 'KNIFE',
                 4: [],
                 5: null
-            }
+            },
+            utilityCount: { HE: 0, FLASH: 0, SMOKE: 0, MOLOTOV: 0 }
         });
     }
 
@@ -135,7 +139,9 @@ export class GameStateManager extends EventEmitter {
             roundState: 'PREROUND',
             roundTimeLeft: 15,
             hasDefuseKit: false,
-            teamScores: { A: 0, B: 0 }
+            teamScores: { A: 0, B: 0 },
+            lossStreak: 0,
+            utilityCount: { HE: 0, FLASH: 0, SMOKE: 0, MOLOTOV: 0 }
         });
     }
 }

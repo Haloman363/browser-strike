@@ -44,12 +44,18 @@ export class FXSystem extends System {
         this.maxSmoke = 25000; // 5 grenades * 5000 particles
         this.smokeIndex = 0;
         this.smokeStorage = null;
+
+        this.maxFire = 10000; // 20 Molotovs * 500 particles
+        this.fireIndex = 0;
+        this.fireStorage = null;
         
         // TSL Nodes
         this.computeUpdate = null;
         this.computeSpawn = null;
         this.computeSmokeUpdate = null;
         this.computeSmokeSpawn = null;
+        this.computeFireUpdate = null;
+        this.computeFireSpawn = null;
         
         // Uniforms
         this.deltaTime = uniform(0);
@@ -61,9 +67,19 @@ export class FXSystem extends System {
         this.smokeSpawnOrigin = uniform(vec3(0, 0, 0));
         this.smokeSpawnCount = uniform(uint(0));
         this.smokeSpawnStartIndex = uniform(uint(0));
+
+        this.fireSpawnOrigin = uniform(vec3(0, 0, 0));
+        this.fireSpawnCount = uniform(uint(0));
+        this.fireSpawnStartIndex = uniform(uint(0));
         
         this.sparkMesh = null;
         this.smokeMesh = null;
+        this.fireMesh = null;
+
+        // Active timers (to skip compute when empty)
+        this.sparksLife = 0;
+        this.smokeLife = 0;
+        this.fireLife = 0;
 
         // Flashbang state
         this.flashIntensity = uniform(0);
@@ -79,6 +95,7 @@ export class FXSystem extends System {
 
         this.initSparks();
         this.initSmoke();
+        this.initFire();
         this.initCompute();
         this.initFlashbangPost();
         
@@ -91,6 +108,8 @@ export class FXSystem extends System {
                 this.spawnSmokeCloud(data.position);
             } else if (data.type === 'flashbang') {
                 this.triggerFlashbang(data.position);
+            } else if (data.type === 'molotov') {
+                this.spawnMolotovFire(data.position);
             }
         });
 
@@ -246,6 +265,62 @@ export class FXSystem extends System {
         this.engine.scene.add(this.smokeMesh);
     }
 
+    initFire() {
+        this.fireStorage = instancedArray(this.maxFire, 'struct { position vec3, velocity vec3, age float, life float, spreadFactor float }');
+
+        const geometry = new THREE.PlaneGeometry(1, 1);
+        const material = new SpriteNodeMaterial();
+        material.transparent = true;
+        material.depthWrite = false;
+        material.blending = THREE.AdditiveBlending;
+
+        const fireParticles = this.fireStorage;
+        const fire = fireParticles.element(instanceIndex);
+
+        // Position Node
+        material.positionNode = fire.position;
+
+        // Scale Node: Fluctuate size like flickering fire
+        const ageNorm = fire.age.div(fire.life);
+        const flicker = sin(fire.age.mul(10).add(instanceIndex.toFloat())).mul(0.1).add(0.9);
+        material.scaleNode = float(50).mul(flicker).mul(sub(1, ageNorm.pow(2)));
+
+        // Color Node: White core -> Orange -> Red -> Black (Smoke)
+        material.colorNode = Fn(() => {
+            const white = vec3(1, 1, 1);
+            const yellow = vec3(1, 0.8, 0.2);
+            const orange = vec3(1, 0.4, 0);
+            const red = vec3(0.8, 0.1, 0);
+            const black = vec3(0, 0, 0);
+
+            // Multi-stage color mix
+            const color = mix(
+                mix(white, yellow, ageNorm.smoothstep(0, 0.1)),
+                mix(orange, red, ageNorm.smoothstep(0.4, 0.8)),
+                ageNorm.smoothstep(0.2, 0.6)
+            );
+
+            // Soft-particle and radial fade
+            const dist = uv().distance(vec2(0.5));
+            const radialFade = dist.mul(2.0).oneMinus().smoothstep(0, 0.5);
+            
+            const fragmentDepth = depth;
+            const sceneDepth = viewportLinearDepth;
+            const depthDiff = sceneDepth.sub(fragmentDepth);
+            const softFade = depthDiff.mul(0.01).clamp(0, 1);
+
+            const opacity = sub(1, ageNorm).mul(softFade).mul(radialFade);
+            
+            return color.pack(opacity);
+        })();
+
+        this.fireMesh = new THREE.InstancedMesh(geometry, material, this.maxFire);
+        this.fireMesh.frustumCulled = false;
+        this.fireMesh.count = this.maxFire;
+
+        this.engine.scene.add(this.fireMesh);
+    }
+
     initCompute() {
         const sparks = this.sparkStorage;
         const spark = sparks.element(instanceIndex);
@@ -337,6 +412,53 @@ export class FXSystem extends System {
                 });
             });
         } )().compute(this.maxSmoke);
+
+        // Fire Update Compute (Molotov)
+        this.computeFireUpdate = ( () => {
+            const fire = this.fireStorage.element(instanceIndex);
+            const age = fire.age.add(this.deltaTime);
+            
+            // Dynamic Spreading: Particles move outward and stay near ground
+            const noise = mx_noise_float(fire.position.mul(0.02).add(this.spawnTime.mul(0.5)));
+            
+            // Outward velocity based on spreadFactor
+            const dir = fire.position.sub(this.fireSpawnOrigin).normalize();
+            const spreadVelocity = dir.mul(fire.spreadFactor).mul(sub(1.0, age.div(fire.life)));
+            
+            // Upward flicker/drift
+            const drift = vec3(noise.mul(5), float(30).add(noise.mul(20)), noise.mul(5));
+            
+            const velocity = fire.velocity.add(drift.add(spreadVelocity).mul(this.deltaTime));
+            const position = fire.position.add(velocity.mul(this.deltaTime));
+
+            return assign(fire, { position, velocity, age }).append(
+                If(age.greaterThan(fire.life), assign(fire.life, 0))
+            );
+        } )().compute(this.maxFire);
+
+        // Fire Spawn Compute
+        this.computeFireSpawn = ( () => {
+            const fire = this.fireStorage.element(instanceIndex);
+            const isInRange = instanceIndex.greaterThanEqual(this.fireSpawnStartIndex).and(instanceIndex.lessThan(this.fireSpawnStartIndex.add(this.fireSpawnCount)));
+
+            return If(isInRange, () => {
+                const h1 = hash(instanceIndex.add(this.spawnTime));
+                const h2 = hash(instanceIndex.add(this.spawnTime).add(123.456));
+                const h3 = hash(instanceIndex.add(this.spawnTime).add(789.012));
+
+                // Random spawn within a small radius
+                const offset = vec3(h1.mul(2).sub(1), 0, h2.mul(2).sub(1)).mul(20);
+                const pos = this.fireSpawnOrigin.add(offset);
+
+                return assign(fire, {
+                    position: pos,
+                    velocity: vec3(0, 0, 0),
+                    age: 0,
+                    life: h1.mul(5).add(2), // 2-7 seconds
+                    spreadFactor: h3.mul(50).add(20) // Random spreading force
+                });
+            });
+        } )().compute(this.maxFire);
     }
 
     spawnMuzzleSparks(data) {
@@ -360,6 +482,9 @@ export class FXSystem extends System {
         // Dispatch spawn compute
         this.engine.renderer.compute(this.computeSpawn);
         
+        // Reset life timer (sparks last ~0.7s)
+        this.sparksLife = 1.0; 
+
         // Advance index for next spawn (wrapping around)
         this.sparkIndex = (this.sparkIndex + count) % this.maxSparks;
     }
@@ -374,7 +499,26 @@ export class FXSystem extends System {
         
         this.engine.renderer.compute(this.computeSmokeSpawn);
         
+        // Reset life timer (smoke lasts ~20s)
+        this.smokeLife = 22.0;
+
         this.smokeIndex = (this.smokeIndex + count) % this.maxSmoke;
+    }
+
+    spawnMolotovFire(position) {
+        const count = 500;
+        
+        this.fireSpawnOrigin.value.copy(position);
+        this.fireSpawnStartIndex.value = this.fireIndex;
+        this.fireSpawnCount.value = count;
+        this.spawnTime.value = performance.now();
+        
+        this.engine.renderer.compute(this.computeFireSpawn);
+        
+        // Reset life timer (fire lasts ~7s)
+        this.fireLife = 8.0;
+
+        this.fireIndex = (this.fireIndex + count) % this.maxFire;
     }
 
     update(delta, time) {
@@ -390,10 +534,20 @@ export class FXSystem extends System {
             if (this.flashIntensity.value < 0) this.flashIntensity.value = 0;
         }
         
-        // Dispatch update computes
-        this.engine.renderer.compute(this.computeUpdate);
-        if (this.computeSmokeUpdate) {
+        // Dispatch update computes only if particles are active
+        if (this.sparksLife > 0) {
+            this.engine.renderer.compute(this.computeUpdate);
+            this.sparksLife -= delta;
+        }
+        
+        if (this.smokeLife > 0) {
             this.engine.renderer.compute(this.computeSmokeUpdate);
+            this.smokeLife -= delta;
+        }
+        
+        if (this.fireLife > 0) {
+            this.engine.renderer.compute(this.computeFireUpdate);
+            this.fireLife -= delta;
         }
     }
 }

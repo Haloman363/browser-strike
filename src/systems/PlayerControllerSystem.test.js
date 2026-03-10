@@ -141,4 +141,64 @@ describe('PlayerControllerSystem', () => {
             }), false);
         });
     });
+
+    describe('Reconciliation', () => {
+        it('should remove inputs with seq <= state.lastSeq from inputBuffer', () => {
+            system.inputBuffer = [
+                { seq: 10, dt: 0.016, keys: { KeyW: true } },
+                { seq: 11, dt: 0.016, keys: { KeyW: true } },
+                { seq: 12, dt: 0.016, keys: { KeyW: true } }
+            ];
+
+            const state = { lastSeq: 11, x: 0, y: 1.7, z: 0 };
+            system.reconcile(state);
+
+            expect(system.inputBuffer.length).toBe(1);
+            expect(system.inputBuffer[0].seq).toBe(12);
+        });
+
+        it('should snap and replay when distance > 0.1 units', () => {
+            // Buffer inputs from 3 to 5
+            system.inputBuffer = [
+                { seq: 3, dt: 0.016, keys: { KeyW: true } }, // Predicted forward
+                { seq: 4, dt: 0.016, keys: { KeyW: true } }, // Predicted forward
+                { seq: 5, dt: 0.016, keys: { KeyW: true } }  // Predicted forward
+            ];
+            
+            // Set current predicted position way off (10 units away)
+            mockCamera.position.set(0, 1.7, 10);
+            
+            // Authoritative state says we were at 0, 1.7, 0 at seq 2
+            const authoritativeState = { lastSeq: 2, x: 0, y: 1.7, z: 0 };
+            
+            const applyInputSpy = vi.spyOn(system, 'applyInput');
+            
+            system.reconcile(authoritativeState);
+
+            // Distance was 10, so should have snapped to 0, 1.7, 0
+            // and replayed 3 inputs
+            expect(applyInputSpy).toHaveBeenCalledTimes(3);
+            expect(mockCamera.position.z).toBeLessThan(0); // Should have moved forward from 0
+        });
+
+        it('should NOT replay when distance <= 0.1 units', () => {
+            system.inputBuffer = [
+                { seq: 3, dt: 0.016, keys: { KeyW: true } }
+            ];
+            
+            // Current position is close enough (0.05 units)
+            mockCamera.position.set(0, 1.7, 0.05);
+            
+            // Authoritative state at seq 2
+            const authoritativeState = { lastSeq: 2, x: 0, y: 1.7, z: 0 };
+            
+            const applyInputSpy = vi.spyOn(system, 'applyInput');
+            
+            system.reconcile(authoritativeState);
+
+            // Distance was 0.05 <= 0.1, so no snap/replay should happen
+            expect(applyInputSpy).not.toHaveBeenCalled();
+            expect(mockCamera.position.z).toBe(0.05); // Position should remain same
+        });
+    });
 });

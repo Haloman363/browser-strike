@@ -27,6 +27,7 @@ import { AISystem } from './src/systems/AISystem.js';
 import { ViewSystem } from './src/systems/ViewSystem.js';
 import { BombSystem } from './src/systems/BombSystem.js';
 import { RoundSystem } from './src/systems/RoundSystem.js';
+import { HostageSystem } from './src/systems/HostageSystem.js';
 
 console.log("Script starting...");
 
@@ -155,7 +156,8 @@ let settings = {
     sensitivity: 1.0,
     viewDistance: 800,
     playerName: "Noob",
-    showKillFeed: true
+    showKillFeed: true,
+    highResTextures: true
 };
 
 const saveSettings = () => {
@@ -213,6 +215,7 @@ engine.registerSystem(AISystem);
 engine.registerSystem(ViewSystem);
 engine.registerSystem(BombSystem);
 engine.registerSystem(RoundSystem);
+engine.registerSystem(HostageSystem);
 
 engine.on('player:damage', (data) => {
     takeDamage(data.amount, data.source);
@@ -250,9 +253,47 @@ function setupMenu() {
     const mpLobbyHostControls = document.getElementById('mp-lobby-host-controls');
     const mpMapOptions = document.querySelectorAll('#mp-map-select .option');
     const mpModeOptions = document.querySelectorAll('#mp-mode-select .option');
+    const soloMapOptions = document.querySelectorAll('#solo-map-select .option');
+    const soloModeOptions = document.querySelectorAll('#solo-mode-select .option');
     const teamsToggles = document.querySelectorAll('#mp-teams-toggle .option');
     const teamSelectors = document.querySelectorAll('.team-selector');
     const teamSelectOptions = document.querySelectorAll('#mp-host-team-select .option, #mp-join-team-select .option');
+
+    // Initialize Solo default active states
+    selectedMap = 'training';
+    selectedMode = 'practice';
+    soloMapOptions.forEach(opt => {
+        if (opt.dataset.value === 'training') opt.classList.add('active');
+    });
+    soloModeOptions.forEach(opt => {
+        if (opt.dataset.value === 'practice') opt.classList.add('active');
+    });
+
+    // Solo Settings Listeners
+    soloMapOptions.forEach(opt => {
+        opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
+            soloMapOptions.forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            if (document.querySelector('.tab-btn[data-tab="solo"]').classList.contains('active')) {
+                selectedMap = opt.dataset.value;
+            }
+        });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
+    });
+
+    soloModeOptions.forEach(opt => {
+        opt.addEventListener('click', () => {
+            soundEngine.playUIClick();
+            soloModeOptions.forEach(o => o.classList.remove('active'));
+            opt.classList.add('active');
+            if (document.querySelector('.tab-btn[data-tab="solo"]').classList.contains('active')) {
+                selectedMode = opt.dataset.value;
+                botsEnabled = selectedMode === 'dm';
+            }
+        });
+        opt.addEventListener('mouseenter', () => soundEngine.playUIHover());
+    });
 
     // Teams Toggle
     teamsToggles.forEach(opt => {
@@ -397,12 +438,23 @@ function setupMenu() {
             btn.classList.add('active');
             document.getElementById(`${btn.dataset.tab}-settings`).classList.add('active');
             
-            // Force Training Range for Solo tab
+            // Sync settings for Solo tab
             if (btn.dataset.tab === 'solo') {
-                selectedMap = 'training';
-                selectedMode = 'practice';
-                botsEnabled = false; 
+                const activeMap = document.querySelector('#solo-map-select .option.active');
+                const activeMode = document.querySelector('#solo-mode-select .option.active');
+                selectedMap = activeMap ? activeMap.dataset.value : 'training';
+                selectedMode = activeMode ? activeMode.dataset.value : 'practice';
+                botsEnabled = selectedMode === 'dm'; 
                 teamsEnabled = false;
+            } else {
+                // Restore MP settings
+                const activeMap = document.querySelector('#mp-map-select .option.active');
+                const activeMode = document.querySelector('#mp-mode-select .option.active');
+                const teamsActive = document.querySelector('#mp-teams-toggle .option.active');
+                selectedMap = activeMap ? activeMap.dataset.value : 'dust2';
+                selectedMode = activeMode ? activeMode.dataset.value : 'dm';
+                teamsEnabled = teamsActive ? (teamsActive.dataset.value === 'true') : false;
+                botsEnabled = true;
             }
 
             // Hide start button if multiplayer is selected (unless hosting)
@@ -581,6 +633,12 @@ function setupDataConnection(conn) {
                 updateUI();
                 broadcastScore();
             }
+        } else if (data.type === 'environment-destroyed') {
+            // Find object by ID and destroy it
+            const target = objects.find(obj => obj.userData.id === data.id);
+            if (target) {
+                destroyObject(target, false);
+            }
         }
     });
 
@@ -718,7 +776,9 @@ function updateNetworkPlayer(id, data) {
 
 function removeNetworkPlayer(id) {
     if (networkPlayers[id]) {
-        scene.remove(networkPlayers[id]);
+        const player = networkPlayers[id];
+        scene.remove(player);
+        Utils.deepDispose(player);
         delete networkPlayers[id];
     }
 }
@@ -1002,8 +1062,10 @@ function init() {
     
     // Completely clear scene if it exists
     if (scene) {
-        while(scene.children.length > 0){ 
-            scene.remove(scene.children[0]); 
+        while(scene.children.length > 0){
+            const child = scene.children[0];
+            scene.remove(child);
+            Utils.deepDispose(child);
         }
     } else {
         scene = new THREE.Scene();
@@ -1090,6 +1152,7 @@ function init() {
         const sensVal = document.getElementById('sens-val');
         const distVal = document.getElementById('dist-val');
         const killfeedOpts = document.querySelectorAll('#killfeed-toggle .option');
+        const textureOpts = document.querySelectorAll('#texture-toggle .option');
 
         // Apply saved settings to UI
         fovSlider.value = settings.fov;
@@ -1104,6 +1167,13 @@ function init() {
         killfeedOpts.forEach(opt => {
             opt.classList.toggle('active', opt.dataset.value === String(settings.showKillFeed));
         });
+
+        textureOpts.forEach(opt => {
+            opt.classList.toggle('active', opt.dataset.value === String(settings.highResTextures));
+        });
+
+        // Ensure TextureGenerator knows the setting immediately
+        localStorage.setItem('bs_low_res_textures', settings.highResTextures ? 'false' : 'true');
 
         // Apply settings to game objects
         camera.fov = settings.fov;
@@ -1214,6 +1284,18 @@ function init() {
                 settings.showKillFeed = val;
                 killfeedOpts.forEach(o => o.classList.toggle('active', o === opt));
                 saveSettings();
+            });
+        });
+
+        textureOpts.forEach(opt => {
+            opt.addEventListener('click', () => {
+                soundEngine.playUIClick();
+                const val = opt.dataset.value === 'true';
+                settings.highResTextures = val;
+                textureOpts.forEach(o => o.classList.toggle('active', o === opt));
+                localStorage.setItem('bs_low_res_textures', val ? 'false' : 'true');
+                saveSettings();
+                alert("Texture quality changed. Please restart the game to apply.");
             });
         });
 
@@ -1562,6 +1644,20 @@ function init() {
         // Start the manual animation/render loop
         animate();
 
+        // Listen for environment damage
+        engine.on('environment:hit', (data) => {
+            const obj = data.object;
+            if (obj && obj.userData.isDestructible && !obj.userData.destroyed) {
+                // If we are host, we process damage. If client, we could show local effects
+                if (isHost || selectedMode === 'practice') {
+                    obj.userData.health -= data.damage;
+                    if (obj.userData.health <= 0) {
+                        destroyObject(obj);
+                    }
+                }
+            }
+        });
+
     } catch (error) {
         console.error("Initialization failed:", error);
         const instructions = document.getElementById('instructions');
@@ -1576,9 +1672,16 @@ function takeDamage(amount, killer = "Bot", weapon = "Gun", killerTeam = null) {
     health -= amount;
     if (health < 0) health = 0;
     updateUI();
-    
-    soundEngine.playHit();
 
+    // Movement Tagging (Slow player down when hit)
+    const pc = engine.getSystem('PlayerControllerSystem');
+    if (pc) {
+        // Simple scaling: 20 damage = 40% slow (intensity 0.4)
+        const intensity = Math.min(0.8, amount / 50);
+        pc.applyTagging(intensity);
+    }
+
+    soundEngine.playHit();
     if (damageFlash) {
         damageFlash.classList.add('active');
         setTimeout(() => damageFlash.classList.remove('active'), 100);
@@ -2122,49 +2225,6 @@ function createSmokeCloud(position) {
     }, 15000);
 }
 
-function createFireArea(position, killerName, killerTeam) {
-    const fireGroup = new THREE.Group();
-    fireGroup.position.copy(position);
-    scene.add(fireGroup);
-
-    const geo = new THREE.SphereGeometry(1, 8, 8);
-    
-    for (let i = 0; i < 20; i++) {
-        const mat = new THREE.MeshBasicMaterial({ 
-            color: i % 2 === 0 ? 0xffaa00 : 0xff4400, 
-            transparent: true, 
-            opacity: 0.6 
-        });
-        const p = new THREE.Mesh(geo, mat);
-        const r = 40;
-        p.position.set((Math.random() - 0.5) * r, (Math.random() * 5), (Math.random() - 0.5) * r);
-        p.scale.set(Math.random() * 10 + 10, Math.random() * 5 + 2, Math.random() * 10 + 10);
-        fireGroup.add(p);
-    }
-
-    const startTime = performance.now();
-    const duration = 7000;
-    const interval = setInterval(() => {
-        const elapsed = performance.now() - startTime;
-        if (elapsed > duration) {
-            clearInterval(interval);
-            scene.remove(fireGroup);
-            return;
-        }
-
-        if (camera.position.distanceTo(position) < 40) {
-            takeDamage(4);
-        }
-
-        enemies.forEach(enemy => {
-            if (enemy.userData.alive && enemy.position.distanceTo(position) < 40) {
-                enemy.userData.health -= 6;
-                if (enemy.userData.health <= 0) killEnemy(enemy, killerName);
-            }
-        });
-    }, 500);
-}
-
 function explode(position, killerName = playerName, killerTeam = playerTeam, grenadeKey = 'HE') {
     const data = GRENADES_DATA[grenadeKey] || GRENADES_DATA['HE'];
     console.log(data.name + " detonated");
@@ -2190,7 +2250,29 @@ function explode(position, killerName = playerName, killerTeam = playerTeam, gre
     } else if (grenadeKey === 'MOLOTOV') {
         soundEngine.playShatter();
         soundEngine.playExplosion();
-        createFireArea(position, killerName, killerTeam);
+        // Visual effect now handled by FXSystem via 'grenade:detonated' event
+        
+        // Damage logic (to be refactored into a proper system later)
+        const startTime = performance.now();
+        const duration = 7000;
+        const interval = setInterval(() => {
+            const elapsed = performance.now() - startTime;
+            if (elapsed > duration) {
+                clearInterval(interval);
+                return;
+            }
+
+            if (camera.position.distanceTo(position) < 40) {
+                takeDamage(4);
+            }
+
+            enemies.forEach(enemy => {
+                if (enemy.userData.alive && enemy.position.distanceTo(position) < 40) {
+                    enemy.userData.health -= 6;
+                    if (enemy.userData.health <= 0) killEnemy(enemy, killerName);
+                }
+            });
+        }, 500);
     }
 
     if (grenadeKey === 'HE' || grenadeKey === 'MOLOTOV') {
@@ -2245,6 +2327,59 @@ function explode(position, killerName = playerName, killerTeam = playerTeam, gre
                 }
             }
         });
+
+        // Damage destructible environment objects
+        objects.forEach(obj => {
+            if (obj.userData.isDestructible && !obj.userData.destroyed) {
+                const dist = obj.position.distanceTo(position);
+                if (dist < blastRadius) {
+                    const dmg = (1 - dist / blastRadius) * data.damage;
+                    obj.userData.health -= dmg;
+                    if (obj.userData.health <= 0) {
+                        destroyObject(obj);
+                    }
+                }
+            }
+        });
+    }
+}
+
+function destroyObject(obj, silent = false) {
+    if (obj.userData.destroyed) return;
+    obj.userData.destroyed = true;
+
+    if (!silent) {
+        soundEngine.playImpact(obj.userData.isCrate ? 'wood' : 'concrete');
+        soundEngine.playShatter();
+        
+        // Spawn debris effect via FXSystem
+        // Note: For now we just remove it, but we could emit an event for particles
+        console.log(`Object destroyed: ${obj.userData.id}`);
+    }
+
+    // Remove from scene and objects list
+    scene.remove(obj);
+    Utils.deepDispose(obj);
+    const index = objects.indexOf(obj);
+    if (index > -1) {
+        objects.splice(index, 1);
+    }
+
+    // Host notifies clients
+    if (isHost) {
+        broadcastDestruction(obj.userData.id);
+    }
+}
+
+function broadcastDestruction(id) {
+    if (connections.length > 0) {
+        const data = {
+            type: 'environment-destroyed',
+            id: id
+        };
+        connections.forEach(conn => {
+            if (conn.open) conn.send(data);
+        });
     }
 }
 
@@ -2263,27 +2398,27 @@ function broadcastExplosion(position, type) {
 }
 
 function killEnemy(enemy, killerName = playerName, weapon = currentWeapon, killerTeam = playerTeam) {
+    if (!enemy.userData.alive) return;
     enemy.userData.alive = false;
-    
+
     // Kill Feed Entry
     addKillFeedEntry(killerName, enemy.userData.name || "Bot", weapon, killerTeam);
 
     if (killerName === playerName) {
         playerKills++;
-        
-        // Award Cash
-        let reward = 300;
-        if (weapon === 'knife') reward = 1500;
-        playerCash += reward;
-        
-        updateUI();
-        
-        // Multiplayer: Broadcast the kill if we are host or just tell others
+
+        // Notify systems (RoundSystem will award cash)
+        engine.emit('entity:killed', { 
+            killer: 'player', 
+            victim: enemy, 
+            weaponKey: GameState.get('currentWeaponKey') 
+        });
+
+        // Multiplayer: Broadcast the kill
         if (connections.length > 0) {
             broadcastKill(killerName, enemy.userData.name || "Bot", weapon, killerTeam);
         }
     }
-
     // --- DISABLE COLLISION FOR DEAD BODY ---
     enemy.children.forEach(child => {
         if (child instanceof THREE.Group) { // Humanoid group
@@ -3005,15 +3140,19 @@ function animate() {
 
         // Apply temporary camera recoil for render only
         const originalRotationX = camera.rotation.x;
-        if (cameraRecoilX > 0.001) {
-            cameraRecoilX = THREE.MathUtils.lerp(cameraRecoilX, 0, 0.15);
-            camera.rotation.x += cameraRecoilX;
+        const originalRotationY = camera.rotation.y;
+        
+        const weaponSystem = engine.getSystem('WeaponSystem');
+        if (weaponSystem) {
+            camera.rotation.x -= weaponSystem.cameraRecoilX;
+            camera.rotation.y += weaponSystem.cameraRecoilY;
         }
 
         renderer.render(scene, camera);
 
-        // Restore rotation so it doesn't drift permanently
+        // Restore rotation so it doesn't drift permanently (mouse look handles the 'real' rotation)
         camera.rotation.x = originalRotationX;
+        camera.rotation.y = originalRotationY;
     } else {
         // Menu or unlocked: just render normally
         renderer.render(scene, camera);

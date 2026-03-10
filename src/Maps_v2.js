@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { COLORS } from './Constants_v2.js';
-import { createWall, createCrate, createPillar, createGunModel, createGrenadeModel, createHumanoidModel, createBombSiteMarker } from './Factory.js';
+import { createWall, createCrate, createPillar, createGunModel, createGrenadeModel, createHumanoidModel, createBombSiteMarker, createLadder, createStairs, createArch, createPipe, createLamp, createHostageModel } from './Factory.js';
 import { TextureGenerator } from './TextureGenerator.js';
 
 export const Maps = {
@@ -47,8 +47,9 @@ export const Maps = {
             createPillar(20, 100, 200, 0, -200, scene, objects);
 
             // --- CT SPAWN AREA (South/Positive Z) ---
-            createWall(400, 40, 200, 0, 20, 800, 0xaaaaaa, scene, objects); // CT Ramp
+            createStairs(400, 40, 200, 8, 0, 20, 800, 0, scene, objects); // CT Ramp
             createWall(600, 80, 20, 0, 40, 950, COLORS.WALL_DEFAULT, scene, objects); // Back Wall CT
+            createLamp(0, 80, 940, 0xfff0dd, scene);
 
             // --- B SITE (West/Negative X) ---
             // B Platform
@@ -57,7 +58,8 @@ export const Maps = {
             createWall(20, 80, 600, -900, 40, -800, COLORS.WALL_DEFAULT, scene, objects);
             createWall(300, 80, 20, -750, 40, -1100, COLORS.WALL_DEFAULT, scene, objects);
             // B Tunnels Exit
-            createWall(20, 80, 200, -500, 40, -700, COLORS.WALL_DEFAULT, scene, objects);
+            createArch(150, 100, 20, 200, -500, 50, -700, Math.PI/2, scene, objects);
+            
             // Strategic B Crates
             createCrate(40, -700, 30, -800, scene, objects); // Center Crate B
             createCrate(30, -850, 25, -950, scene, objects);
@@ -65,25 +67,28 @@ export const Maps = {
             createPillar(15, 60, -600, 0, -950, scene, objects);
 
             // --- MID AREA ---
-            // Mid Doors (Double Doors)
-            createWall(80, 100, 10, -40, 50, -100, 0x554433, scene, objects); // Left Door
-            createWall(80, 100, 10, 40, 50, -100, 0x554433, scene, objects);  // Right Door
+            // Mid Doors Area (Double Doors)
+            createArch(160, 120, 20, 40, 0, 60, -100, 0, scene, objects);
+            
             // Xbox
             createCrate(45, 0, 22.5, -250, scene, objects);
             // Catwalk
             createWall(200, 10, 600, 200, 40, -400, 0x999999, scene, objects);
             createWall(20, 60, 600, 300, 70, -400, COLORS.WALL_DEFAULT, scene, objects); // Catwalk Wall
+            createPipe(5, 600, 290, 60, -400, Math.PI/2, 0, 0, scene, objects); // Pipe on wall
             
             // --- A SITE (East/Positive X) ---
             // A Platform
             createWall(400, 30, 300, 800, 15, -800, 0xaaaaaa, scene, objects);
             // A Short (stairs area)
-            createWall(200, 20, 100, 600, 10, -500, 0x999999, scene, objects);
+            createStairs(200, 40, 150, 10, 600, 20, -500, 0, scene, objects);
+            
             // A Long
             createWall(20, 80, 1000, 1100, 40, 0, COLORS.WALL_DEFAULT, scene, objects);
             createWall(400, 80, 20, 900, 40, 500, COLORS.WALL_DEFAULT, scene, objects); // Long Corner
             // Pit
             createWall(300, 5, 300, 900, 2.5, 800, 0x665544, scene, objects);
+            createLamp(1080, 80, 0, 0xfff0dd, scene);
             
             // Strategic A Crates
             createCrate(40, 800, 55, -800, scene, objects);
@@ -92,13 +97,13 @@ export const Maps = {
 
             // --- T SPAWN AREA (North/Negative Z) ---
             createWall(600, 80, 20, 0, 40, -1800, COLORS.WALL_DEFAULT, scene, objects); // T Spawn Back Wall
-            createWall(20, 80, 400, -300, 40, -1600, COLORS.WALL_DEFAULT, scene, objects); // T Ramp Side
-            createWall(20, 80, 400, 300, 40, -1600, COLORS.WALL_DEFAULT, scene, objects);  // T Ramp Side
+            createStairs(200, 40, 400, 8, -300, 20, -1600, 0, scene, objects); // T Ramp L
+            createStairs(200, 40, 400, 8, 300, 20, -1600, 0, scene, objects);  // T Ramp R
 
             // --- TUNNELS ---
             // Upper Tunnels
-            createWall(400, 100, 20, -600, 50, -400, 0x333333, scene, objects); // Tunnel Wall
-            createWall(20, 100, 400, -800, 50, -600, 0x333333, scene, objects); // Tunnel Wall
+            createArch(150, 120, 20, 400, -600, 60, -400, 0, scene, objects);
+            createArch(150, 120, 20, 400, -800, 60, -600, Math.PI/2, scene, objects);
             // Lower Tunnels
             createWall(200, 100, 20, -300, 50, -250, 0x333333, scene, objects);
 
@@ -128,6 +133,188 @@ export const Maps = {
                     enemy.userData.targetPos = new THREE.Vector3(targetX, 0, targetZ);
                 }
             }
+
+            // --- LADDERS ---
+            // Ladder to Catwalk
+            createLadder(20, 100, 300, 50, -400, scene, objects);
+            // Ladder near B Site
+            createLadder(20, 80, -500, 40, -700, scene, objects);
+        }
+    },
+    'mirage': {
+        spawnPoint: { x: 0, y: 18, z: 800 }, // CT Spawn area
+        build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer, weaponsData, grenadesData) => {
+            const bombsites = [];
+            if (window.engine && window.engine.context) window.engine.context.bombsites = bombsites;
+
+            // A Site Marker
+            const aMarker = createBombSiteMarker('A');
+            aMarker.position.set(600, 15, 200);
+            scene.add(aMarker);
+            objects.push(aMarker);
+            bombsites.push(aMarker);
+
+            // B Site Marker
+            const bMarker = createBombSiteMarker('B');
+            bMarker.position.set(-600, 15, 200);
+            scene.add(bMarker);
+            objects.push(bMarker);
+            bombsites.push(bMarker);
+
+            // Floor (Concrete/Sand mix)
+            const floorGeometry = new THREE.PlaneGeometry(5000, 5000);
+            floorGeometry.rotateX(-Math.PI / 2);
+            const concreteTex = TextureGenerator.createConcreteTexture();
+            concreteTex.repeat.set(100, 100);
+            const floorMaterial = new THREE.MeshPhongMaterial({ map: concreteTex });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.receiveShadow = true;
+            floor.userData.isGround = true;
+            scene.add(floor);
+            objects.push(floor);
+
+            // --- MID AREA ---
+            // Top Mid
+            createWall(400, 10, 400, 0, 5, -400, 0xaaaaaa, scene, objects);
+            // Mid Boxes
+            createCrate(40, -50, 20, -200, scene, objects);
+            createCrate(40, -50, 60, -200, scene, objects);
+            // Window (CT Side)
+            createWall(200, 100, 20, 0, 100, 200, 0x888888, scene, objects); // Window Frame
+            createWall(200, 50, 200, 0, 25, 300, 0x999999, scene, objects); // Sniper Nest Floor
+            // Connector
+            createWall(100, 100, 300, 200, 50, 0, COLORS.WALL_DEFAULT, scene, objects);
+            createStairs(100, 50, 150, 8, 200, 25, 150, 0, scene, objects); // Stairs to A
+
+            // --- A SITE ---
+            // Ticket Booth
+            createWall(80, 80, 80, 600, 40, 400, 0x555555, scene, objects);
+            // A Stairs
+            createStairs(120, 60, 200, 10, 400, 30, 100, 0, scene, objects);
+            // Palace Entrance
+            createWall(200, 150, 20, 800, 75, -100, COLORS.WALL_DEFAULT, scene, objects);
+            // Tetris
+            createCrate(40, 500, 20, 0, scene, objects);
+            createCrate(40, 540, 20, 0, scene, objects);
+            createCrate(40, 520, 60, 0, scene, objects);
+
+            // --- B SITE ---
+            // Apartments (Apps)
+            createWall(400, 100, 150, -600, 100, -200, 0x777777, scene, objects);
+            createStairs(100, 100, 250, 12, -600, 50, -400, 0, scene, objects); // Kitchen stairs
+            // Van
+            createWall(120, 60, 60, -450, 30, 200, 0x224488, scene, objects);
+            // Bench
+            createWall(100, 20, 40, -750, 10, 100, 0x444444, scene, objects);
+
+            // --- SPAWNS ---
+            // CT Spawn
+            createWall(600, 10, 400, 0, 5, 800, 0x999999, scene, objects);
+            // T Spawn
+            createWall(600, 10, 400, 0, 5, -1200, 0x999999, scene, objects);
+
+            // --- HOSTAGES (Mirage) ---
+            const hostageSystem = window.engine.getSystem('HostageSystem');
+            if (hostageSystem) {
+                hostageSystem.spawnHostage(800, 0, -100); // Palace area
+                hostageSystem.addRescueZone(new THREE.Vector3(0, 0, 800), 200); // CT Spawn
+            }
+
+            // Enemies
+            if (botsEnabled && !peer) {
+                for (let i = 0; i < 20; i++) {
+                    const isT = i < 10;
+                    const team = isT ? 'B' : 'A';
+                    const spawnX = Math.random() * 400 - 200;
+                    const spawnZ = isT ? -1100 + Math.random() * 200 : 700 + Math.random() * 200;
+                    
+                    const enemy = createEnemyFn(spawnX, 0, spawnZ, team);
+                    const targetX = Math.random() * 1000 - 500;
+                    const targetZ = isT ? 200 : -200;
+                    enemy.userData.targetPos = new THREE.Vector3(targetX, 0, targetZ);
+                }
+            }
+        }
+    },
+    'inferno': {
+        spawnPoint: { x: 0, y: 18, z: 1000 }, // CT Spawn area
+        build: (scene, objects, enemies, droppedGuns, createEnemyFn, botsEnabled, teamsEnabled, peer, weaponsData, grenadesData) => {
+            const bombsites = [];
+            if (window.engine && window.engine.context) window.engine.context.bombsites = bombsites;
+
+            // A Site Marker
+            const aMarker = createBombSiteMarker('A');
+            aMarker.position.set(400, 15, -400);
+            scene.add(aMarker);
+            objects.push(aMarker);
+            bombsites.push(aMarker);
+
+            // B Site Marker
+            const bMarker = createBombSiteMarker('B');
+            bMarker.position.set(-600, 15, -600);
+            scene.add(bMarker);
+            objects.push(bMarker);
+            bombsites.push(bMarker);
+
+            // Floor (Stone/Cobblestone)
+            const floorGeometry = new THREE.PlaneGeometry(5000, 5000);
+            floorGeometry.rotateX(-Math.PI / 2);
+            const stoneTex = TextureGenerator.createConcreteTexture();
+            stoneTex.repeat.set(150, 150);
+            const floorMaterial = new THREE.MeshPhongMaterial({ map: stoneTex });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.receiveShadow = true;
+            floor.userData.isGround = true;
+            scene.add(floor);
+            objects.push(floor);
+
+            // --- B SITE & BANANA ---
+            // Banana Path
+            createWall(150, 100, 600, -500, 50, 0, COLORS.WALL_DEFAULT, scene, objects); // Banana Left Wall
+            createWall(150, 100, 600, -300, 50, 0, COLORS.WALL_DEFAULT, scene, objects); // Banana Right Wall
+            // B Site Fountain
+            createPillar(40, 30, -600, 0, -600, scene, objects);
+            // Sandbags
+            createCrate(30, -450, 15, -200, scene, objects);
+            createCrate(30, -450, 15, -235, scene, objects);
+
+            // --- MID AREA ---
+            // Main Mid
+            createWall(200, 100, 800, 0, 50, 0, COLORS.WALL_DEFAULT, scene, objects);
+            // The Arch
+            createArch(150, 120, 20, 60, 150, 60, -200, 0, scene, objects);
+            // Library
+            createWall(300, 100, 200, 300, 50, -100, 0x8b4513, scene, objects);
+
+            // --- A SITE ---
+            // Pit
+            createWall(250, 10, 250, 600, 5, -200, 0x666666, scene, objects);
+            // Balcony
+            createWall(150, 10, 150, 400, 80, -400, 0xaaaaaa, scene, objects);
+            createStairs(100, 80, 200, 10, 400, 40, -250, 0, scene, objects); // Stairs to Balcony
+            // Graveyard Wall
+            createWall(20, 100, 300, 750, 50, -500, COLORS.WALL_DEFAULT, scene, objects);
+
+            // --- SPAWNS ---
+            // CT Spawn
+            createWall(600, 10, 400, 0, 5, 1000, 0x999999, scene, objects);
+            // T Spawn
+            createWall(600, 10, 400, 0, 5, -1500, 0x999999, scene, objects);
+
+            // Enemies
+            if (botsEnabled && !peer) {
+                for (let i = 0; i < 20; i++) {
+                    const isT = i < 10;
+                    const team = isT ? 'B' : 'A';
+                    const spawnX = Math.random() * 400 - 200;
+                    const spawnZ = isT ? -1400 + Math.random() * 200 : 900 + Math.random() * 200;
+                    
+                    const enemy = createEnemyFn(spawnX, 0, spawnZ, team);
+                    const targetX = Math.random() * 800 - 400;
+                    const targetZ = isT ? 400 : -400;
+                    enemy.userData.targetPos = new THREE.Vector3(targetX, 0, targetZ);
+                }
+            }
         }
     },
     'training': {
@@ -142,8 +329,6 @@ export const Maps = {
             
             // Revert floor to use concrete texture
             const floorWall = createWall(floorWidth, 10, floorDepth, 0, -5, 250, 0xaaaaaa, scene, objects);
-            // Apply concrete texture if possible (createWall usually clones textures based on color)
-            // But let's ensure it looks right
             
             // Perimeter Walls
             createWall(floorWidth, 100, 20, 0, 50, -350, COLORS.WALL_DEFAULT, scene, objects); // Back Wall
@@ -152,10 +337,8 @@ export const Maps = {
             createWall(20, 100, floorDepth, 500, 50, 250, COLORS.WALL_DEFAULT, scene, objects);  // Right Wall
 
             // --- SECTION 1: CENTRAL HUB (EQUIPMENT) ---
-            // Equipment pad
             createWall(400, 5, 200, 0, 2.5, -150, 0x554433, scene, objects);
             
-            // Group weapons by type
             const weaponsByType = {
                 'pistol': [],
                 'smg': [],
@@ -174,21 +357,20 @@ export const Maps = {
 
             const typeOrder = ['pistol', 'smg', 'rifle', 'sniper', 'shotgun', 'heavy'];
             let mountIdx = 0;
-            const backWallZ = -340; // Mount guns on the back wall
+            const backWallZ = -340; 
 
             typeOrder.forEach((type, typeIdx) => {
                 const keys = weaponsByType[type];
                 keys.forEach((key, keyIdx) => {
-                    const x = (mountIdx - 9.5) * 40; // Spread across the wall
-                    const y = 30; // Height on the wall
+                    const x = (mountIdx - 9.5) * 40; 
+                    const y = 30; 
                     
-                    // Small wall mount shelf
                     createWall(30, 2, 10, x, y - 5, backWallZ + 10, 0x444444, scene, objects);
                     
                     const pickup = createGunModel(key, false);
                     pickup.scale.set(15, 15, 15);
                     pickup.position.set(x, y, backWallZ + 15);
-                    pickup.rotation.set(0, Math.PI / 2, 0); // Flat against wall
+                    pickup.rotation.set(0, Math.PI / 2, 0); 
                     pickup.userData.isPickup = true;
                     pickup.userData.weaponKey = key;
                     pickup.userData.ammoAmount = weaponsData[key].magSize * 5;
@@ -197,11 +379,9 @@ export const Maps = {
                     
                     mountIdx++;
                 });
-                // Add a small gap between types
                 mountIdx += 0.5;
             });
 
-            // Grenade Station (also on wall or nearby)
             const grenadeKeys = Object.keys(grenadesData);
             grenadeKeys.forEach((key, idx) => {
                 const x = (idx - (grenadeKeys.length / 2)) * 40 + 350;
@@ -218,8 +398,6 @@ export const Maps = {
                 droppedGuns.push(pickup);
             });
 
-            // --- SECTION 2: SHOOTING RANGE (NORTH) ---
-            // Wall removed from here
             const laneWidth = 80;
             const numLanes = 5;
             for(let i=0; i<=numLanes; i++) {
@@ -246,7 +424,6 @@ export const Maps = {
                 });
             }
 
-            // --- SECTION 3: KILL HOUSE (EAST) ---
             const khX = 350;
             const khZ = 400;
             createWall(250, 5, 400, khX, 2.5, khZ, 0x777777, scene, objects);
@@ -258,7 +435,6 @@ export const Maps = {
             createEnemyFn(khX + 80, 0, khZ - 150, 'A', { isStationary: true });
             createEnemyFn(khX - 80, 0, khZ + 150, 'A', { isStationary: true });
 
-            // --- SECTION 4: PARKOUR (WEST) ---
             const pkX = -350;
             const pkZ = 400;
             createWall(200, 10, 80, pkX, 5, pkZ - 150, 0x444444, scene, objects);
@@ -278,7 +454,10 @@ export const Maps = {
             reward.userData.ammoAmount = 30;
             scene.add(reward);
             droppedGuns.push(reward);
+
+            // --- LADDERS ---
+            createLadder(20, 100, 100, 50, -300, scene, objects);
+            createLadder(20, 100, -250, 50, 400, scene, objects);
         }
     }
-
 };

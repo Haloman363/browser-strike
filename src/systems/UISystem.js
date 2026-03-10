@@ -193,8 +193,9 @@ export class UISystem extends System {
         subMenu.innerHTML = '';
         subMenu.style.display = 'flex';
 
-        // Position sub-menu near the mouse or center? 
-        // For now, center overlay is fine since it's already in the middle of SVG.
+        const currentCash = GameState.get('cash');
+        const utilityCount = GameState.get('utilityCount') || { HE: 0, FLASH: 0, SMOKE: 0, MOLOTOV: 0 };
+        const totalUtility = Object.values(utilityCount).reduce((a, b) => a + b, 0);
         
         config.weapons.forEach((weaponKey, i) => {
             const weapon = WEAPONS_DATA[weaponKey] || GRENADES_DATA[weaponKey] || { name: weaponKey, price: 0 };
@@ -204,16 +205,26 @@ export class UISystem extends System {
             if (weaponKey === 'VESTHELM') { weapon.name = 'Kevlar + Helmet'; weapon.price = 1000; }
             if (weaponKey === 'DEFUSE') { weapon.name = 'Defuse Kit'; weapon.price = 400; }
 
+            // Check Limits
+            let limitReached = false;
+            if (GRENADES_DATA[weaponKey]) {
+                if (totalUtility >= ECONOMY_SETTINGS.UTILITY_LIMIT_TOTAL) limitReached = true;
+                if (weaponKey === 'FLASH' && utilityCount.FLASH >= ECONOMY_SETTINGS.UTILITY_LIMIT_FLASH) limitReached = true;
+                if (weaponKey !== 'FLASH' && utilityCount[weaponKey] >= 1) limitReached = true;
+            }
+
+            const canAfford = currentCash >= weapon.price;
+            const isAvailable = !limitReached;
+
             const item = document.createElement('div');
-            const canAfford = GameState.get('cash') >= weapon.price;
-            item.className = `buy-item ${canAfford ? '' : 'disabled'}`;
+            item.className = `buy-item ${canAfford && isAvailable ? '' : 'disabled'}`;
             item.innerHTML = `
                 <span class="item-key">${i + 1}</span>
-                <span class="item-name">${weapon.name}</span>
+                <span class="item-name">${weapon.name}${limitReached ? ' (MAX)' : ''}</span>
                 <span class="item-price">$${weapon.price}</span>
             `;
             
-            if (canAfford) {
+            if (canAfford && isAvailable) {
                 item.addEventListener('click', () => this.purchaseItem(weaponKey));
             }
             subMenu.appendChild(item);
@@ -253,15 +264,18 @@ export class UISystem extends System {
         if (weaponKey === 'DEFUSE') { weapon.price = 400; }
 
         if (GameState.get('cash') >= weapon.price) {
-            GameState.set('cash', GameState.get('cash') - weapon.price);
-            
             const weaponSystem = this.engine.getSystem('WeaponSystem');
             if (weaponSystem) {
-                weaponSystem.giveWeapon(weaponKey);
+                // weaponSystem.giveWeapon now returns boolean for success
+                const success = weaponSystem.giveWeapon(weaponKey);
+                if (success) {
+                    GameState.set('cash', GameState.get('cash') - weapon.price);
+                    console.log(`Purchased ${weaponKey}`);
+                    this.closeBuyMenu();
+                } else {
+                    console.log(`Limit reached for ${weaponKey}`);
+                }
             }
-            
-            console.log(`Purchased ${weaponKey}`);
-            this.closeBuyMenu();
         } else {
             console.log("Insufficient funds");
         }

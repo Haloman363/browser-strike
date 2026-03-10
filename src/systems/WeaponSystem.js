@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { System } from '../core/System.js';
 import { GameState } from '../GameState.js';
-import { WEAPONS_DATA, GRENADES_DATA } from '../Constants_v2.js';
+import { WEAPONS_DATA, GRENADES_DATA, PHYSICS } from '../Constants_v2.js';
 import { WEAPON_RECIPES } from '../WeaponRecipes.js';
 import { Utils } from '../Utils.js';
 import { createBloodSplatter, createImpactEffect } from '../Weapon.js';
@@ -22,34 +22,68 @@ export class WeaponSystem extends System {
     }
 
     giveWeapon(weaponKey) {
-        const weapon = WEAPONS_DATA[weaponKey] || GRENADES_DATA[weaponKey];
+        const weaponData = WEAPONS_DATA[weaponKey] || GRENADES_DATA[weaponKey];
         
-        if (!weapon) {
+        if (!weaponData) {
             // Handle Gear
             if (weaponKey === 'VEST') {
                 GameState.set({ health: 100 });
                 console.log("Gave Kevlar Vest");
-                return;
+                return true;
             }
             if (weaponKey === 'VESTHELM') {
                 GameState.set({ health: 100 });
                 console.log("Gave Kevlar + Helmet");
-                return;
+                return true;
             }
             if (weaponKey === 'DEFUSE') {
                 GameState.set({ hasDefuseKit: true });
                 console.log("Gave Defuse Kit");
-                return;
+                return true;
             }
-            return;
+            return false;
         }
 
-        // Determine slot (1: Knife, 2: Primary, 3: Secondary/Pistol, 4: Grenades, 5: Bomb)
-        let slot = 2; // Default to Primary
-        if (weapon.type === 'pistol') slot = 3;
-        if (weapon.type === 'knife') slot = 1;
-        if (GRENADES_DATA[weaponKey]) slot = 4;
-        if (weapon.type === 'utility') slot = 5;
+        // --- UTILITY LIMITS ---
+        if (GRENADES_DATA[weaponKey]) {
+            const utilityCount = { ...GameState.get('utilityCount') };
+            const totalUtility = Object.values(utilityCount).reduce((a, b) => a + b, 0);
+            
+            // Total limit (4)
+            if (totalUtility >= ECONOMY_SETTINGS.UTILITY_LIMIT_TOTAL) {
+                console.warn("Max utility reached (4)");
+                return false;
+            }
+
+            // Flashbang limit (2)
+            if (weaponKey === 'FLASH' && utilityCount.FLASH >= ECONOMY_SETTINGS.UTILITY_LIMIT_FLASH) {
+                console.warn("Max flashbangs reached (2)");
+                return false;
+            }
+
+            // Individual limit (1 for others)
+            if (weaponKey !== 'FLASH' && utilityCount[weaponKey] >= 1) {
+                console.warn(`Already carrying ${weaponKey}`);
+                return false;
+            }
+
+            utilityCount[weaponKey]++;
+            GameState.set({ utilityCount });
+        }
+
+        // Determine slot
+        let slot = weaponData.slot; 
+        if (weaponData.type === 'rifle' || weaponData.type === 'heavy' || weaponData.type === 'sniper' || weaponData.type === 'smg' || weaponData.type === 'shotgun') {
+            slot = 2; // Primary
+        } else if (weaponData.type === 'pistol') {
+            slot = 3; // Secondary
+        } else if (weaponData.type === 'knife') {
+            slot = 1;
+        } else if (GRENADES_DATA[weaponKey]) {
+            slot = 4;
+        } else if (weaponData.type === 'utility') {
+            slot = 5;
+        }
 
         // Update GameState
         GameState.setInventorySlot(slot, weaponKey);
@@ -60,6 +94,10 @@ export class WeaponSystem extends System {
         }
         
         console.log(`WeaponSystem: Given ${weaponKey} to slot ${slot}`);
+
+        // Notify main to update models if necessary
+        this.engine.emit('weapon:purchased', { slot, weaponKey, weaponData });
+        return true;
     }
 
     init() {
@@ -91,9 +129,9 @@ export class WeaponSystem extends System {
     }
 
     update(delta, time) {
-        // Handle recoil recovery
-        const recoverySpeed = 5.0; // Decay factor
-        const decay = Math.pow(0.1, delta * recoverySpeed);
+        // Handle recoil recovery with framerate-independent smoothing
+        const recoverySpeed = 10.0; 
+        const decay = Math.exp(-recoverySpeed * delta);
         
         this.recoil *= decay;
         this.cameraRecoilX *= decay;
@@ -127,8 +165,8 @@ export class WeaponSystem extends System {
         const currentSlot = GameState.get('currentSlot');
         const weaponKey = GameState.get('currentWeaponKey');
         
-        // Cannot drop knife (slot 3)
-        if (currentSlot === 3) return;
+        // Cannot drop knife (slot 1)
+        if (currentSlot === 1) return;
         
         const inventory = GameState.get('inventory');
         if (!inventory[currentSlot]) return;
@@ -154,35 +192,8 @@ export class WeaponSystem extends System {
         newInventory[currentSlot] = null;
         GameState.set({ inventory: newInventory });
 
-        // Switch to knife (slot 3) automatically
-        this.engine.emit('input:keydown', 'Digit1'); // 1 is Knife
-    }
-
-    giveWeapon(weaponKey) {
-        const weaponData = WEAPONS_DATA[weaponKey];
-        if (!weaponData) return;
-
-        // Determine slot
-        let slot = weaponData.slot; // 2 for Secondary, 1 for Primary (if we follow CS slot indices)
-        // Adjust slot mapping: 1 (Primary), 2 (Secondary), 3 (Knife)
-        // Constants_v2 says: Glock(slot 3), AK47(slot 2). Wait. 
-        // My GameState init used: 1 (Primary), 2 (Secondary), 3 (Knife).
-        // Let's re-map WEAPONS_DATA slot to our inventory slot.
-        if (weaponData.type === 'rifle' || weaponData.type === 'heavy' || weaponData.type === 'sniper' || weaponData.type === 'smg' || weaponData.type === 'shotgun') {
-            slot = 1;
-        } else if (weaponData.type === 'pistol') {
-            slot = 2;
-        } else if (weaponData.type === 'utility') {
-            slot = 5;
-        }
-
-        // Add to GameState
-        GameState.setInventorySlot(slot, weaponKey);
-        
-        console.log(`Weapon given: ${weaponKey} to slot ${slot}`);
-        
-        // Notify main to update models
-        this.engine.emit('weapon:purchased', { slot, weaponKey, weaponData });
+        // Switch to knife (slot 1) automatically
+        this.engine.emit('input:keydown', 'Digit1');
     }
 
     calculateSpread() {
@@ -196,16 +207,22 @@ export class WeaponSystem extends System {
         const pc = this.engine.getSystem('PlayerControllerSystem');
         let velocityLength = 0;
         let isCrouching = false;
+        let isOnLadder = false;
         
         if (pc) {
             velocityLength = pc.velocity.length();
             isCrouching = pc.isCrouching;
+            isOnLadder = pc.isOnLadder;
         }
         
         let totalSpread = baseSpread + (velocityLength * moveInaccuracy);
         
         if (isCrouching) {
             totalSpread *= 0.5;
+        }
+
+        if (isOnLadder) {
+            totalSpread *= PHYSICS.LADDER_SPREAD_MULTIPLIER;
         }
         
         return totalSpread;
@@ -336,6 +353,17 @@ export class WeaponSystem extends System {
             if (hitPart.userData.isGround) impactColor = 0xd2b48c;
             
             createImpactEffect(point, scene, impactParticles, impactColor);
+            
+            // Handle destructible environment objects
+            if (hitPart.userData.isDestructible) {
+                this.engine.emit('environment:hit', { 
+                    id: hitPart.userData.id, 
+                    damage: weaponData.damage, 
+                    point: point,
+                    object: hitPart
+                });
+            }
+
             if (this.engine.context.soundEngine) {
                 let surface = 'concrete';
                 if (hitPart.userData.isCrate) surface = 'wood';
