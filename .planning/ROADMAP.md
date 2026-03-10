@@ -25,7 +25,7 @@
 | 4. WebGPU Foundation | 2/2 | Complete   | 2026-03-08 |
 | 5. Visual Fidelity | 1/1 | Complete   | 2026-03-08 |
 | 6. FX Overhaul | 2/2 | Complete   | 2026-03-08 |
-| 7. Gunplay Refinement | 0/0 | Not started | - |
+| 7. Gunplay Refinement | 1/2 | In Progress|  |
 | 8. Game Mode | 0/0 | Not started | - |
 | 9. Strategic Layer | 0/0 | Not started | - |
 | 10. Tactical Utility | 0/0 | Not started | - |
@@ -109,7 +109,9 @@
 **Success Criteria**:
   1. Firing weapons results in consistent, learnable recoil patterns.
   2. Movement (running/jumping) significantly increases crosshair size and shot spread.
-**Plans**: TBD
+**Plans**:
+- [ ] 07-01-PLAN.md — Foundation: Gunplay Math & Data (Wave 1)
+- [ ] 07-02-PLAN.md — Implementation: Advanced Weapon Mechanics (Wave 2)
 
 ### Phase 8: Game Mode
 **Goal**: Build the core competitive bomb defusal loop.

@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 7: Gunplay Refinement.
+**Current Focus**: Executing Phase 7: Gunplay Refinement.
 
 ## Current Position
 **Phase**: 07 - Gunplay Refinement
-**Plan**: 07-01 - Foundation & Data
+**Plan**: 07-02 - System Refactor & UI
 **Status**: In Progress
-**Progress**: [▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░] 50%
+**Progress**: [▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░] 55%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Deterministic recoil patterns and Gaussian spread for competitive feel.
+- **New Decision**: Use Box-Muller transform for Gaussian spread. Coordinate-based recoil patterns.
 
 ### Learnings
 - Box-Muller transform is efficient for GPU-side or CPU-side Gaussian randomness.
-- Recoil coordinates should be stored as normalized offsets to be applied as camera punch and trajectory deviation.
+- Recoil patterns should be stored as normalized offsets to be applied as camera punch and trajectory deviation.
 
 ## Session Continuity
-**Current Session**: Resumed work on Phase 7. Plans 07-01 and 07-02 detected.
+**Current Session**: Phase 7: Wave 1 complete. Wave 2 started.
 **Next Steps**:
-1. Execute Phase 7 Plan 01 (Math & Data).
-2. Execute Phase 7 Plan 02 (System Refactor & UI).
+1. Refactor `WeaponSystem` fire loop to use patterns and move-inaccuracy.
+2. Implement dynamic CSS-based crosshair.
 
 ---
 *Last updated: 2026-03-09*
