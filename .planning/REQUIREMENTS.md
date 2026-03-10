@@ -15,7 +15,7 @@
 - [x] **WGPU-04**: WebGPU-optimized particle systems (Muzzle flash, Smokes)
 
 ### Gameplay Mechanics (GAME)
-- [ ] **GAME-01**: Competitive Bomb Defusal Loop (Round timers, site logic, win conditions)
+- [x] **GAME-01**: Competitive Bomb Defusal Loop (Round timers, site logic, win conditions)
 - [ ] **GAME-02**: Buy Menu & Tactical Economy System
 - [x] **GAME-03**: Deterministic Recoil Patterns (Learnable spray patterns)
 - [x] **GAME-04**: Movement Inaccuracy (Inaccuracy while running/jumping)
@@ -56,7 +56,7 @@
 | WGPU-02 | Phase 5 | Complete |
 | WGPU-03 | Phase 5 | Complete |
 | WGPU-04 | Phase 6 | Complete |
-| GAME-01 | Phase 8 | Pending |
+| GAME-01 | Phase 8 | Complete |
 | GAME-02 | Phase 9 | Pending |
 | GAME-03 | Phase 7 | Complete |
 | GAME-04 | Phase 7 | Complete |
