@@ -1,12 +1,13 @@
 ---
 area: gameplay
 slug: counter-strike-mechanics
-status: todo
+status: in-progress
 priority: high
 created: 2026-03-10
+phase: 14
 ---
 
-# Counter-Strike Game Modes and Mechanics
+# Counter-Strike Game Modes and Mechanics (Phase 14)
 
 Implement core Counter-Strike gameplay loops and mechanics to achieve a more authentic tactical experience.
 

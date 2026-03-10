@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 13 COMPLETE.
+**Current Focus**: Phase 14 - Gameplay Mechanics (Economy & Rule Systems).
 
 ## Current Position
-**Phase**: 13 - Map Expansion
-**Plan**: 13-03 - Global Map Optimization & Prop Dressing
-**Status**: COMPLETE
-**Progress**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%
+**Phase**: 14 - Gameplay Mechanics
+**Plan**: 14-01 - Advanced Economy & Buy System
+**Status**: IN_PROGRESS
+**Progress**: [░░░░░░░░░░░░░░░░░░░░] 0% (of current phase)
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -17,21 +17,21 @@
 - **Frame Rate**: Target 60 FPS on WebGPU.
 
 ## Accumulated Context
-### Final Decisions (v1)
-- **WebGPU & TSL**: High-fidelity particles and post-processing.
-- **Modular Systems**: Clean separation of core loops.
-- **Optimized Factory**: Specialized procedural model builders.
+### Final Decisions (v1 & Phase 13)
+- **WebGPU & TSL**: Foundation for high-fidelity rendering.
+- **Modular Systems**: Input, Physics, Weaponry, UI, Networking, and Round logic.
+- **Map Expansion**: Recreated and refined Dust 2, Mirage, and Inferno.
 
-### New Decisions (Phase 13)
-- **Map Suite**: Finalized layouts for Dust 2 (refined), Mirage, and Inferno.
-- **Procedural Detail**: Integrated `createStairs`, `createArch`, `createPipe`, and `createLamp` for a richer world.
-- **Optimized Lighting**: Individual map detail lamps use low-res shadow maps to preserve performance.
+### New Decisions (Phase 14)
+- **Competitive Economy**: Implementing consecutive loss bonuses and specific kill rewards to match CS standards.
+- **Movement-Based Accuracy**: Decided to prioritize counter-strafing implementation to reward high-skill movement.
 
 ## Session Continuity
-**Current Session**: Phase 13 Complete. Map expansion goals achieved.
+**Current Session**: Promoted "Gameplay Mechanics" todo to Phase 14. Defined Context and Research.
 **Next Steps**:
-1. Promote "Gameplay Mechanics" todo to Phase 14 (Economy, Modes, Movement).
-2. Final production verification.
+1. Implement `14-01-PLAN.md` for the Advanced Economy System.
+2. Refactor `RoundSystem.js` to handle complex reward logic.
+3. Update Buy Menu UI to support utility limits.
 
 ---
 *Last updated: 2026-03-10*
