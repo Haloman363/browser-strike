@@ -34,6 +34,7 @@
 1. Final verification of all maps and weapons.
 2. Deploy to production environment.
 3. Implement additional Counter-Strike map layouts (Mirage, Inferno).
+4. Begin processing raw assets (weapons, characters, Italy map) from resources folders.
 
 ---
 *Last updated: 2026-03-10*
