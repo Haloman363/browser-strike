@@ -25,37 +25,45 @@ canvas {
     left: 50%;
     width: 4px;
     height: 4px;
-    background-color: #0f0; /* Classic green crosshair */
+    background-color: #0f0; /* Center dot */
     transform: translate(-50%, -50%);
-    transition: transform 0.1s ease-out, width 0.1s, height 0.1s;
+    pointer-events: none;
+    --crosshair-gap: 4px;
 }
 
-#crosshair::before, #crosshair::after {
-    content: '';
+.ch-line {
     position: absolute;
     background-color: #0f0;
 }
 
-/* Horizontal line */
-#crosshair::before {
-    top: 50%;
-    left: -10px;
-    width: 24px;
+.ch-line.left, .ch-line.right {
+    width: 10px;
     height: 2px;
+    top: 50%;
     transform: translateY(-50%);
 }
 
-/* Vertical line */
-#crosshair::after {
-    left: 50%;
-    top: -10px;
+.ch-line.left {
+    right: calc(100% + var(--crosshair-gap));
+}
+
+.ch-line.right {
+    left: calc(100% + var(--crosshair-gap));
+}
+
+.ch-line.top, .ch-line.bottom {
     width: 2px;
-    height: 24px;
+    height: 10px;
+    left: 50%;
     transform: translateX(-50%);
 }
 
-#crosshair.firing {
-    transform: translate(-50%, -50%) scale(1.5);
+.ch-line.top {
+    bottom: calc(100% + var(--crosshair-gap));
+}
+
+.ch-line.bottom {
+    top: calc(100% + var(--crosshair-gap));
 }
 
 #main-menu {

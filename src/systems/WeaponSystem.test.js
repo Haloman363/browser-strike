@@ -26,6 +26,20 @@ vi.mock('../Constants_v2.js', () => ({
     GRENADES_DATA: {}
 }));
 
+// Mock Weapon Recipes
+vi.mock('../WeaponRecipes.js', () => ({
+    WEAPON_RECIPES: {
+        AK47: {
+            recoilPattern: [{ x: 0.1, y: 0.2 }, { x: 0.3, y: 0.4 }],
+            moveInaccuracy: 0.05
+        },
+        GLOCK: {
+            recoilPattern: [{x: 0, y: 0.1}],
+            moveInaccuracy: 0.05
+        }
+    }
+}));
+
 // Mock Weapon effects
 vi.mock('../Weapon.js', () => ({
     createBloodSplatter: vi.fn(),

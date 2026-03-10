@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { System } from '../core/System.js';
 import { GameState } from '../GameState.js';
 import { WEAPONS_DATA, GRENADES_DATA } from '../Constants_v2.js';
+import { WEAPON_RECIPES } from '../WeaponRecipes.js';
+import { Utils } from '../Utils.js';
 import { createBloodSplatter, createImpactEffect } from '../Weapon.js';
 
 export class WeaponSystem extends System {
@@ -11,6 +13,9 @@ export class WeaponSystem extends System {
         this.lastFireTime = 0;
         this.recoil = 0;
         this.cameraRecoilX = 0;
+        this.cameraRecoilY = 0;
+        this.shotIndex = 0;
+        this.currentSpread = 0;
         this.isFiring = false;
         this.inventory = null; // Will be synced from GameState or main
         this.objects = []; // For raycasting
@@ -40,13 +45,22 @@ export class WeaponSystem extends System {
 
     update(delta, time) {
         // Handle recoil recovery
-        if (this.recoil > 0) {
-            this.recoil -= delta * 0.5;
-            if (this.recoil < 0) this.recoil = 0;
-        }
-        if (this.cameraRecoilX > 0) {
-            this.cameraRecoilX -= delta * 0.5;
-            if (this.cameraRecoilX < 0) this.cameraRecoilX = 0;
+        const recoverySpeed = 5.0; // Decay factor
+        const decay = Math.pow(0.1, delta * recoverySpeed);
+        
+        this.recoil *= decay;
+        this.cameraRecoilX *= decay;
+        this.cameraRecoilY *= decay;
+        
+        // Decay current spread back to base
+        const weaponKey = GameState.get('currentWeaponKey');
+        const weaponData = WEAPONS_DATA[weaponKey] || WEAPONS_DATA['GLOCK'];
+        const baseSpread = weaponData.spread || 0.02;
+        
+        if (this.currentSpread > baseSpread) {
+            this.currentSpread = baseSpread + (this.currentSpread - baseSpread) * decay;
+        } else {
+            this.currentSpread = baseSpread;
         }
 
         // Handle auto-firing if mouse is down
@@ -57,16 +71,52 @@ export class WeaponSystem extends System {
 
     setFiring(isFiring) {
         this.isFiring = isFiring;
+        if (!isFiring) {
+            this.shotIndex = 0;
+        }
+    }
+
+    calculateSpread() {
+        const weaponKey = GameState.get('currentWeaponKey');
+        const weaponData = WEAPONS_DATA[weaponKey] || WEAPONS_DATA['GLOCK'];
+        const recipe = WEAPON_RECIPES[weaponKey] || WEAPON_RECIPES['GLOCK'];
+        
+        const baseSpread = weaponData.spread || 0.02;
+        const moveInaccuracy = recipe.moveInaccuracy || 0.05;
+        
+        const pc = this.engine.getSystem('PlayerControllerSystem');
+        let velocityLength = 0;
+        let isCrouching = false;
+        
+        if (pc) {
+            velocityLength = pc.velocity.length();
+            isCrouching = pc.isCrouching;
+        }
+        
+        let totalSpread = baseSpread + (velocityLength * moveInaccuracy);
+        
+        if (isCrouching) {
+            totalSpread *= 0.5;
+        }
+        
+        return totalSpread;
+    }
+
+    getRecoilPunch() {
+        const weaponKey = GameState.get('currentWeaponKey');
+        const recipe = WEAPON_RECIPES[weaponKey] || WEAPON_RECIPES['GLOCK'];
+        const pattern = recipe.recoilPattern || [{x: 0, y: 0.1}];
+        
+        return pattern[this.shotIndex % pattern.length];
     }
 
     shoot() {
         const currentSlot = GameState.get('currentSlot');
         const ammoInClip = GameState.get('ammoInClip');
-        const weaponKey = GameState.get('currentWeaponKey'); // Use the machine key for data lookup
+        const weaponKey = GameState.get('currentWeaponKey');
         const weaponData = WEAPONS_DATA[weaponKey] || WEAPONS_DATA['GLOCK'];
 
         if (ammoInClip <= 0) {
-            // Play click sound via engine/soundEngine
             if (this.engine.context.soundEngine) {
                 this.engine.context.soundEngine.playClick(performance.now());
             }
@@ -83,6 +133,13 @@ export class WeaponSystem extends System {
 
         this.lastFireTime = now;
 
+        // Calculate and set current spread for UI
+        this.currentSpread = this.calculateSpread();
+
+        // Update shot index for recoil pattern
+        const punch = this.getRecoilPunch();
+        this.shotIndex++;
+
         // Update Ammo
         GameState.set({ ammoInClip: ammoInClip - 1 });
         
@@ -94,9 +151,9 @@ export class WeaponSystem extends System {
         // Notify systems
         this.engine.emit('weapon:fired', { weaponKey, weaponData });
 
-        // Add recoil
-        this.recoil = Math.min(this.recoil + weaponData.recoil, 0.2);
-        this.cameraRecoilX += weaponData.recoil * 0.5;
+        // Add recoil (visual punch)
+        this.cameraRecoilX += punch.y * 0.1;
+        this.cameraRecoilY += punch.x * 0.1;
 
         // Authoritative Shooting: Send SHOOT request to NetworkSystem
         const network = this.engine.getSystem('NetworkSystem');
@@ -104,8 +161,22 @@ export class WeaponSystem extends System {
             const timestamp = network.getServerTime();
             const camera = this.engine.camera;
             const origin = camera.position.clone();
+            
+            // Apply Gaussian spread to direction
             const direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
+            
+            if (this.currentSpread > 0) {
+                const right = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+                const up = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+                
+                const spreadX = Utils.getGaussian(this.currentSpread);
+                const spreadY = Utils.getGaussian(this.currentSpread);
+                
+                direction.addScaledVector(right, spreadX);
+                direction.addScaledVector(up, spreadY);
+                direction.normalize();
+            }
 
             network.send('SHOOT', {
                 timestamp,

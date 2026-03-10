@@ -16,7 +16,8 @@ export class UISystem extends System {
             plantContainer: document.getElementById('plant-progress-container'),
             plantBar: document.getElementById('plant-progress-bar'),
             pickupPrompt: document.getElementById('pickup-prompt'),
-            backend: document.getElementById('backend-label')
+            backend: document.getElementById('backend-label'),
+            crosshair: document.getElementById('crosshair')
         };
     }
 
@@ -46,6 +47,20 @@ export class UISystem extends System {
         this.fullUpdate();
     }
 
+    update(delta, time) {
+        // Handle elements that might need frequent updates
+        
+        // Update Dynamic Crosshair
+        if (this.domElements.crosshair) {
+            const weaponSystem = this.engine.getSystem('WeaponSystem');
+            if (weaponSystem) {
+                // Scale spread to pixels (e.g. 0.02 base spread * 500 = 10px gap)
+                const gap = Math.max(2, weaponSystem.currentSpread * 500);
+                this.domElements.crosshair.style.setProperty('--crosshair-gap', `${gap}px`);
+            }
+        }
+    }
+
     updateBombSitePrompt(site) {
         if (!this.domElements.pickupPrompt) return;
         
@@ -65,7 +80,7 @@ export class UISystem extends System {
         if (GameState.get('atBombSite') && GameState.get('currentWeapon') === 'c4' && !GameState.get('bombPlanted')) return;
 
         if (pickup && pickup.userData.weaponKey) {
-            const wName = pickup.userData.weaponKey; // Could use WEAPONS_DATA[wName].name if imported
+            const wName = pickup.userData.weaponKey;
             this.domElements.pickupPrompt.innerHTML = `PRESS <span style="background: #ff9d00; color: #000; padding: 2px 8px; border-radius: 3px;">E</span> TO SWAP FOR ${wName}`;
             this.domElements.pickupPrompt.style.display = 'block';
         } else {
