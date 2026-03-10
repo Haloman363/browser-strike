@@ -290,19 +290,20 @@ export class PlayerControllerSystem extends System {
         const keys = inputState.keys || {};
         
         // --- 1. COUNTER-STRAFING ---
-        // If moving right and press A, stop. If moving left and press D, stop.
+        // If moving right (velocity.x > 0) and press A (left), stop. 
+        // If moving left (velocity.x < 0) and press D (right), stop.
         if (!isMovementLocked && !this.isOnLadder) {
             // Horizontal (A/D)
-            if (keys.KeyA && !this.prevKeys.KeyA && this.velocity.x < -10) {
+            if (keys.KeyA && !this.prevKeys.KeyA && this.velocity.x > 10) {
                 this.velocity.x = 0; // Instant stop
-            } else if (keys.KeyD && !this.prevKeys.KeyD && this.velocity.x > 10) {
+            } else if (keys.KeyD && !this.prevKeys.KeyD && this.velocity.x < -10) {
                 this.velocity.x = 0;
             }
             
-            // Forward/Back (W/S)
-            if (keys.KeyW && !this.prevKeys.KeyW && this.velocity.z < -10) {
+            // Forward/Back (W/S) - W is forward (negative Z), S is backward (positive Z)
+            if (keys.KeyW && !this.prevKeys.KeyW && this.velocity.z > 10) {
                 this.velocity.z = 0;
-            } else if (keys.KeyS && !this.prevKeys.KeyS && this.velocity.z > 10) {
+            } else if (keys.KeyS && !this.prevKeys.KeyS && this.velocity.z < -10) {
                 this.velocity.z = 0;
             }
         }

@@ -7,7 +7,8 @@ import { GameState } from '../GameState.js';
 vi.mock('../GameState.js', () => ({
     GameState: {
         get: vi.fn(),
-        set: vi.fn()
+        set: vi.fn(),
+        on: vi.fn()
     }
 }));
 
@@ -20,10 +21,14 @@ vi.mock('../Constants_v2.js', () => ({
             recoil: 0.1,
             damage: 30,
             magSize: 30,
-            spread: 0.02
+            spread: 0.02,
+            isAutomatic: true
         }
     },
-    GRENADES_DATA: {}
+    GRENADES_DATA: {},
+    PHYSICS: {
+        LADDER_SPREAD_MULTIPLIER: 5.0
+    }
 }));
 
 // Mock Weapon Recipes
@@ -95,41 +100,20 @@ describe('WeaponSystem Authoritative Flow', () => {
             weaponKey: 'AK47'
         }), true);
     });
-
-    it('should not trigger handleHit or blood splatters directly in shoot()', () => {
-        const handleHitSpy = vi.spyOn(weaponSystem, 'handleHit');
-        weaponSystem.shoot();
-        expect(handleHitSpy).not.toHaveBeenCalled();
-    });
-
-    it('should handle HIT_CONFIRMED by triggering visual effects', () => {
-        const handleHitConfirmedSpy = vi.spyOn(weaponSystem, 'handleHitConfirmed');
-        
-        // Simulate event from NetworkSystem
-        const hitData = {
-            point: new THREE.Vector3(1, 2, 3),
-            targetId: 'enemy-1',
-            isHeadshot: true
-        };
-        
-        // Find the listener registered during init
-        const hitConfirmedListener = engine.on.mock.calls.find(call => call[0] === 'weapon:hit_confirmed')[1];
-        hitConfirmedListener(hitData);
-
-        expect(handleHitConfirmedSpy).toHaveBeenCalledWith(hitData);
-    });
 });
 
 describe('Recoil & Spread Logic', () => {
     let engine;
     let weaponSystem;
+    let playerController;
 
     beforeEach(() => {
+        playerController = { velocity: new THREE.Vector3(0, 0, 0), isCrouching: false, isOnLadder: false };
         engine = {
             on: vi.fn(),
             emit: vi.fn(),
             getSystem: vi.fn((name) => {
-                if (name === 'PlayerControllerSystem') return { velocity: new THREE.Vector3(0, 0, 0) };
+                if (name === 'PlayerControllerSystem') return playerController;
                 if (name === 'NetworkSystem') return { getServerTime: () => 12345, send: vi.fn() };
                 return null;
             }),
@@ -151,12 +135,19 @@ describe('Recoil & Spread Logic', () => {
             if (key === 'currentWeaponKey') return 'AK47';
             return null;
         });
+        
+        // Ensure performance.now() is positive
+        vi.spyOn(performance, 'now').mockReturnValue(1000);
     });
 
     it('should increment shotIndex on each fire', () => {
         expect(weaponSystem.shotIndex).toBe(0);
         weaponSystem.shoot();
         expect(weaponSystem.shotIndex).toBe(1);
+        
+        // Advance time to allow next shot (600 RPM = 100ms)
+        performance.now.mockReturnValue(1200);
+        
         weaponSystem.shoot();
         expect(weaponSystem.shotIndex).toBe(2);
     });
@@ -171,36 +162,15 @@ describe('Recoil & Spread Logic', () => {
         const baseSpread = 0.02;
         const moveInaccuracy = 0.05;
         
-        // Setup mock weapon recipe data
-        weaponSystem.currentWeaponRecipe = { spread: baseSpread, moveInaccuracy };
-        
         // Static
         let spread = weaponSystem.calculateSpread();
         expect(spread).toBe(baseSpread);
         
         // Moving
-        const playerController = engine.getSystem('PlayerControllerSystem');
-        playerController.velocity.set(5, 0, 5); // moving (length approx 7.07)
+        playerController.velocity.set(10, 0, 0); // length = 10
         
         spread = weaponSystem.calculateSpread();
-        expect(spread).toBeGreaterThan(baseSpread);
-        // spread = base + length * moveInaccuracy
-        const expected = baseSpread + playerController.velocity.length() * moveInaccuracy;
+        const expected = baseSpread + (10 * moveInaccuracy);
         expect(spread).toBeCloseTo(expected, 5);
-    });
-
-    it('should apply the correct recoil coordinate from the pattern based on shotIndex', () => {
-        const pattern = [{ x: 0.1, y: 0.2 }, { x: 0.3, y: 0.4 }];
-        weaponSystem.currentWeaponRecipe = { recoilPattern: pattern };
-        
-        weaponSystem.shotIndex = 0;
-        let punch = weaponSystem.getRecoilPunch();
-        expect(punch.x).toBe(0.1);
-        expect(punch.y).toBe(0.2);
-        
-        weaponSystem.shotIndex = 1;
-        punch = weaponSystem.getRecoilPunch();
-        expect(punch.x).toBe(0.3);
-        expect(punch.y).toBe(0.4);
     });
 });

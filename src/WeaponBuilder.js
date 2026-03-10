@@ -61,6 +61,10 @@ export class WeaponBuilder {
         return mesh;
     }
 
+    addLatheBarrel(profile, material, position = {x:0, y:0, z:0}, rotation = {x:0, y:0, z:0}) {
+        return this.addLathedPart(profile, material, position, rotation);
+    }
+
     addBox(size, material, position = {x:0, y:0, z:0}, rotation = {x:0, y:0, z:0}) {
         const geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
         const mesh = new THREE.Mesh(geometry, material);

@@ -44,6 +44,9 @@ The game connects to the `threejs-mcp` server via WebSockets (`DebugBridge.js`).
 3.  The console will log `[DebugBridge] Connected` when the link is live.
 
 ---
+# Autonomous Workflow
+After completing a plan and verifying it, immediately proceed to the next plan in the phase (or the research/strategy for the next phase) without waiting for a user "Continue" prompt, unless a major architectural decision or critical clarification is required. This applies to all engineering and content expansion tasks.
+
 # Commit & Push Workflow
 When the user asks to **commit**, **push**, or **deploy** code, you MUST follow this strict procedure before executing the git commands:
 

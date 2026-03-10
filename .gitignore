@@ -6,3 +6,6 @@ dist
 *.deb
 
 .gemini/settings.json
+
+resources/
+process-models-textures/

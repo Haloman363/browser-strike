@@ -53,6 +53,7 @@
                                 <div class="options" id="mp-map-select">
                                     <button class="option active" data-value="dust2">Dust 2</button>
                                     <button class="option" data-value="mirage">Mirage</button>
+                                    <button class="option" data-value="inferno">Inferno</button>
                                 </div>
                             </div>
                             <div class="menu-section">
@@ -88,16 +89,20 @@
             </div>
 
             <div id="solo-settings" class="menu-tab-content">
-                <div class="menu-section" style="text-align: center; padding: 20px;">
-                    <h2 style="color: #ff9d00;">OFFLINE TRAINING</h2>
-                    <p style="color: #ccc; font-size: 18px; line-height: 1.6;">
-                        Enter the official Browser Strike training facility.<br>
-                        Test all weapons, utility, and practice your aim<br>
-                        against stationary targets at varying distances.
-                    </p>
-                    <div style="margin-top: 20px; padding: 15px; border: 1px solid #444; background: rgba(0,0,0,0.3);">
-                        <p style="margin: 5px 0;"><strong>MAP:</strong> Training Range</p>
-                        <p style="margin: 5px 0;"><strong>MODE:</strong> Target Practice</p>
+                <div class="menu-section">
+                    <h3>Select Map</h3>
+                    <div class="options" id="solo-map-select">
+                        <button class="option" data-value="training">Training Range</button>
+                        <button class="option" data-value="dust2">Dust 2</button>
+                        <button class="option" data-value="mirage">Mirage</button>
+                        <button class="option" data-value="inferno">Inferno</button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <h3>Select Mode</h3>
+                    <div class="options" id="solo-mode-select">
+                        <button class="option active" data-value="practice">Target Practice</button>
+                        <button class="option" data-value="dm">Deathmatch</button>
                     </div>
                 </div>
             </div>
@@ -247,6 +252,13 @@
                 <div class="setting-item">
                     <label>Kill Feed</label>
                     <div class="options" id="killfeed-toggle" style="justify-content: center;">
+                        <button class="option active" data-value="true" style="padding: 10px 20px;">ON</button>
+                        <button class="option" data-value="false" style="padding: 10px 20px;">OFF</button>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <label>High-Res Textures (50MB+)</label>
+                    <div class="options" id="texture-toggle" style="justify-content: center;">
                         <button class="option active" data-value="true" style="padding: 10px 20px;">ON</button>
                         <button class="option" data-value="false" style="padding: 10px 20px;">OFF</button>
                     </div>

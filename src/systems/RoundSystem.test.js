@@ -22,6 +22,7 @@ describe('RoundSystem FSM', () => {
             })
         };
         roundSystem = new RoundSystem(engine);
+        roundSystem.init();
         GameState.set({ isGameStarted: true, roundState: 'PREROUND', roundTimeLeft: 15, isHost: true });
     });
 
@@ -33,11 +34,11 @@ describe('RoundSystem FSM', () => {
         expect(GameState.get('roundTimeLeft')).toBe(115);
     });
 
-    it('should award $300 on engine:kill event', () => {
+    it('should award $300 on entity:killed event', () => {
         const initialCash = GameState.get('cash');
         // Simulate engine event
-        const killHandler = engine.on.mock.calls.find(call => call[0] === 'engine:kill')[1];
-        killHandler({ attacker: 'player' }); // Assuming it passes attacker info
+        const killHandler = engine.on.mock.calls.find(call => call[0] === 'entity:killed')[1];
+        killHandler({ killer: 'player', weaponKey: 'AK47' }); 
 
         expect(GameState.get('cash')).toBe(initialCash + 300);
     });
