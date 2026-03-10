@@ -26,6 +26,7 @@ export const BOMB_SETTINGS = {
     PLANT_TIME: 3000,     // 3 seconds to plant
     EXPLODE_TIME: 40000,  // 40 seconds countdown
     PLANT_RADIUS: 50,     // Distance to bomb site center
+    DEFUSE_RADIUS: 30,    // Distance to defuse the bomb
     EXPLOSION_RADIUS: 500,
     EXPLOSION_DAMAGE: 500
 };
@@ -82,7 +83,7 @@ export const GRENADES_DATA = {
 export const WEAPONS_DATA = {
     'GLOCK': {
         name: 'Glock-18',
-        slot: 2,
+        slot: 3,
         damage: 20,
         headshotMultiplier: 4,
         magSize: 20,
@@ -97,7 +98,7 @@ export const WEAPONS_DATA = {
     },
     'USP': {
         name: 'USP-S',
-        slot: 2,
+        slot: 3,
         damage: 25,
         headshotMultiplier: 4,
         magSize: 12,
@@ -112,7 +113,7 @@ export const WEAPONS_DATA = {
     },
     'DEAGLE': {
         name: 'Desert Eagle',
-        slot: 2,
+        slot: 3,
         damage: 60,
         headshotMultiplier: 4,
         magSize: 7,
@@ -127,7 +128,7 @@ export const WEAPONS_DATA = {
     },
     'AK47': {
         name: 'AK-47',
-        slot: 3,
+        slot: 2,
         damage: 36,
         headshotMultiplier: 4,
         magSize: 30,
@@ -142,7 +143,7 @@ export const WEAPONS_DATA = {
     },
     'M4A4': {
         name: 'M4A4',
-        slot: 3,
+        slot: 2,
         damage: 30,
         headshotMultiplier: 4,
         magSize: 30,
@@ -157,7 +158,7 @@ export const WEAPONS_DATA = {
     },
     'AWP': {
         name: 'AWP',
-        slot: 3,
+        slot: 2,
         damage: 115,
         headshotMultiplier: 4,
         magSize: 5,
@@ -173,7 +174,7 @@ export const WEAPONS_DATA = {
     },
     'P90': {
         name: 'P90',
-        slot: 3,
+        slot: 2,
         damage: 20,
         headshotMultiplier: 4,
         magSize: 50,
@@ -188,7 +189,7 @@ export const WEAPONS_DATA = {
     },
     'XM1014': {
         name: 'XM1014',
-        slot: 3,
+        slot: 2,
         damage: 20,
         pellets: 6,
         headshotMultiplier: 2,
@@ -204,7 +205,7 @@ export const WEAPONS_DATA = {
     },
     'P250': {
         name: 'P250',
-        slot: 2,
+        slot: 3,
         damage: 38,
         headshotMultiplier: 4,
         magSize: 13,
@@ -219,7 +220,7 @@ export const WEAPONS_DATA = {
     },
     'MAC10': {
         name: 'MAC-10',
-        slot: 3,
+        slot: 2,
         damage: 29,
         headshotMultiplier: 4,
         magSize: 30,
@@ -234,7 +235,7 @@ export const WEAPONS_DATA = {
     },
     'MP9': {
         name: 'MP9',
-        slot: 3,
+        slot: 2,
         damage: 26,
         headshotMultiplier: 4,
         magSize: 30,
@@ -249,7 +250,7 @@ export const WEAPONS_DATA = {
     },
     'GALIL': {
         name: 'Galil AR',
-        slot: 3,
+        slot: 2,
         damage: 30,
         headshotMultiplier: 4,
         magSize: 35,
@@ -264,7 +265,7 @@ export const WEAPONS_DATA = {
     },
     'FAMAS': {
         name: 'FAMAS',
-        slot: 3,
+        slot: 2,
         damage: 30,
         headshotMultiplier: 4,
         magSize: 25,
@@ -279,7 +280,7 @@ export const WEAPONS_DATA = {
     },
     'AUG': {
         name: 'AUG',
-        slot: 3,
+        slot: 2,
         damage: 28,
         headshotMultiplier: 4,
         magSize: 30,
@@ -294,7 +295,7 @@ export const WEAPONS_DATA = {
     },
     'SG553': {
         name: 'SG 553',
-        slot: 3,
+        slot: 2,
         damage: 30,
         headshotMultiplier: 4,
         magSize: 30,
@@ -309,7 +310,7 @@ export const WEAPONS_DATA = {
     },
     'SSG08': {
         name: 'SSG 08',
-        slot: 3,
+        slot: 2,
         damage: 88,
         headshotMultiplier: 4,
         magSize: 10,
@@ -325,7 +326,7 @@ export const WEAPONS_DATA = {
     },
     'NEGEV': {
         name: 'Negev',
-        slot: 3,
+        slot: 2,
         damage: 35,
         headshotMultiplier: 4,
         magSize: 150,
@@ -340,7 +341,7 @@ export const WEAPONS_DATA = {
     },
     'MP7': {
         name: 'MP7',
-        slot: 3,
+        slot: 2,
         damage: 29,
         headshotMultiplier: 4,
         magSize: 30,
@@ -355,7 +356,7 @@ export const WEAPONS_DATA = {
     },
     'M249': {
         name: 'M249',
-        slot: 3,
+        slot: 2,
         damage: 32,
         headshotMultiplier: 4,
         magSize: 100,
@@ -370,7 +371,7 @@ export const WEAPONS_DATA = {
     },
     NOVA: {
         name: 'Nova',
-        slot: 3,
+        slot: 2,
         damage: 26,
         pellets: 8,
         headshotMultiplier: 2,

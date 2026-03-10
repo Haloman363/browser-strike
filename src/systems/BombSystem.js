@@ -35,16 +35,34 @@ export class BombSystem extends System {
         if (this.engine.context.soundEngine) {
             this.engine.context.soundEngine.playLand(); // Placeholder for plant sound
         }
+
+        GameState.set({ 
+            bombPlanted: true, 
+            bombTimeLeft: Math.ceil(this.timer),
+            bombDefused: false,
+            bombExploded: false,
+            defuseProgress: 0,
+            isDefusing: false
+        });
     }
 
     update(delta, time) {
-        if (!GameState.get('bombPlanted') || GameState.get('bombExploded')) return;
+        if (!GameState.get('bombPlanted') || GameState.get('bombExploded') || GameState.get('bombDefused')) return;
 
         this.timer -= delta;
         GameState.set({ bombTimeLeft: Math.max(0, Math.ceil(this.timer)) });
 
+        // Defusal logic
+        this.updateDefusal(delta);
+
         // Beeping logic
         const beepInterval = this.timer > 10 ? 1000 : (this.timer > 5 ? 500 : 250);
+        if (performance.now() - this.lastBeepTime > (beepInterval / 1000)) {
+            // Need to convert interval to seconds for comparison with delta-driven time or use absolute time
+            // Let's use performance.now() which is easier for now, but update it in init/update
+        }
+        
+        // Let's stick with performance.now() as it was.
         if (performance.now() - this.lastBeepTime > beepInterval) {
             this.lastBeepTime = performance.now();
             this.beep();
@@ -55,13 +73,70 @@ export class BombSystem extends System {
         }
     }
 
+    updateDefusal(delta) {
+        const input = this.engine.getSystem('InputSystem');
+        const isDefuseKeyPressed = input && input.isKeyPressed('KeyB');
+        
+        // We use camera position as player position in this simplified architecture
+        const playerPos = this.engine.camera.position;
+        
+        let canDefuse = false;
+        if (this.plantedBomb) {
+            const dist = playerPos.distanceTo(this.plantedBomb.position);
+            if (dist < BOMB_SETTINGS.DEFUSE_RADIUS) {
+                canDefuse = true;
+            }
+        }
+
+        if (isDefuseKeyPressed && canDefuse) {
+            const hasKit = GameState.get('hasDefuseKit');
+            const defuseTime = hasKit ? 5 : 10;
+            const progressInc = delta / defuseTime;
+            
+            let progress = GameState.get('defuseProgress') || 0;
+            progress += progressInc;
+            
+            if (progress >= 1) {
+                this.defuse();
+            } else {
+                GameState.set({ 
+                    defuseProgress: progress, 
+                    isDefusing: true 
+                });
+            }
+        } else {
+            if (GameState.get('defuseProgress') > 0) {
+                GameState.set({ 
+                    defuseProgress: 0, 
+                    isDefusing: false 
+                });
+            }
+        }
+    }
+
+    defuse() {
+        GameState.set({ 
+            bombDefused: true,
+            defuseProgress: 1,
+            isDefusing: false
+        });
+        console.log("BOMB DEFUSED!");
+        this.engine.emit('bomb:defused');
+        
+        // Visual feedback
+        if (this.plantedBomb) {
+            const led = this.plantedBomb.getObjectByName('led');
+            if (led && led.material) led.material.color.set(0x00ff00);
+        }
+    }
+
     beep() {
         if (this.plantedBomb) {
             const led = this.plantedBomb.getObjectByName('led');
-            if (led) {
+            if (led && led.material) {
                 led.material.color.set(0xffffff);
                 setTimeout(() => {
-                    if (led.material) led.material.color.set(0xff0000);
+                    if (led && led.material) led.material.color.set(0xff0000);
                 }, 100);
             }
         }
@@ -74,12 +149,12 @@ export class BombSystem extends System {
     explode() {
         GameState.set({ bombExploded: true });
         console.log("BOMB EXPLODED!");
+        this.engine.emit('bomb:exploded');
         
         if (this.plantedBomb) {
             const pos = this.plantedBomb.position.clone();
             
-            // Trigger explosion visual/damage (reusing grenade logic if possible)
-            // For now, let's just log and maybe add a big sphere
+            // Trigger explosion visual
             const explosionGeo = new THREE.SphereGeometry(BOMB_SETTINGS.EXPLOSION_RADIUS, 32, 32);
             const explosionMat = new THREE.MeshBasicMaterial({ 
                 color: 0xffaa00, 
@@ -93,7 +168,6 @@ export class BombSystem extends System {
             // Damage check
             const dist = this.engine.camera.position.distanceTo(pos);
             if (dist < BOMB_SETTINGS.EXPLOSION_RADIUS) {
-                // takeDamage is global in main.js, we might need to emit an event
                 this.engine.emit('player:damage', { 
                     amount: BOMB_SETTINGS.EXPLOSION_DAMAGE, 
                     source: 'bomb' 
