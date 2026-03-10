@@ -20,7 +20,10 @@ export class Engine extends EventEmitter {
         this.backend = null;
         this.clock = new THREE.Clock();
         this.isRunning = false;
-        this.context = {}; // Global context for systems to share resources
+        this.context = {
+            snapshotTexture: null
+        }; // Global context for systems to share resources
+        this.snapshotTarget = null;
     }
 
     /**
@@ -65,6 +68,39 @@ export class Engine extends EventEmitter {
         }
 
         return this;
+    }
+
+    /**
+     * Captures the current frame to a texture for later use (e.g., Flashbang ghosting).
+     */
+    captureFrame() {
+        if (!this.renderer || !this.scene || !this.camera) return;
+
+        if (!this.snapshotTarget) {
+            const size = new THREE.Vector2();
+            this.renderer.getSize(size);
+            const pixelRatio = this.renderer.getPixelRatio();
+            
+            this.snapshotTarget = new THREE.RenderTarget(
+                size.x * pixelRatio,
+                size.y * pixelRatio,
+                {
+                    minFilter: THREE.LinearFilter,
+                    magFilter: THREE.LinearFilter,
+                    type: THREE.HalfFloatType
+                }
+            );
+        }
+
+        const currentTarget = this.renderer.getRenderTarget();
+        this.renderer.setRenderTarget(this.snapshotTarget);
+        this.renderer.render(this.scene, this.camera);
+        this.renderer.setRenderTarget(currentTarget);
+        
+        this.context.snapshotTexture = this.snapshotTarget.texture;
+        this.emit('frame:captured', this.context.snapshotTexture);
+        
+        return this.context.snapshotTexture;
     }
 
     /**
@@ -153,6 +189,13 @@ export class Engine extends EventEmitter {
             this.camera.aspect = window.innerWidth / window.innerHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            if (this.snapshotTarget) {
+                const size = new THREE.Vector2();
+                this.renderer.getSize(size);
+                const pixelRatio = this.renderer.getPixelRatio();
+                this.snapshotTarget.setSize(size.x * pixelRatio, size.y * pixelRatio);
+            }
         }
     }
 
