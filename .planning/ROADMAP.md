@@ -11,7 +11,7 @@
 - [x] **Phase 7: Gunplay Refinement** - Recoil patterns and movement inaccuracy (completed 2026-03-10)
 - [x] **Phase 8: Game Mode** - Competitive bomb defusal loop (completed 2026-03-10)
 - [x] **Phase 9: Strategic Layer** - Buy menu and tactical economy (completed 2026-03-10)
-- [ ] **Phase 10: Tactical Utility** - Grenades and area-of-effect items
+- [x] **Phase 10: Tactical Utility** - Grenades and area-of-effect items (completed 2026-03-10)
 - [ ] **Phase 11: World Interaction** - Dynamic and destructible map elements
 - [ ] **Phase 12: Polish & Performance** - Optimization and final stabilization
 
@@ -28,7 +28,7 @@
 | 7. Gunplay Refinement | 2/2 | Complete   | 2026-03-10 |
 | 8. Game Mode | 2/2 | Complete   | 2026-03-10 |
 | 9. Strategic Layer | 2/2 | Complete   | 2026-03-10 |
-| 10. Tactical Utility | 0/0 | Not started | - |
+| 10. Tactical Utility | 1/1 | Complete   | 2026-03-10 |
 | 11. World Interaction | 0/0 | Not started | - |
 | 12. Polish & Performance | 0/0 | Not started | - |
 

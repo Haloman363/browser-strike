@@ -2169,36 +2169,24 @@ function explode(position, killerName = playerName, killerTeam = playerTeam, gre
     const data = GRENADES_DATA[grenadeKey] || GRENADES_DATA['HE'];
     console.log(data.name + " detonated");
     
+    // Notify Systems (like FXSystem) to handle visual effects
+    if (window.gameEngine) {
+        window.gameEngine.emit('grenade:detonated', { 
+            type: grenadeKey.toLowerCase(), 
+            position,
+            killerName,
+            killerTeam
+        });
+    }
+
     if (grenadeKey === 'HE') {
         soundEngine.playExplosion();
     } else if (grenadeKey === 'FLASH') {
         soundEngine.playFlashbang();
-        const dirToNade = position.clone().sub(camera.position).normalize();
-        const lookDir = new THREE.Vector3();
-        camera.getWorldDirection(lookDir);
-        const dot = lookDir.dot(dirToNade);
-        
-        if (dot > 0.3) {
-            const dist = camera.position.distanceTo(position);
-            if (dist < 500) {
-                const flashOverlay = createFlashOverlay();
-                flashOverlay.style.opacity = '1';
-                flashOverlay.style.display = 'block';
-                
-                let opacity = 1.0;
-                const fade = setInterval(() => {
-                    opacity -= 0.02;
-                    flashOverlay.style.opacity = opacity;
-                    if (opacity <= 0) {
-                        clearInterval(fade);
-                        flashOverlay.style.display = 'none';
-                    }
-                }, 100);
-            }
-        }
+        // Visual effect now handled by FXSystem
     } else if (grenadeKey === 'SMOKE') {
         soundEngine.playSmoke();
-        createSmokeCloud(position);
+        // Visual effect now handled by FXSystem
     } else if (grenadeKey === 'MOLOTOV') {
         soundEngine.playShatter();
         soundEngine.playExplosion();

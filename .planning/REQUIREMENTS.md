@@ -22,8 +22,8 @@
 - [ ] **GAME-05**: Dynamic Map Interaction (Destructible crates, opening doors)
 
 ### Tactical Utility (UTIL)
-- [ ] **UTIL-01**: Smoke Grenades (Network-synced volumetric-style effects)
-- [ ] **UTIL-02**: Flashbangs (Screen blinding with falloff logic)
+- [x] **UTIL-01**: Smoke Grenades (Network-synced volumetric-style effects)
+- [x] **UTIL-02**: Flashbangs (Screen blinding with falloff logic)
 - [ ] **UTIL-03**: Molotovs (Area denial with damage-over-time)
 
 ## Validated (Already in Code)
@@ -61,6 +61,6 @@
 | GAME-03 | Phase 7 | Complete |
 | GAME-04 | Phase 7 | Complete |
 | GAME-05 | Phase 11 | Pending |
-| UTIL-01 | Phase 10 | Pending |
-| UTIL-02 | Phase 10 | Pending |
+| UTIL-01 | Phase 10 | Complete |
+| UTIL-02 | Phase 10 | Complete |
 | UTIL-03 | Phase 10 | Pending |

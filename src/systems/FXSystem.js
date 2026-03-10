@@ -24,7 +24,8 @@ import {
     viewportLinearDepth,
     uv,
     vec2,
-    Fn
+    Fn,
+    texture
 } from 'three/tsl';
 import { PointsNodeMaterial, SpriteNodeMaterial } from 'three/webgpu';
 
@@ -63,6 +64,10 @@ export class FXSystem extends System {
         
         this.sparkMesh = null;
         this.smokeMesh = null;
+
+        // Flashbang state
+        this.flashIntensity = uniform(0);
+        this.snapshotTexture = uniform(new THREE.Texture());
     }
 
     init() {
@@ -75,6 +80,7 @@ export class FXSystem extends System {
         this.initSparks();
         this.initSmoke();
         this.initCompute();
+        this.initFlashbangPost();
         
         // Listen for weapon fire events to spawn sparks
         this.engine.on('weapon:fired', (data) => this.spawnMuzzleSparks(data));
@@ -83,10 +89,82 @@ export class FXSystem extends System {
         this.engine.on('grenade:detonated', (data) => {
             if (data.type === 'smoke') {
                 this.spawnSmokeCloud(data.position);
+            } else if (data.type === 'flashbang') {
+                this.triggerFlashbang(data.position);
             }
         });
 
+        // Sync snapshot texture when captured
+        this.engine.on('frame:captured', (tex) => {
+            this.snapshotTexture.value = tex;
+        });
+
         console.log('FXSystem initialized');
+    }
+
+    initFlashbangPost() {
+        // Create the TSL post-processing pass for flashbang
+        const flashOverlay = ( ( input ) => {
+            const white = vec3(1, 1, 1);
+            const intensity = this.flashIntensity;
+            const snapshot = texture(this.snapshotTexture);
+            
+            // Blend original with ghost after-image and then white-out
+            const ghostBlend = mix(input, snapshot, intensity.mul(0.8));
+            return mix(ghostBlend, white, intensity.pow(2.0));
+        } );
+
+        // Add to engine's post-processing
+        if (this.engine.postProcessing) {
+            const currentOutput = this.engine.postProcessing.outputNode;
+            this.engine.postProcessing.outputNode = flashOverlay(currentOutput);
+        }
+    }
+
+    triggerFlashbang(position) {
+        const camera = this.engine.camera;
+        if (!camera) return;
+
+        // 1. Line of Sight Check
+        const dist = camera.position.distanceTo(position);
+        if (dist > 500) return; // Too far
+
+        // Raycast to check for occlusion
+        const raycaster = new THREE.Raycaster();
+        const dir = position.clone().sub(camera.position).normalize();
+        raycaster.set(camera.position, dir);
+        
+        const intersects = raycaster.intersectObjects(this.engine.context.objects || [], true);
+        if (intersects.length > 0 && intersects[0].distance < dist - 5) {
+            console.log("Flashbang occluded");
+            return;
+        }
+
+        // 2. Orientation Check (Are they looking at it?)
+        const viewDir = new THREE.Vector3();
+        camera.getWorldDirection(viewDir);
+        const dot = viewDir.dot(dir);
+        
+        let intensity = 0;
+        if (dot > 0.5) { // Looking at it
+            intensity = 1.0;
+        } else if (dot > -0.5) { // Peripheral
+            intensity = 0.5;
+        } else { // Looking away
+            intensity = 0.1;
+        }
+
+        // Apply distance falloff
+        intensity *= (1.0 - (dist / 500));
+
+        if (intensity > 0.1) {
+            // 3. Capture Ghost Frame
+            this.engine.captureFrame();
+            
+            // 4. Activate Effect
+            this.flashIntensity.value = intensity;
+            console.log(`Flashed with intensity: ${intensity}`);
+        }
     }
 
     initSparks() {
@@ -305,6 +383,12 @@ export class FXSystem extends System {
         // Update uniforms
         this.deltaTime.value = delta;
         this.spawnTime.value = time;
+
+        // Flashbang decay
+        if (this.flashIntensity.value > 0) {
+            this.flashIntensity.value -= delta * 0.15; // Fades out over ~6-7 seconds
+            if (this.flashIntensity.value < 0) this.flashIntensity.value = 0;
+        }
         
         // Dispatch update computes
         this.engine.renderer.compute(this.computeUpdate);

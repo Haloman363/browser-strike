@@ -2,13 +2,13 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Phase 9: Tactical Economy COMPLETE. Transitioning to Phase 10: Utility Overhaul.
+**Current Focus**: Executing Phase 10: Utility Overhaul.
 
 ## Current Position
 **Phase**: 10 - Utility Overhaul
-**Plan**: TBD
-**Status**: Not started
-**Progress**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░] 80%
+**Plan**: 10-02 - Dynamic Molotov Fire Flow
+**Status**: In Progress
+**Progress**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░] 85%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: SVG-based radial buy menu for classic tactical feel. Spawn-zone restricted purchasing.
+- **New Decision**: TSL-based frame freeze for flashbangs. Radial density for volumetric smoke.
 
 ### Learnings
-- SVG allows for precise circular segment calculation without complex canvas math.
-- Event-driven purchasing (`weapon:purchased`) ensures clean separation between UI and world logic.
+- `renderer.render()` to a custom `RenderTarget` is a reliable way to capture frame snapshots in WebGPURenderer.
+- TSL `mix()` nodes are extremely powerful for creating complex visual blends like the "ghost" after-image effect.
 
 ## Session Continuity
-**Current Session**: Phase 9 COMPLETE.
+**Current Session**: Phase 10: Wave 1 complete. Wave 2 started.
 **Next Steps**:
-1. Begin Phase 10: Utility Overhaul.
-2. Refine Flashbang and Smoke grenade effects.
+1. Implement dynamic fire flow compute shader for Molotovs.
+2. Integrate Molotov damage checking with the fire positions.
 
 ---
-*Last updated: 2026-03-09*
+*Last updated: 2026-03-10*
