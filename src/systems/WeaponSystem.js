@@ -21,6 +21,47 @@ export class WeaponSystem extends System {
         this.objects = []; // For raycasting
     }
 
+    giveWeapon(weaponKey) {
+        const weapon = WEAPONS_DATA[weaponKey] || GRENADES_DATA[weaponKey];
+        
+        if (!weapon) {
+            // Handle Gear
+            if (weaponKey === 'VEST') {
+                GameState.set({ health: 100 });
+                console.log("Gave Kevlar Vest");
+                return;
+            }
+            if (weaponKey === 'VESTHELM') {
+                GameState.set({ health: 100 });
+                console.log("Gave Kevlar + Helmet");
+                return;
+            }
+            if (weaponKey === 'DEFUSE') {
+                GameState.set({ hasDefuseKit: true });
+                console.log("Gave Defuse Kit");
+                return;
+            }
+            return;
+        }
+
+        // Determine slot (1: Knife, 2: Primary, 3: Secondary/Pistol, 4: Grenades, 5: Bomb)
+        let slot = 2; // Default to Primary
+        if (weapon.type === 'pistol') slot = 3;
+        if (weapon.type === 'knife') slot = 1;
+        if (GRENADES_DATA[weaponKey]) slot = 4;
+        if (weapon.type === 'utility') slot = 5;
+
+        // Update GameState
+        GameState.setInventorySlot(slot, weaponKey);
+        
+        // Update current weapon if it's Primary or Secondary
+        if (slot === 2 || slot === 3) {
+            this.engine.emit('input:keydown', `Digit${slot}`);
+        }
+        
+        console.log(`WeaponSystem: Given ${weaponKey} to slot ${slot}`);
+    }
+
     init() {
         console.log("WeaponSystem initialized");
         // Sync with engine context if available
@@ -115,6 +156,33 @@ export class WeaponSystem extends System {
 
         // Switch to knife (slot 3) automatically
         this.engine.emit('input:keydown', 'Digit1'); // 1 is Knife
+    }
+
+    giveWeapon(weaponKey) {
+        const weaponData = WEAPONS_DATA[weaponKey];
+        if (!weaponData) return;
+
+        // Determine slot
+        let slot = weaponData.slot; // 2 for Secondary, 1 for Primary (if we follow CS slot indices)
+        // Adjust slot mapping: 1 (Primary), 2 (Secondary), 3 (Knife)
+        // Constants_v2 says: Glock(slot 3), AK47(slot 2). Wait. 
+        // My GameState init used: 1 (Primary), 2 (Secondary), 3 (Knife).
+        // Let's re-map WEAPONS_DATA slot to our inventory slot.
+        if (weaponData.type === 'rifle' || weaponData.type === 'heavy' || weaponData.type === 'sniper' || weaponData.type === 'smg' || weaponData.type === 'shotgun') {
+            slot = 1;
+        } else if (weaponData.type === 'pistol') {
+            slot = 2;
+        } else if (weaponData.type === 'utility') {
+            slot = 5;
+        }
+
+        // Add to GameState
+        GameState.setInventorySlot(slot, weaponKey);
+        
+        console.log(`Weapon given: ${weaponKey} to slot ${slot}`);
+        
+        // Notify main to update models
+        this.engine.emit('weapon:purchased', { slot, weaponKey, weaponData });
     }
 
     calculateSpread() {

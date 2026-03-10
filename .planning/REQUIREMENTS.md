@@ -16,7 +16,7 @@
 
 ### Gameplay Mechanics (GAME)
 - [x] **GAME-01**: Competitive Bomb Defusal Loop (Round timers, site logic, win conditions)
-- [ ] **GAME-02**: Buy Menu & Tactical Economy System
+- [x] **GAME-02**: Buy Menu & Tactical Economy System
 - [x] **GAME-03**: Deterministic Recoil Patterns (Learnable spray patterns)
 - [x] **GAME-04**: Movement Inaccuracy (Inaccuracy while running/jumping)
 - [ ] **GAME-05**: Dynamic Map Interaction (Destructible crates, opening doors)
@@ -57,7 +57,7 @@
 | WGPU-03 | Phase 5 | Complete |
 | WGPU-04 | Phase 6 | Complete |
 | GAME-01 | Phase 8 | Complete |
-| GAME-02 | Phase 9 | Pending |
+| GAME-02 | Phase 9 | Complete |
 | GAME-03 | Phase 7 | Complete |
 | GAME-04 | Phase 7 | Complete |
 | GAME-05 | Phase 11 | Pending |

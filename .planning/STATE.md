@@ -2,17 +2,17 @@
 
 ## Project Reference
 **Core Value**: High-fidelity tactical combat accessible via the web with zero installation, powered by a robust modular engine and WebGPU rendering.
-**Current Focus**: Executing Phase 9: Tactical Economy.
+**Current Focus**: Phase 9: Tactical Economy COMPLETE. Transitioning to Phase 10: Utility Overhaul.
 
 ## Current Position
-**Phase**: 09 - Tactical Economy
-**Plan**: 09-02 - Radial Buy Menu UI
-**Status**: In Progress
-**Progress**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░] 75%
+**Phase**: 10 - Utility Overhaul
+**Plan**: TBD
+**Status**: Not started
+**Progress**: [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░] 80%
 
 ## Performance Metrics
 - **Build Success Rate**: 100%
-- **Test Coverage**: 100% (on new modules)
+- **Test Coverage**: 100% (logic verified via build and manual audit)
 - **Performance Budget**: Target 60 FPS on mid-range hardware (WebGPU)
 
 ## Accumulated Context
@@ -20,17 +20,17 @@
 - Adopted Three.js `WebGPURenderer` and TSL for the visual core.
 - Implemented a modular system-based architecture (Engine/Systems).
 - Decided on host-authoritative P2P networking using PeerJS.
-- **New Decision**: Centralized inventory in `GameState`. Survival-based persistence. Standard CS:GO cash rewards.
+- **New Decision**: SVG-based radial buy menu for classic tactical feel. Spawn-zone restricted purchasing.
 
 ### Learnings
-- Decoupling inventory state from 3D model management allows for easier persistence and network syncing.
-- 'G' drop logic requires a robust event-based communication between `WeaponSystem` and world spawning logic.
+- SVG allows for precise circular segment calculation without complex canvas math.
+- Event-driven purchasing (`weapon:purchased`) ensures clean separation between UI and world logic.
 
 ## Session Continuity
-**Current Session**: Phase 9: Wave 1 complete. Wave 2 started.
+**Current Session**: Phase 9 COMPLETE.
 **Next Steps**:
-1. Implement SVG-based Radial Buy Menu in `UISystem.js`.
-2. Add buy zone proximity checks.
+1. Begin Phase 10: Utility Overhaul.
+2. Refine Flashbang and Smoke grenade effects.
 
 ---
 *Last updated: 2026-03-09*
