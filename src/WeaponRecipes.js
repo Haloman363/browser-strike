@@ -43,7 +43,16 @@ export const WEAPON_RECIPES = {
         boltAction: false,
         sightType: 'iron_rifle',
         vmRightHand: { x: 0.18, y: -0.18, z: 0.12, rx: -0.1, ry: -0.3 },
-        vmLeftHand: { x: -0.18, y: -0.15, z: -0.25, rx: -0.2, ry: 0.3 }
+        vmLeftHand: { x: -0.18, y: -0.15, z: -0.25, rx: -0.2, ry: 0.3 },
+        recoilPattern: [
+            { x: 0, y: 0.1 }, { x: -0.1, y: 0.3 }, { x: -0.2, y: 0.5 }, { x: -0.3, y: 0.8 }, { x: -0.4, y: 1.1 },
+            { x: -0.4, y: 1.4 }, { x: -0.3, y: 1.7 }, { x: -0.1, y: 2.0 }, { x: 0.2, y: 2.3 }, { x: 0.5, y: 2.5 },
+            { x: 0.8, y: 2.6 }, { x: 1.1, y: 2.7 }, { x: 1.3, y: 2.8 }, { x: 1.4, y: 2.8 }, { x: 1.4, y: 2.7 },
+            { x: 1.2, y: 2.6 }, { x: 0.9, y: 2.5 }, { x: 0.5, y: 2.5 }, { x: 0.1, y: 2.5 }, { x: -0.3, y: 2.5 },
+            { x: -0.7, y: 2.6 }, { x: -1.0, y: 2.7 }, { x: -1.2, y: 2.8 }, { x: -1.4, y: 2.8 }, { x: -1.5, y: 2.8 },
+            { x: -1.4, y: 2.7 }, { x: -1.2, y: 2.6 }, { x: -0.9, y: 2.5 }, { x: -0.5, y: 2.5 }, { x: -0.2, y: 2.5 }
+        ],
+        moveInaccuracy: 0.05
     },
     'M4A4': {
         bodyColor: '#1a1a1a',
@@ -95,7 +104,16 @@ export const WEAPON_RECIPES = {
         m4HandguardCap: true,
         sightType: 'iron_rifle',
         vmRightHand: { x: 0.18, y: -0.18, z: 0.1, rx: -0.1, ry: -0.3 },
-        vmLeftHand: { x: -0.18, y: -0.15, z: -0.22, rx: -0.2, ry: 0.3 }
+        vmLeftHand: { x: -0.18, y: -0.15, z: -0.22, rx: -0.2, ry: 0.3 },
+        recoilPattern: [
+            { x: 0, y: 0.05 }, { x: 0, y: 0.15 }, { x: -0.1, y: 0.3 }, { x: -0.2, y: 0.5 }, { x: -0.25, y: 0.7 },
+            { x: -0.3, y: 0.9 }, { x: -0.3, y: 1.1 }, { x: -0.2, y: 1.3 }, { x: -0.1, y: 1.5 }, { x: 0.1, y: 1.7 },
+            { x: 0.3, y: 1.8 }, { x: 0.5, y: 1.9 }, { x: 0.7, y: 2.0 }, { x: 0.8, y: 2.0 }, { x: 0.8, y: 1.9 },
+            { x: 0.7, y: 1.8 }, { x: 0.5, y: 1.7 }, { x: 0.3, y: 1.7 }, { x: 0.1, y: 1.7 }, { x: -0.1, y: 1.7 },
+            { x: -0.3, y: 1.8 }, { x: -0.5, y: 1.9 }, { x: -0.7, y: 2.0 }, { x: -0.8, y: 2.0 }, { x: -0.8, y: 2.0 },
+            { x: -0.7, y: 1.9 }, { x: -0.5, y: 1.8 }, { x: -0.3, y: 1.7 }, { x: -0.1, y: 1.7 }, { x: 0, y: 1.7 }
+        ],
+        moveInaccuracy: 0.03
     },
     'AWP': {
         bodyColor: '#2d3e2d',
@@ -185,7 +203,12 @@ export const WEAPON_RECIPES = {
         deagleSightDetails: true,
         slideSerrations: true,
         vmRightHand: { x: 0.12, y: -0.15, z: 0.1, rx: -0.1, ry: -0.4 },
-        vmLeftHand: { x: -0.05, y: -0.18, z: 0.08, rx: -0.2, ry: 0.6 }
+        vmLeftHand: { x: -0.05, y: -0.18, z: 0.08, rx: -0.2, ry: 0.6 },
+        recoilPattern: [
+            { x: 0, y: 1.5 }, { x: 0, y: 2.8 }, { x: -0.2, y: 4.0 }, { x: 0.2, y: 4.8 }, 
+            { x: 0.5, y: 5.4 }, { x: -0.5, y: 6.0 }, { x: 0, y: 6.5 }
+        ],
+        moveInaccuracy: 0.08
     },
     'GLOCK': {
         bodyColor: '#1a1a1a',
