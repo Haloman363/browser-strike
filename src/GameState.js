@@ -45,7 +45,8 @@ export class GameStateManager extends EventEmitter {
             bombTimeLeft: 40,
             canPlant: false,
             atBombSite: null, // 'A' or 'B'
-            bombExploded: false
+            bombExploded: false,
+            inventory: { 1: null, 2: 'GLOCK', 3: 'KNIFE', 4: [], 5: null }
         };
     }
 
@@ -76,6 +77,46 @@ export class GameStateManager extends EventEmitter {
      */
     get(key) {
         return this.state[key];
+    }
+
+    /**
+     * Set a specific inventory slot.
+     * @param {number} slot 1-5
+     * @param {string} weaponKey 
+     */
+    setInventorySlot(slot, weaponKey) {
+        const inventory = { ...this.state.inventory };
+        if (slot === 4) {
+            // Grenade slot is an array
+            if (!inventory[4]) inventory[4] = [];
+            inventory[4].push(weaponKey);
+        } else {
+            inventory[slot] = weaponKey;
+        }
+        this.set({ inventory });
+    }
+
+    /**
+     * Get a specific inventory slot.
+     * @param {number} slot 1-5
+     */
+    getInventorySlot(slot) {
+        return this.state.inventory[slot];
+    }
+
+    /**
+     * Resets inventory to defaults (Pistol + Knife).
+     */
+    clearInventory() {
+        this.set({
+            inventory: {
+                1: null,
+                2: 'GLOCK',
+                3: 'KNIFE',
+                4: [],
+                5: null
+            }
+        });
     }
 
     /**

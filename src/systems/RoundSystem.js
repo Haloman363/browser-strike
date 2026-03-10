@@ -25,6 +25,14 @@ export class RoundSystem extends System {
         this.engine.on('bomb:defused', () => this.onRoundWin('A')); // CT win
         this.engine.on('bomb:exploded', () => this.onRoundWin('B')); // T win
         
+        // Cash Reward for Kills
+        this.engine.on('entity:killed', ({ killer }) => {
+            if (killer === 'player') {
+                const currentCash = GameState.get('cash');
+                GameState.set({ cash: currentCash + 300 });
+            }
+        });
+
         // Listen for network ROUND_STATE updates if we're a client
         this.engine.on('network:round_state', (data) => {
             if (!GameState.get('isHost')) {
@@ -44,6 +52,14 @@ export class RoundSystem extends System {
         const scores = { ...GameState.get('teamScores') };
         scores[winner]++;
         
+        // Grant Round Rewards
+        const playerTeam = GameState.get('playerTeam');
+        const winReward = 3250;
+        const lossReward = 1400;
+        const currentCash = GameState.get('cash');
+        const reward = (playerTeam === winner) ? winReward : lossReward;
+        GameState.set({ cash: currentCash + reward });
+
         GameState.set({ 
             teamScores: scores,
             roundState: 'POST_ROUND',
@@ -137,7 +153,12 @@ export class RoundSystem extends System {
         // 1. Teleport Player
         this.teleportToSpawn();
 
-        // 2. Reset Health/Ammo/State
+        // 2. Reset Health/State (Inventory persists if alive)
+        const isPlayerDead = GameState.get('isPlayerDead');
+        if (isPlayerDead) {
+            GameState.clearInventory();
+        }
+
         GameState.set({
             health: 100,
             bombPlanted: false,

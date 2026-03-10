@@ -26,6 +26,12 @@ export class WeaponSystem extends System {
         // Sync with engine context if available
         this.objects = this.engine.context.objects || [];
 
+        this.engine.on('input:keydown', (code) => {
+            if (code === 'KeyG') {
+                this.dropWeapon();
+            }
+        });
+
         this.engine.on('input:mousedown', (button) => {
             if (button === 0) { // Left click
                 this.setFiring(true);
@@ -74,6 +80,41 @@ export class WeaponSystem extends System {
         if (!isFiring) {
             this.shotIndex = 0;
         }
+    }
+
+    dropWeapon() {
+        const currentSlot = GameState.get('currentSlot');
+        const weaponKey = GameState.get('currentWeaponKey');
+        
+        // Cannot drop knife (slot 3)
+        if (currentSlot === 3) return;
+        
+        const inventory = GameState.get('inventory');
+        if (!inventory[currentSlot]) return;
+
+        console.log(`Dropping weapon: ${weaponKey} from slot ${currentSlot}`);
+
+        // Notify world to spawn pickup
+        const camera = this.engine.camera;
+        const dropPos = camera.position.clone();
+        const dropDir = new THREE.Vector3();
+        camera.getWorldDirection(dropDir);
+        
+        this.engine.emit('weapon:dropped', {
+            weaponKey,
+            position: dropPos,
+            direction: dropDir,
+            ammoInClip: GameState.get('ammoInClip'),
+            ammoTotal: GameState.get('ammoTotal')
+        });
+
+        // Remove from GameState inventory
+        const newInventory = { ...inventory };
+        newInventory[currentSlot] = null;
+        GameState.set({ inventory: newInventory });
+
+        // Switch to knife (slot 3) automatically
+        this.engine.emit('input:keydown', 'Digit1'); // 1 is Knife
     }
 
     calculateSpread() {
