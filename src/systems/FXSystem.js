@@ -22,6 +22,8 @@ import {
     mx_noise_float,
     depth,
     viewportLinearDepth,
+    uv,
+    vec2,
     Fn
 } from 'three/tsl';
 import { PointsNodeMaterial, SpriteNodeMaterial } from 'three/webgpu';
@@ -146,13 +148,17 @@ export class FXSystem extends System {
         material.colorNode = Fn(() => {
             const baseAlpha = ageNorm.smoothstep(0, 0.1).mul(sub(1, ageNorm.pow(2))).mul(0.4);
             
+            // Radial density: fade at edges of the particle sprite
+            const dist = uv().distance(vec2(0.5));
+            const radialFade = dist.mul(2.0).oneMinus().smoothstep(0, 0.5);
+            
             // Soft-particle logic: fade near geometry
             const fragmentDepth = depth;
             const sceneDepth = viewportLinearDepth;
             const depthDiff = sceneDepth.sub(fragmentDepth);
             const softFade = depthDiff.mul(0.01).clamp(0, 1);
             
-            return vec3(0.6, 0.6, 0.6).toVar().pack(baseAlpha.mul(softFade));
+            return vec3(0.6, 0.6, 0.6).toVar().pack(baseAlpha.mul(softFade).mul(radialFade));
         })();
 
         this.smokeMesh = new THREE.InstancedMesh(geometry, material, this.maxSmoke);
