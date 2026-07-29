@@ -176,16 +176,20 @@ const P = {
   headR: 0.115,           // 0.23m head diameter
   neck: 0.085,
   shoulderSpan: 0.46,
-  chestH: 0.32,           // ribcage, shoulder down to the floating ribs
+  chestH: 0.28,           // ribcage, shoulder down to the floating ribs
   chestW: 0.36,
   chestD: 0.22,
-  spineH: 0.18,           // floating ribs down to the waist
+  spineH: 0.16,           // floating ribs down to the waist
   hipW: 0.34,
   hipH: 0.16,
   // Hip pivot at HALF body height. thigh + shin + ankle = 0.915, leaving a
   // ~0.015m rest flex at the knee — nobody stands with locked knees, and it
   // also guarantees the knee bends the correct way when the cycle starts.
   hipY: 0.90,
+  // Neutral standing flex, solved so the ankle lands directly under the hip
+  // with the sole flat on y=0: 0.44cos(h) + 0.415cos(h+k) = 0.90 - ankleH.
+  restHip: 0.182,
+  restKnee: -0.375,
   upperArm: 0.29,
   lowerArm: 0.25,
   armR: 0.052,
@@ -196,6 +200,11 @@ const P = {
   footL: 0.27,
   footW: 0.115,
 };
+
+// Rest height of the hips GROUP. The leg pivots hang P.hipH/2 below it, so the
+// group sits that much above the anatomical hip height. animate() and the death
+// collapse both write hips.position.y, so this must be one shared number.
+const HIPS_Y = P.hipY + P.hipH / 2;
 
 function mat(color, rough = 0.85, metal = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
@@ -245,7 +254,7 @@ export function buildBotModel() {
 
   // --- Hips: the animation root. Bobs and leans; everything hangs off it.
   const hips = new THREE.Group();
-  hips.position.y = P.hipY;
+  hips.position.y = HIPS_Y;
   root.add(hips);
   joints.hips = hips;
 
@@ -281,8 +290,6 @@ export function buildBotModel() {
   rib.scale.z = P.chestD / P.chestW;       // squash front-to-back into an oval
   // Upper back slab fills the cylinder's flat back so the pack has something
   // to sit against.
-  part(chest, new THREE.BoxGeometry(P.chestW - 0.06, P.chestH * 0.8, 0.06), M.fatigue,
-    0, P.chestH * 0.52, -P.chestD / 2 + 0.02);
 
   // Plate carrier: a SEPARATE layer sitting proud of the ribcage with real
   // thickness, front and back plates plus a cummerbund wrapping the sides.
@@ -343,7 +350,7 @@ export function buildBotModel() {
   // Skull: an ovoid, longer front-to-back than it is wide, with a jaw block
   // beneath. A bare sphere is what read as a black ball.
   const skull = part(head, new THREE.SphereGeometry(P.headR, 16, 12), M.balaclava,
-    0, P.headR * 0.95, -0.005);
+    0, P.headR * 0.85, -0.005);
   skull.scale.set(0.92, 1.02, 1.10);
   const jaw = part(head, new THREE.BoxGeometry(0.145, 0.085, 0.15), M.balaclava,
     0, P.headR * 0.55, 0.012);
@@ -361,7 +368,7 @@ export function buildBotModel() {
   // Shemagh: a wrapped crown plus two offset fold bands. The offsets are what
   // make it read as cloth wound round a head rather than a hat.
   const crown = part(head, new THREE.SphereGeometry(P.headR * 1.04, 14, 10), M.wrap,
-    0, P.headR * 1.10, -0.015);
+    0, P.headR * 1.02, -0.015);
   crown.scale.set(0.98, 0.78, 1.06);
   const fold1 = part(head, new THREE.TorusGeometry(P.headR * 0.98, 0.028, 8, 16),
     M.wrapPale, 0, P.headR * 1.30, -0.012);
@@ -407,10 +414,6 @@ export function buildBotModel() {
     part(elbow,
       new THREE.CapsuleGeometry(P.armR * 0.9, P.lowerArm - P.armR * 2 + lap, 4, 10),
       M.fatigue, 0, -(P.lowerArm - lap) / 2, 0);
-    // Rolled cuff at the wrist.
-    part(elbow, new THREE.CylinderGeometry(P.armR * 0.95, P.armR * 0.85, 0.045, 8),
-      M.fatigueLit, 0, -P.lowerArm + 0.02, 0);
-
     const hand = new THREE.Group();
     hand.position.y = -P.lowerArm - 0.005;
     elbow.add(hand);
@@ -450,15 +453,20 @@ export function buildBotModel() {
       new THREE.CapsuleGeometry(P.legR * 0.92, P.lowerLeg * 0.62, 4, 10),
       M.trouser, 0, -P.lowerLeg * 0.34, 0);
     // Bloused cuff bunched over the boot top.
-    part(knee, new THREE.CylinderGeometry(P.legR * 1.02, P.legR * 0.86, 0.09, 10),
-      M.trouserDark, 0, -P.lowerLeg + 0.055, 0);
-    part(knee, new THREE.CapsuleGeometry(P.legR * 0.7, 0.10, 4, 8),
-      M.trouserDark, 0, -P.lowerLeg + 0.09, 0);
+    part(knee, new THREE.CylinderGeometry(P.legR * 1.05, P.legR * 0.86, 0.11, 10),
+      M.trouserDark, 0, -P.lowerLeg + 0.06, 0);
 
     const ankle = new THREE.Group();
     ankle.position.y = -P.lowerLeg;
     knee.add(ankle);
     joints[`ankle${side}`] = ankle;
+
+    // Neutral standing flex. animate() overwrites these every frame, but the
+    // un-animated model (editor previews, the headless proportion check) must
+    // still stand on its soles rather than sinking through the floor.
+    hip.rotation.x = P.restHip;
+    knee.rotation.x = P.restKnee;
+    ankle.rotation.x = -(P.restHip + P.restKnee);
 
     // BOOT. Built as ankle collar -> foot mass -> sole -> toe cap, all forward
     // of the ankle pivot, so heel-strike and toe-off actually read in the gait.
@@ -478,19 +486,33 @@ export function buildBotModel() {
   }
 
   // --- Rifle, held in the right hand, left hand supporting the foregrip.
+  // The rifle GROUP's origin is the PISTOL GRIP, not the receiver centre: the
+  // grip is what the right fist closes on, so making it the pivot means the
+  // weapon rotates about the hand instead of swinging the hand around. It also
+  // pulls the foregrip back to roughly 0.24m forward, inside the left arm's
+  // 0.54m reach — without this the left hand can never touch the handguard.
   const rifle = new THREE.Group();
   joints.handR.add(rifle);
   joints.rifle = rifle;
-  buildRifle(rifle, M);
+  const gun = new THREE.Group();
+  gun.position.set(0, GRIP_OFFSET.y, GRIP_OFFSET.z);
+  rifle.add(gun);
+  buildRifle(gun, M);
 
   // Muzzle marker so the shoot code can spawn tracers from the right place.
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0.055, 0.56);
-  rifle.add(muzzle);
+  gun.add(muzzle);
   joints.muzzle = muzzle;
 
   return { root, joints, materials: M };
 }
+
+// Where the pistol grip and the foregrip sit in raw rifle geometry space. The
+// rifle group is shifted by -GRIP_OFFSET so its origin lands on the pistol grip;
+// FOREGRIP is then where the LEFT hand has to reach, in rifle-group space.
+const GRIP_OFFSET = { y: 0.048, z: -0.03 };
+const FOREGRIP = { y: 0.055 + GRIP_OFFSET.y, z: 0.27 + GRIP_OFFSET.z };
 
 /** Simple AK-flavoured primitive rifle, +Z is the barrel direction. */
 function buildRifle(g, M) {
@@ -518,17 +540,21 @@ function buildRifle(g, M) {
 // Ordered head-first so the multiplier resolution is stable when they overlap.
 // ponytail: spheres rather than oriented boxes. At CS ranges the difference is
 // under a pixel; swap for OBBs if the bots ever get prone/lean poses.
+// Landmarks from the rebuilt model (measured, see _testBot): crown 1.80,
+// head centre 1.68, shoulder 1.46, hip pivot 0.90, knee 0.46, ankle 0.06.
 const HITBOXES = [
-  { part: 'head', y: 1.68, r: 0.135 },
+  { part: 'head', y: 1.68, r: 0.125 },
   { part: 'chest', y: 1.36, r: 0.235 },
-  { part: 'stomach', y: 1.08, r: 0.215 },
-  // Three leg spheres: consecutive radii must overlap or shots slip through the
-  // shin. The self-check sweeps every 5cm of height to enforce that.
-  { part: 'leg', y: 0.76, r: 0.20 },
-  { part: 'leg', y: 0.50, r: 0.175 },
-  { part: 'leg', y: 0.25, r: 0.165 },
-  { part: 'arm', y: 1.32, r: 0.13, x: 0.27 },
-  { part: 'arm', y: 1.32, r: 0.13, x: -0.27 },
+  { part: 'stomach', y: 1.07, r: 0.215 },
+  // Four leg spheres: consecutive radii must overlap or shots slip through the
+  // shin. The self-check sweeps every 5cm of height to enforce that. The extra
+  // low sphere covers the boot now that the model has actual feet.
+  { part: 'leg', y: 0.78, r: 0.185 },
+  { part: 'leg', y: 0.55, r: 0.16 },
+  { part: 'leg', y: 0.32, r: 0.155 },
+  { part: 'leg', y: 0.12, r: 0.145 },
+  { part: 'arm', y: 1.36, r: 0.115, x: 0.24 },
+  { part: 'arm', y: 1.36, r: 0.115, x: -0.24 },
 ];
 
 // ---------------------------------------------------------------------------
@@ -1096,7 +1122,7 @@ export class Bot {
     // 1x (weight shifts onto the planted leg), plus breathing at rest.
     const bob = -Math.abs(sinP) * 0.055 * amp;
     const idleBreath = Math.sin(this.breathe) * 0.008 * (1 - w);
-    J.hips.position.y = P.hipY + bob + idleBreath;
+    J.hips.position.y = HIPS_Y + bob + idleBreath;
     J.hips.position.x = cosP * 0.022 * amp;
     J.hips.rotation.z = -cosP * 0.055 * amp;   // pelvis tilt toward the swing leg
     J.hips.rotation.y = sinP * 0.10 * amp;     // pelvis counter-rotation
@@ -1145,13 +1171,16 @@ export class Bot {
       const ph = side === 'L' ? p : p + Math.PI;
       const s = Math.sin(ph), c = Math.cos(ph);
 
+      // All three angles are offsets from the STANDING pose (P.restHip etc), so
+      // at amp=0 the leg settles into a soft-knee stand rather than snapping
+      // straight and driving the sole through the floor.
       // Hip swings fore/aft. Slight forward bias so the bot leans into its stride.
-      const hipAngle = s * 0.62 * amp + 0.06 * amp;
+      const hipAngle = P.restHip + s * 0.62 * amp + 0.06 * amp;
 
       // Knee: only flexes on the swing half. max(0, -cos) gates it to the half
       // of the cycle where the foot is airborne. Knees never hyperextend.
       const swing = Math.max(0, -c);
-      const kneeAngle = -(swing * swing * 1.15 + 0.10) * amp - 0.05;
+      const kneeAngle = P.restKnee - (swing * swing * 1.15 + 0.10) * amp;
 
       // Ankle. Now that there is an actual foot forward of this pivot, the
       // ankle drives the visible part of the gait: positive rotation.x pitches
@@ -1160,7 +1189,9 @@ export class Bot {
       //   swing, early  (swing high)        -> dorsiflex to clear the ground
       //   swing, late   (s ~ +1)            -> level out for heel-strike
       const heelStrike = Math.max(0, s) * (1 - swing);
-      const ankleAngle = (c * 0.40 - swing * 0.34 - heelStrike * 0.14) * amp;
+      const restAnkle = -(P.restHip + P.restKnee);   // keeps the sole flat at rest
+      const ankleAngle = restAnkle +
+        (c * 0.40 - swing * 0.34 - heelStrike * 0.14) * amp;
 
       const hip = J[`hip${side}`], knee = J[`knee${side}`], ankle = J[`ankle${side}`];
       hip.rotation.x = damp(hip.rotation.x, hipAngle, 20, dt);
@@ -1186,42 +1217,48 @@ export class Bot {
     const swayX = Math.sin(this.breathe * 0.7) * 0.045 * (1 - w * 0.6) + sinP * 0.09 * amp;
     const swayY = Math.cos(this.breathe * 0.53) * 0.035 * (1 - w * 0.6);
 
-    // Right arm holds the pistol grip: elbow tucked in and DOWN so the weapon
-    // sits at chest height, not slung at the waist.
-    const rShoulderX = aiming ? -1.05 : -0.82;
-    const rShoulderZ = aiming ? -0.34 : -0.24;
-    const rElbow = aiming ? -1.68 : -1.35;
+    // These angles are SOLVED, not eyeballed: a search over the arm chain for
+    // the pose that puts the right fist on the pistol grip with the barrel
+    // level and forward, then the left arm onto the resulting foregrip. Nudging
+    // any of them by more than ~0.1 rad breaks the two-handed grip.
+    const rShoulderX = aiming ? -0.05 : -0.30;
+    const rShoulderY = aiming ? 0.20 : 0.16;
+    const rShoulderZ = aiming ? 0.00 : -0.10;
+    const rElbow = aiming ? -1.72 : -1.50;
+    const rElbowY = -0.40;
 
-    // Left arm crosses the body to the foregrip. Higher shoulder abduction plus
-    // a deeper elbow is what closes the arms-plus-rifle triangle; without it
-    // the left hand hangs in space and the gun reads as unheld.
-    const lShoulderX = aiming ? -1.22 : -0.98;
-    const lShoulderZ = aiming ? 0.86 : 0.66;
-    const lElbow = aiming ? -1.92 : -1.58;
+    // Left arm crosses the body to the foregrip. This is the closed triangle
+    // that reads as "person holding a gun" rather than "gun floating nearby".
+    const lShoulderX = aiming ? -0.60 : -0.44;
+    const lShoulderY = aiming ? 0.80 : 0.62;
+    const lShoulderZ = aiming ? -0.80 : -0.55;
+    const lElbow = aiming ? 0.00 : -0.20;
+    const lElbowY = -1.00;
 
     const R = J.shoulderR, L = J.shoulderL;
     R.rotation.x = damp(R.rotation.x, rShoulderX + swayX * 0.5, 9, dt);
+    R.rotation.y = damp(R.rotation.y, rShoulderY, 9, dt);
     R.rotation.z = damp(R.rotation.z, rShoulderZ + swayY, 9, dt);
-    R.rotation.y = damp(R.rotation.y, aiming ? -0.26 : -0.14, 9, dt);
     J.elbowR.rotation.x = damp(J.elbowR.rotation.x, rElbow - swayX * 0.35, 9, dt);
-    J.elbowR.rotation.y = damp(J.elbowR.rotation.y, aiming ? -0.30 : -0.18, 9, dt);
+    J.elbowR.rotation.y = damp(J.elbowR.rotation.y, rElbowY, 9, dt);
 
     L.rotation.x = damp(L.rotation.x, lShoulderX + swayX * 0.5, 9, dt);
+    L.rotation.y = damp(L.rotation.y, lShoulderY, 9, dt);
     L.rotation.z = damp(L.rotation.z, lShoulderZ + swayY, 9, dt);
-    L.rotation.y = damp(L.rotation.y, aiming ? 0.52 : 0.36, 9, dt);
     J.elbowL.rotation.x = damp(J.elbowL.rotation.x, lElbow - swayX * 0.35, 9, dt);
-    J.elbowL.rotation.y = damp(J.elbowL.rotation.y, aiming ? 0.40 : 0.26, 9, dt);
+    J.elbowL.rotation.y = damp(J.elbowL.rotation.y, lElbowY, 9, dt);
 
-    // Rifle sits in the right hand pointing +Z (forward). Recoil kicks it up
-    // and settles fast — the visible tell that the bot is shooting.
+    // Rifle pivots about the PISTOL GRIP (see GRIP_OFFSET), so these rotations
+    // turn the weapon in the fist rather than swinging the hand. Solved so the
+    // barrel points down +Z with the muzzle level at ~1.22m — chest height.
+    // Recoil kicks it up and settles fast: the visible tell that it is firing.
     const recoil = this.muzzleFlashTime > 0 ? 0.16 : 0;
     J.rifle.rotation.set(
-      damp(J.rifle.rotation.x, 1.42 + recoil, 30, dt),
-      damp(J.rifle.rotation.y, 0.14, 12, dt),
-      damp(J.rifle.rotation.z, aiming ? 0.02 : 0.26, 10, dt),
+      damp(J.rifle.rotation.x, 1.86 + recoil, 30, dt),
+      damp(J.rifle.rotation.y, -0.35, 12, dt),
+      damp(J.rifle.rotation.z, aiming ? -0.40 : -0.20, 10, dt),
     );
-    // Offset so the pistol grip lands IN the fist rather than beside it.
-    J.rifle.position.set(0.005, -0.05, 0.03);
+    J.rifle.position.set(0, 0, 0);
 
     // Snap the left hand onto the foregrip. Two-bone IK would be nicer, but a
     // direct world-space placement of the hand pivot is exact and costs one
@@ -1240,7 +1277,7 @@ export class Bot {
   snapLeftHandToForegrip() {
     const J = this.joints;
     if (!J.rifle || !J.handL) return;
-    if (!this._gripLocal) this._gripLocal = new THREE.Vector3(0, 0.055, 0.27);
+    if (!this._gripLocal) this._gripLocal = new THREE.Vector3(0, FOREGRIP.y, FOREGRIP.z);
     if (!this._gripWorld) this._gripWorld = new THREE.Vector3();
 
     // Both chains hang off the chest, so updating from there is enough.
@@ -1272,7 +1309,7 @@ export class Bot {
 
     // Buckle: knees give way in the first third, dropping the hips.
     const buckle = clamp(this.deathTime / 0.5, 0, 1);
-    J.hips.position.y = P.hipY * (1 - buckle * 0.55);
+    J.hips.position.y = HIPS_Y * (1 - buckle * 0.55);
 
     // Topple about the tumble axis. Rotating the ROOT (not the hips) is what
     // makes the body end up lying on the ground rather than folded in place.
@@ -1457,6 +1494,165 @@ export function _testBot() {
     assert(Math.abs(v - 10) < 0.05, `should converge, got ${v}`);
     // A 1-second frame must not overshoot — this is why it is exponential.
     assert(damp(0, 10, 8, 1) <= 10, 'must never overshoot the target');
+  });
+
+  // --- Model geometry. buildBotModel() is pure Three.js with no DOM and no
+  // renderer, so the whole rig can be measured headlessly. These are the checks
+  // that would otherwise need a screenshot.
+  const model = buildBotModel();
+  model.root.updateMatrixWorld(true);
+  const worldY = name => {
+    const v = new THREE.Vector3();
+    model.joints[name].getWorldPosition(v);
+    return v.y;
+  };
+  const bounds = obj => new THREE.Box3().setFromObject(obj);
+
+  check('model measures 1.80m tall and stands on the ground plane', () => {
+    const b = bounds(model.root);
+    const h = b.max.y - b.min.y;
+    assert(Math.abs(h - P.height) < 0.03, `height should be ~1.80m, got ${h.toFixed(3)}`);
+    // Root origin is the feet, so the soles must sit on y=0, not float or sink.
+    assert(Math.abs(b.min.y) < 0.03, `soles should touch y=0, got ${b.min.y.toFixed(3)}`);
+  });
+
+  check('joint heights match human proportions', () => {
+    const hip = worldY('hipL'), sh = worldY('shoulderL'), head = worldY('head');
+    // Hip at HALF body height is the number that stops the bot reading stilt-like.
+    assert(Math.abs(hip - P.height / 2) < 0.03,
+      `hip should be at ~0.90m (half height), got ${hip.toFixed(3)}`);
+    assert(sh > 1.40 && sh < 1.52, `shoulder should be ~1.46m, got ${sh.toFixed(3)}`);
+    assert(head > sh, 'head must sit above the shoulder');
+    // ~7.5 heads tall: a 1.80m figure over a 0.23m head.
+    const heads = P.height / (P.headR * 2);
+    assert(heads > 7.0 && heads < 8.2, `should be ~7.5 heads tall, got ${heads.toFixed(2)}`);
+  });
+
+  check('feet extend forward of the ankle and rotate with it', () => {
+    for (const side of ['L', 'R']) {
+      const ankle = model.joints[`ankle${side}`];
+      const pivot = new THREE.Vector3();
+      ankle.getWorldPosition(pivot);
+      const fb = bounds(ankle);
+      const forward = fb.max.z - pivot.z;
+      const behind = pivot.z - fb.min.z;
+      assert(forward > 0.14, `${side} foot must extend forward, got ${forward.toFixed(3)}`);
+      assert(forward > behind * 1.5,
+        `${side} foot mass must be mostly forward of the ankle (${forward.toFixed(3)} vs ${behind.toFixed(3)})`);
+      const len = fb.max.z - fb.min.z;
+      assert(len > 0.22 && len < 0.34, `${side} foot should be ~0.27m, got ${len.toFixed(3)}`);
+      // Rotating the ankle must carry the foot with it — that is the whole
+      // point of parenting the boot to the joint rather than to the shin.
+      ankle.rotation.x += 0.5;
+      ankle.updateMatrixWorld(true);
+      const after = bounds(ankle);
+      assert(Math.abs(after.max.y - fb.max.y) > 0.01, `${side} foot must follow the ankle`);
+      ankle.rotation.x -= 0.5;
+      ankle.updateMatrixWorld(true);
+    }
+  });
+
+  check('every mesh casts shadow and uses a lit standard material', () => {
+    let meshes = 0, flat = 0;
+    model.root.traverse(o => {
+      if (!o.isMesh) return;
+      meshes++;
+      assert(o.castShadow, 'every part must cast a shadow');
+      assert(o.material.isMeshStandardMaterial, 'parts must use MeshStandardMaterial');
+      // Near-black parts are what made the old bot read as an unlit placeholder.
+      // THREE.Color stores linear values, so convert back to the sRGB the
+      // palette was authored in before judging brightness.
+      const c = o.material.color.clone().convertLinearToSRGB();
+      if ((c.r + c.g + c.b) / 3 < 0.13) flat++;
+    });
+    assert(meshes > 40 && meshes <= 80, `mesh budget is ~70, got ${meshes}`);
+    assert(flat === 0, `${flat} parts are near-black and will read as unlit`);
+    // Colour variety: a single flat tone is the other half of the placeholder look.
+    const tones = new Set();
+    model.root.traverse(o => { if (o.isMesh) tones.add(o.material.color.getHex()); });
+    assert(tones.size >= 8, `expected varied per-part colour, got ${tones.size} tones`);
+  });
+
+  check('limb segments overlap at every joint so no gaps open when posed', () => {
+    // Drive the rig through a full gait cycle and assert the child limb's
+    // geometry always reaches back over its parent pivot.
+    const pairs = [['hipL', 'kneeL'], ['kneeL', 'ankleL'], ['shoulderL', 'elbowL']];
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      model.joints.hipL.rotation.x = Math.sin(a) * 0.62 + P.restHip;
+      model.joints.kneeL.rotation.x = P.restKnee - Math.max(0, -Math.cos(a)) * 1.15;
+      model.joints.shoulderL.rotation.x = -1.2 + Math.sin(a) * 0.3;
+      model.root.updateMatrixWorld(true);
+      for (const [, childName] of pairs) {
+        const child = model.joints[childName];
+        const pivot = new THREE.Vector3();
+        child.getWorldPosition(pivot);
+        const cb = bounds(child);
+        // The child's own geometry must enclose its pivot point, which means it
+        // overlaps back into the parent segment rather than leaving a hole.
+        assert(cb.min.y <= pivot.y + 1e-3 && cb.max.y >= pivot.y - 1e-3,
+          `${childName} geometry leaves a gap at its joint (phase ${i})`);
+      }
+    }
+    model.joints.hipL.rotation.x = P.restHip;
+    model.joints.kneeL.rotation.x = P.restKnee;
+    model.joints.shoulderL.rotation.x = 0;
+    model.root.updateMatrixWorld(true);
+  });
+
+  check('the rifle is parented to the right hand and sits at chest height', () => {
+    // Parenting is what makes the weapon read as held rather than floating.
+    let p = model.joints.rifle.parent, found = false;
+    while (p) { if (p === model.joints.handR) { found = true; break; } p = p.parent; }
+    assert(found, 'rifle must be a descendant of the right hand');
+    // Pose the arms the way animateArms() does when aiming, then check height,
+    // barrel direction, and that BOTH hands are on the weapon.
+    model.joints.shoulderR.rotation.set(-0.05, 0.20, 0.00);
+    model.joints.elbowR.rotation.set(-1.72, -0.40, 0);
+    model.joints.shoulderL.rotation.set(-0.60, 0.80, -0.80);
+    model.joints.elbowL.rotation.set(0.00, -1.00, 0);
+    model.joints.rifle.rotation.set(1.86, -0.35, -0.40);
+    model.joints.rifle.position.set(0, 0, 0);
+    model.root.updateMatrixWorld(true);
+
+    const gun = new THREE.Vector3();
+    model.joints.rifle.getWorldPosition(gun);
+    assert(gun.y > 1.05, `weapon should be at chest height, not the waist (${gun.y.toFixed(2)})`);
+    const muzzle = new THREE.Vector3();
+    model.joints.muzzle.getWorldPosition(muzzle);
+    // Barrel must point forward and level, not at the sky — that was the bug
+    // where the folded forearm aimed the whole weapon upward.
+    const barrel = muzzle.clone().sub(gun).normalize();
+    assert(barrel.z > 0.9, `barrel must point forward, got z=${barrel.z.toFixed(2)}`);
+    assert(Math.abs(barrel.y) < 0.2, `barrel must be level, got y=${barrel.y.toFixed(2)}`);
+
+    // The closed arms-to-weapon triangle: the right fist is on the pistol grip
+    // (the rifle pivot) and the left hand reaches the foregrip.
+    const handR = new THREE.Vector3(), handL = new THREE.Vector3();
+    model.joints.handR.getWorldPosition(handR);
+    model.joints.handL.getWorldPosition(handL);
+    assert(handR.distanceTo(gun) < 0.12,
+      `right hand must be on the grip, off by ${handR.distanceTo(gun).toFixed(3)}m`);
+    const fore = new THREE.Vector3(0, FOREGRIP.y, FOREGRIP.z)
+      .applyMatrix4(model.joints.rifle.matrixWorld);
+    // animate() snaps the left hand the rest of the way; the pose only has to
+    // land inside that snap's reach clamp.
+    assert(handL.distanceTo(fore) < 0.14,
+      `left hand must reach the foregrip, off by ${handL.distanceTo(fore).toFixed(3)}m`);
+  });
+
+  check('hitbox spheres stay inside the model silhouette', () => {
+    const b = bounds(model.root);
+    for (const box of HITBOXES) {
+      assert(box.y - box.r > -0.05, `${box.part} hitbox dips below the feet`);
+      assert(box.y + box.r < b.max.y + 0.12,
+        `${box.part} hitbox at ${box.y} overshoots the ${b.max.y.toFixed(2)}m crown`);
+      assert(Math.abs(box.x ?? 0) + box.r < 0.45, `${box.part} hitbox is wider than the body`);
+    }
+    const head = HITBOXES.find(h => h.part === 'head');
+    // The head sphere must actually sit on the modelled head, not near it.
+    assert(Math.abs(head.y - worldY('head') - 0.09) < 0.09,
+      `head hitbox (${head.y}) is off the modelled head (pivot ${worldY('head').toFixed(2)})`);
   });
 
   check('bot health and rifle damage give a sane time-to-kill', () => {

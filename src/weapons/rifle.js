@@ -262,75 +262,196 @@ export class Rifle {
 
   // -- construction ---------------------------------------------------------
 
-  buildViewmodel(materials) {
-    const metal = materials?.metal ||
-      new THREE.MeshStandardMaterial({ color: 0x4a4a50, roughness: 0.38, metalness: 0.9 });
-    const wood = materials?.wood ||
-      new THREE.MeshStandardMaterial({ color: 0x8a5a2e, roughness: 0.68, metalness: 0.0 });
-    const dark = new THREE.MeshStandardMaterial({
-      color: 0x33353a, roughness: 0.5, metalness: 0.65 });
+  /**
+   * AK-pattern rifle, composed from primitives. Gun-local axes: -Z is down the
+   * barrel (camera forward), +X is the shooter's right, +Y up. The origin sits
+   * at the front of the receiver so the whole thing straddles z ~ -0.62..+0.30.
+   *
+   * Deliberately NOT using the world material set here. Those are 1m-scale
+   * textured materials for map geometry; on a 0.2m handguard the albedo tiles
+   * into a blotchy mess and the normal map reads as noise. Plain standard
+   * materials at the right colour beat a texture at the wrong scale.
+   */
+  buildViewmodel(_materials) {
+    // METALNESS: the viewmodel scene has no environment map (the world's lives
+    // on renderer.scene), and a fully metallic PBR surface with nothing to
+    // reflect renders BLACK. So the steel here is deliberately semi-metallic
+    // with a lifted base colour — it reads as parkerised steel under the three
+    // viewmodel lights, where metalness:0.9 read as a silhouette.
+    const metal = new THREE.MeshStandardMaterial({
+      color: 0x3a3b41, roughness: 0.42, metalness: 0.35 });    // parkerised steel
+    const worn = new THREE.MeshStandardMaterial({
+      color: 0x55575e, roughness: 0.3, metalness: 0.45 });     // rubbed-bright edges
+    const wood = new THREE.MeshStandardMaterial({
+      color: 0x7a4a20, roughness: 0.68, metalness: 0.0 });     // AK laminate
+    const woodDark = new THREE.MeshStandardMaterial({
+      color: 0x633a17, roughness: 0.72, metalness: 0.0 });     // lower furniture
+    const poly = new THREE.MeshStandardMaterial({
+      color: 0x201e1c, roughness: 0.55, metalness: 0.1 });     // bakelite/polymer
+    const bore = new THREE.MeshStandardMaterial({
+      color: 0x1b1d21, roughness: 0.6, metalness: 0.25 });     // barrel, unpolished
 
     const gun = new THREE.Group();
-    // Barrel points down -Z, matching camera-space forward.
     const box = (w, h, d, mat, x, y, z) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
       m.position.set(x, y, z);
       gun.add(m);
       return m;
     };
-    const cyl = (r, h, mat, x, y, z, seg = 12) => {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, seg), mat);
-      m.rotation.x = Math.PI / 2; // stand the cylinder along Z
+    // Cylinders default to standing along Z (down the barrel); pass axis 'y'
+    // for the ones that stay upright.
+    const cyl = (rt, rb, h, mat, x, y, z, seg = 14, axis = 'z') => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat);
+      if (axis === 'z') m.rotation.x = Math.PI / 2;
       m.position.set(x, y, z);
       gun.add(m);
       return m;
     };
 
-    box(0.070, 0.075, 0.34, metal, 0, 0, -0.05);           // receiver
-    box(0.055, 0.045, 0.20, wood, 0, 0.005, -0.30);        // handguard (upper)
-    box(0.050, 0.038, 0.18, wood, 0, -0.045, -0.29);       // handguard (lower)
-    cyl(0.011, 0.42, dark, 0, 0.012, -0.42);               // barrel
-    cyl(0.017, 0.055, dark, 0, 0.012, -0.635);             // muzzle brake
-    cyl(0.014, 0.13, metal, 0, -0.030, -0.235, 8);         // gas tube / piston
+    // -- receiver: a real box with a separate dust cover sitting proud of it --
+    // Kept SHALLOW on purpose: the AK receiver is only ~55mm tall and it is the
+    // dust cover's dome plus the magwell below that make up the visual mass.
+    // A tall box here is exactly what made the old model read as a slab.
+    box(0.058, 0.046, 0.285, metal, 0, 0.004, -0.070);         // receiver body
+    box(0.064, 0.014, 0.115, metal, 0, -0.023, -0.115);        // magwell lip
+    // Dust cover: slightly wider than the receiver, domed with a squashed half
+    // cylinder — that rounded top is the AK's most-copied profile line.
+    cyl(0.031, 0.031, 0.235, metal, 0, 0.027, -0.088, 16)
+      .scale.set(1.0, 1.0, 0.38);                              // squashed = dome
+    box(0.058, 0.012, 0.026, metal, 0, 0.038, -0.200);         // cover front lug
+    // Rivet row — three tiny studs on the flat, sells the stamped receiver.
+    for (let i = 0; i < 3; i++) {
+      cyl(0.004, 0.004, 0.005, worn, 0.030, -0.010, -0.03 - i * 0.070, 8, 'y')
+        .rotation.z = Math.PI / 2;
+    }
+    // Rear sight block + leaf, on the trunnion just ahead of the dust cover.
+    box(0.044, 0.018, 0.028, metal, 0, 0.038, -0.222);
+    box(0.010, 0.014, 0.007, poly, 0, 0.050, -0.220);          // sight notch
+    // Selector lever: the long stamped bar down the right side.
+    box(0.007, 0.046, 0.014, worn, 0.031, 0.006, -0.038);
+    // Charging handle, right side, riding in its slot.
+    box(0.018, 0.010, 0.046, worn, 0.036, 0.022, -0.135);
+    box(0.011, 0.009, 0.028, worn, 0.028, 0.022, -0.162);
 
-    // Magazine: the iconic curve, faked with two segments rather than a spline.
-    const magA = box(0.036, 0.13, 0.075, dark, 0, -0.095, -0.115);
-    magA.rotation.x = -0.20;
-    const magB = box(0.034, 0.10, 0.070, dark, 0, -0.195, -0.155);
-    magB.rotation.x = -0.55;
-    this.magParts = [magA, magB];
+    // -- magazine: the silhouette. 4 segments, each rotated a bit more, so the
+    // stack curves forward the way a 7.62x39 mag does. --------------------
+    // Walk a point down the mag's centreline, turning a fixed amount per
+    // segment. That accumulation is what actually produces a curve — the old
+    // version set absolute rotations on segments at fixed offsets, which just
+    // fanned them out around a common origin and read as a straight box.
+    this.magParts = [];
+    let mx = 0, my = -0.052, mz = -0.130, ma = -0.12; // ma = lean, radians
+    const SEG = 0.048;
+    for (let i = 0; i < 4; i++) {
+      const w = 0.038 - i * 0.001;
+      const m = box(w, SEG * 1.06, 0.072 - i * 0.002, poly, mx, my, mz);
+      m.rotation.x = ma;
+      this.magParts.push(m);
+      // Spine rib on the front face of each segment — pressed reinforcement.
+      const r = box(w * 0.9, 0.006, 0.008, metal, mx, my, mz - 0.038);
+      r.rotation.x = ma;
+      this.magParts.push(r);
+      // Step down along the segment's own tilted axis, then lean further.
+      my -= Math.cos(ma) * SEG;
+      mz += Math.sin(ma) * SEG;   // +sin with negative ma walks the mag FORWARD
+      ma -= 0.20;
+    }
+    // Floorplate: a brighter lip so the mag bottom reads as an edge, not a
+    // fade-out. This is the deepest point of the weapon in the frame.
+    const plate = box(0.040, 0.010, 0.070, worn, mx, my + 0.020, mz);
+    plate.rotation.x = ma + 0.20;
+    this.magParts.push(plate);
     this.magHome = this.magParts.map((m) => m.position.clone());
 
-    const grip = box(0.034, 0.115, 0.055, dark, 0, -0.085, 0.045);
-    grip.rotation.x = 0.28;                                 // pistol grip
-    box(0.030, 0.060, 0.075, dark, 0, -0.020, 0.075);       // trigger guard block
-    box(0.052, 0.062, 0.20, wood, 0, -0.010, 0.20);         // stock
-    box(0.050, 0.085, 0.030, dark, 0, -0.020, 0.305);       // butt plate
+    // -- handguard: upper + lower wood, vents in the upper, gas tube above ----
+    box(0.048, 0.034, 0.155, wood, 0, 0.036, -0.300);          // upper handguard
+    const lower = box(0.052, 0.046, 0.170, woodDark, 0, -0.026, -0.292);
+    lower.rotation.x = -0.03;                                  // slight downslope
+    box(0.040, 0.014, 0.150, woodDark, 0, -0.049, -0.290);     // lower belly
+    // Vent slots: dark slits cut into the sides of the upper handguard. Cheaper
+    // than CSG — inset dark boxes at the surface read the same at this size.
+    for (let i = 0; i < 3; i++) {
+      const z = -0.262 - i * 0.040;
+      box(0.050, 0.012, 0.022, poly, 0, 0.040, z);
+    }
+    // Gas tube: sits on top of the upper handguard, capped at the rear.
+    cyl(0.0125, 0.0125, 0.150, metal, 0, 0.055, -0.300, 12);
+    cyl(0.016, 0.016, 0.020, metal, 0, 0.055, -0.222, 12);     // gas tube collar
 
-    // Iron sights — small, but they are what sells the silhouette.
-    box(0.030, 0.022, 0.016, dark, 0, 0.058, 0.055);        // rear sight block
-    box(0.010, 0.026, 0.012, dark, 0, 0.070, -0.560);       // front post
-    box(0.026, 0.008, 0.014, dark, 0, 0.082, -0.560);       // front hood
+    // -- gas block, front sight, barrel --------------------------------------
+    cyl(0.0105, 0.0105, 0.235, bore, 0, 0.004, -0.470, 14);    // barrel
+    box(0.030, 0.048, 0.034, metal, 0, 0.022, -0.392);         // gas block
+    box(0.020, 0.024, 0.020, metal, 0, 0.048, -0.392);         // gas port stub
+    box(0.026, 0.040, 0.028, metal, 0, 0.020, -0.545);         // front sight base
+    // Protective ears with the post standing between them.
+    box(0.007, 0.030, 0.014, metal, -0.011, 0.052, -0.545);
+    box(0.007, 0.030, 0.014, metal, 0.011, 0.052, -0.545);
+    cyl(0.0035, 0.0035, 0.026, worn, 0, 0.052, -0.545, 8, 'y'); // front post
+    box(0.020, 0.010, 0.030, metal, 0, -0.014, -0.545);        // cleaning-rod lug
+    // Slant brake: flared, and cut away on one side like the real muzzle device.
+    cyl(0.0175, 0.0155, 0.052, worn, 0, 0.004, -0.612, 14);
+    cyl(0.0085, 0.0085, 0.020, bore, 0, 0.004, -0.632, 12);    // bore recess
+
+    // -- grip, trigger, trigger guard ----------------------------------------
+    // Grip sits well BEHIND the magazine (+z) so the two read as separate
+    // shapes. Overlapping them is what made the old model's underside mush.
+    const grip = box(0.030, 0.100, 0.042, poly, 0, -0.076, 0.058);
+    grip.rotation.x = 0.34;
+    box(0.033, 0.012, 0.046, poly, 0, -0.122, 0.074).rotation.x = 0.34; // grip cap
+    // Trigger guard: four thin bars forming an actual loop, so you can see
+    // daylight through it. A solid block here reads as a lump.
+    box(0.022, 0.006, 0.062, metal, 0, -0.048, 0.016);         // guard bottom bar
+    box(0.022, 0.022, 0.006, metal, 0, -0.038, -0.012);        // guard front strap
+    box(0.022, 0.020, 0.006, metal, 0, -0.039, 0.044);         // guard rear strap
+    box(0.007, 0.020, 0.009, worn, 0, -0.040, 0.010);          // trigger blade
+
+    // -- stock: goes back toward the camera and off-frame, which is correct ---
+    // The AK stock is a narrow wrist that swells to the butt, not a plank. It
+    // is also the biggest thing in frame at this angle, so it gets a real
+    // taper: a 4-sided cylinder is a wedge for free and reads far better than
+    // a constant-section box.
+    const wrist = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.019, 0.026, 0.145, 4), wood);
+    wrist.rotation.set(Math.PI / 2 - 0.10, Math.PI / 4, 0);
+    wrist.position.set(0, -0.028, 0.150);
+    gun.add(wrist);
+    const butt = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.026, 0.030, 0.100, 4), wood);
+    butt.rotation.set(Math.PI / 2 - 0.10, Math.PI / 4, 0);
+    butt.position.set(0, -0.048, 0.262);
+    gun.add(butt);
+    box(0.034, 0.058, 0.012, poly, 0, -0.056, 0.310);          // butt plate
+    // Tang: kept narrower than the receiver so it tucks under the rear of it
+    // rather than reading as a separate block bolted on the back.
+    box(0.030, 0.030, 0.050, wood, 0, -0.014, 0.086);
 
     for (const c of gun.children) { c.castShadow = false; c.receiveShadow = false; }
 
-    // Resting pose: low-right, angled slightly inward. This is the whole
-    // "it feels like CS" pose — gun canted in from the bottom-right corner.
-    // Pushed out and down from the camera. At 0.24m the weapon filled half the
-    // frame and cropped off-screen; CS keeps it to roughly the lower-right
-    // quarter so it never competes with the crosshair for attention.
-    gun.position.set(0.135, -0.145, -0.42);
-    gun.rotation.set(0.02, 0.045, 0.015);
+    // Resting pose, tuned against screenshots. Lower-right quarter, barrel
+    // angled in toward screen centre. Three constraints fight here:
+    //   - Y cannot go below about -0.11: the mag hangs to y ~ -0.24 in gun
+    //     space, and any lower crops the magazine off the bottom edge, which
+    //     is the one feature that makes the weapon identifiable.
+    //   - YAW past ~0.3 turns the stock broadside to the camera and it fills
+    //     the right half of the frame as a slab.
+    //   - Negative PITCH is what tips the receiver's left side into view; at
+    //     0 the camera looks down the top and the gun reads as a plank.
+    // Scale 0.58 keeps the muzzle clear of the crosshair at screen centre.
+    gun.scale.setScalar(0.58);
+    gun.position.set(0.140, -0.100, -0.370);
+    gun.rotation.set(-0.15, 0.21, 0.10);
     this.gun = gun;
     this.gunHome = { pos: gun.position.clone(), rot: gun.rotation.clone() };
     this.vmRoot.add(gun);
 
-    // Muzzle marker: where flash and shells attach, in gun-local space.
+    // Muzzle marker: where flash and shells attach, in gun-local space. Must
+    // track the brake — it moved forward when the barrel got shorter.
     this.muzzle = new THREE.Object3D();
-    this.muzzle.position.set(0, 0.012, -0.665);
+    this.muzzle.position.set(0, 0.004, -0.642);
     gun.add(this.muzzle);
+    // Eject port: right side of the receiver, under the dust cover lip.
     this.ejectPort = new THREE.Object3D();
-    this.ejectPort.position.set(0.04, 0.02, -0.06);
+    this.ejectPort.position.set(0.036, 0.026, -0.075);
     gun.add(this.ejectPort);
 
     this.buildMuzzleFlash();
@@ -659,11 +780,12 @@ export class Rifle {
 
       // Magazine drops out over the first third, new one seats in the last.
       const magOut = t < 0.34 ? t / 0.34 : (t > 0.62 ? 1 - (t - 0.62) / 0.38 : 1);
+      const gone = magOut < 0.98;
       for (let i = 0; i < this.magParts.length; i++) {
         this.magParts[i].position.copy(this.magHome[i]);
         this.magParts[i].position.y -= magOut * 0.30;
+        this.magParts[i].visible = gone;
       }
-      this.magParts[0].visible = this.magParts[1].visible = magOut < 0.98;
     } else {
       for (let i = 0; i < this.magParts.length; i++) {
         this.magParts[i].position.copy(this.magHome[i]);
@@ -874,6 +996,44 @@ export function _testRecoil() {
   // Damage falloff.
   check('damage falls off with distance', damageAt(50) < damageAt(5));
   check('point-blank damage is full', Math.abs(damageAt(0) - RIFLE.damage) < 1e-9);
+
+  // Viewmodel geometry. Building the scene graph needs no DOM or renderer, so
+  // the assembled weapon's proportions are assertable headlessly — this is what
+  // catches "the magazine is above the receiver" without opening a browser.
+  const vm = Object.create(Rifle.prototype);
+  vm.vmRoot = new THREE.Group();
+  vm.buildViewmodel(null);
+  // Measure in GUN-LOCAL space: the resting pose's rotation would skew the box
+  // and turn "is it rifle-shaped" into "is it posed a particular way".
+  vm.gun.position.set(0, 0, 0);
+  vm.gun.rotation.set(0, 0, 0);
+  vm.gun.scale.setScalar(1);
+  vm.gun.updateMatrixWorld(true);
+  // Only the gun's own parts — the muzzle flash quads are children too, and
+  // they are 0.16m of billboard that would fake up the length.
+  const bb = new THREE.Box3();
+  let meshCount = 0;
+  for (const c of vm.gun.children) {
+    if (!c.isMesh) continue;
+    meshCount++;
+    bb.union(new THREE.Box3().setFromObject(c));
+  }
+  const size = bb.getSize(new THREE.Vector3());
+
+  check('viewmodel is roughly rifle-length (~0.9m)',
+    size.z > 0.85 && size.z < 1.00, `${size.z.toFixed(3)}m, ${meshCount} meshes`);
+  check('viewmodel is not a plank — it has real height and width',
+    size.y > 0.25 && size.x > 0.06, `${size.x.toFixed(3)} x ${size.y.toFixed(3)}`);
+  check('magazine hangs below the receiver', (() => {
+    const mag = new THREE.Box3();
+    for (const m of vm.magParts) mag.union(new THREE.Box3().setFromObject(m));
+    return mag.min.y < -0.20 && mag.max.y < 0.0;
+  })(), `mag y ${new THREE.Box3().setFromObject(vm.magParts[3]).min.y.toFixed(3)}`);
+  check('muzzle sits at the front of the weapon, on the bore line',
+    vm.muzzle.position.z < bb.min.z + 0.03 && Math.abs(vm.muzzle.position.y) < 0.03,
+    `${vm.muzzle.position.z} vs bbox front ${bb.min.z.toFixed(3)}`);
+  check('eject port is on the right side of the receiver',
+    vm.ejectPort.position.x > 0.02 && Math.abs(vm.ejectPort.position.z) < 0.16);
 
   const failed = results.filter((r2) => !r2.ok);
   return { results, passed: results.length - failed.length, failed: failed.length };
