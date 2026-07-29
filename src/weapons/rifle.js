@@ -241,10 +241,20 @@ export class Rifle {
     this.vmScene.add(this.vmRoot);
     // The viewmodel scene needs its own light — it is not in the world scene,
     // so none of the map lighting reaches it.
-    const key = new THREE.DirectionalLight(0xffe4bd, 2.6);
+    const key = new THREE.DirectionalLight(0xfff0d4, 3.4);
     key.position.set(-0.6, 1.0, 0.8);
     this.vmScene.add(key);
-    this.vmScene.add(new THREE.HemisphereLight(0x74a8de, 0x4a3c2c, 1.1));
+    // Rim from behind-right separates the weapon's top edge from the world
+    // behind it; without it a dark receiver merges into whatever it overlaps.
+    const rim = new THREE.DirectionalLight(0xbfd4f0, 1.6);
+    rim.position.set(1.2, 0.6, -1.0);
+    this.vmScene.add(rim);
+    // Warm from below, standing in for bounce off the ground and the player's
+    // own body — this is what keeps the underside from going solid black.
+    const fill = new THREE.DirectionalLight(0xd9a877, 0.9);
+    fill.position.set(0.2, -1.0, 0.4);
+    this.vmScene.add(fill);
+    this.vmScene.add(new THREE.HemisphereLight(0x9fb8d8, 0x6a5540, 1.4));
 
     this.buildViewmodel(opts.materials);
     this.buildEffects();
@@ -254,11 +264,11 @@ export class Rifle {
 
   buildViewmodel(materials) {
     const metal = materials?.metal ||
-      new THREE.MeshStandardMaterial({ color: 0x2b2b2e, roughness: 0.42, metalness: 0.85 });
+      new THREE.MeshStandardMaterial({ color: 0x4a4a50, roughness: 0.38, metalness: 0.9 });
     const wood = materials?.wood ||
-      new THREE.MeshStandardMaterial({ color: 0x6b4526, roughness: 0.72, metalness: 0.0 });
+      new THREE.MeshStandardMaterial({ color: 0x8a5a2e, roughness: 0.68, metalness: 0.0 });
     const dark = new THREE.MeshStandardMaterial({
-      color: 0x17181a, roughness: 0.55, metalness: 0.6 });
+      color: 0x33353a, roughness: 0.5, metalness: 0.65 });
 
     const gun = new THREE.Group();
     // Barrel points down -Z, matching camera-space forward.
@@ -306,7 +316,10 @@ export class Rifle {
 
     // Resting pose: low-right, angled slightly inward. This is the whole
     // "it feels like CS" pose — gun canted in from the bottom-right corner.
-    gun.position.set(0.115, -0.115, -0.24);
+    // Pushed out and down from the camera. At 0.24m the weapon filled half the
+    // frame and cropped off-screen; CS keeps it to roughly the lower-right
+    // quarter so it never competes with the crosshair for attention.
+    gun.position.set(0.135, -0.145, -0.42);
     gun.rotation.set(0.02, 0.045, 0.015);
     this.gun = gun;
     this.gunHome = { pos: gun.position.clone(), rot: gun.rotation.clone() };
@@ -357,7 +370,7 @@ export class Rifle {
     // the oldest decal is silently recycled once we hit the cap.
     const decalGeo = new THREE.PlaneGeometry(0.075, 0.075);
     const decalMat = new THREE.MeshBasicMaterial({
-      color: 0x141210,
+      color: 0x2e2b28,
       transparent: true,
       opacity: 0.82,
       depthWrite: false,

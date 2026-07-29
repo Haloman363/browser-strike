@@ -145,38 +145,53 @@ const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 // ---------------------------------------------------------------------------
 
 // Militia palette. Desaturated and warm so the bot reads against Mirage's
-// sandstone without looking like a colour-picker accident.
+// sandstone. Nothing here is near-black: flat blacks kill the shading that
+// makes primitives read as volume, which is what made the old bot a mannequin.
 const SKIN = {
-  fatigue: 0xa8935f,   // tan trousers/sleeves
-  fatigueDark: 0x7d6b44,
-  vest: 0x2f2f2c,      // dark chest rig
-  vestTrim: 0x4a4740,
-  wrap: 0x8a3f32,      // terracotta head wrap
-  balaclava: 0x22201e,
+  fatigue: 0x9a8560,      // tan sleeves
+  fatigueLit: 0xa89268,   // slightly lifted tone for shoulders/upper sleeve
+  trouser: 0x8d7a57,      // trousers, a touch cooler than the sleeves
+  trouserDark: 0x7a6a4c,  // bloused shin section
+  vest: 0x4a4234,         // olive-brown plate carrier
+  vestDark: 0x3d3629,     // straps and cummerbund
+  pouch: 0x585040,        // mag pouches, lifted so they read against the vest
+  belt: 0x3a2f22,
+  wrap: 0x9c6a52,         // dust-red shemagh
+  wrapPale: 0xc0a68c,     // off-white fold highlights
+  balaclava: 0x3b352e,    // face covering: dark but not black
   skin: 0xb08a68,
-  boot: 0x1f1c19,
-  gun: 0x24211e,
-  gunWood: 0x5c3d24,
+  boot: 0x3a2c20,
+  bootSole: 0x2b221a,
+  glove: 0x4b3a2a,
+  gun: 0x2e2a26,
+  gunMetal: 0x4a4642,
+  gunWood: 0x6b4a2c,
 };
 
-// Human proportions in metres for a 1.80m figure (~7.5 heads).
+// Human proportions in metres for a 1.80m figure (~7.5 heads tall).
+// Hip pivot sits at HALF body height — the single number that stops the bot
+// reading as stilt-legged.
 const P = {
-  headR: 0.115,
-  neck: 0.07,
-  shoulderSpan: 0.45,
-  chestH: 0.30,
-  chestW: 0.40,
-  chestD: 0.24,
-  spineH: 0.18,
-  hipW: 0.32,
-  hipH: 0.14,
-  upperArm: 0.30,
-  lowerArm: 0.27,
-  armR: 0.055,
+  height: 1.80,
+  headR: 0.115,           // 0.23m head diameter
+  neck: 0.085,
+  shoulderSpan: 0.46,
+  chestH: 0.32,           // ribcage, shoulder down to the floating ribs
+  chestW: 0.36,
+  chestD: 0.22,
+  spineH: 0.18,           // floating ribs down to the waist
+  hipW: 0.34,
+  hipH: 0.16,
+  hipY: 0.90,             // hip pivot height = half of 1.80m
+  upperArm: 0.29,
+  lowerArm: 0.25,
+  armR: 0.052,
   upperLeg: 0.44,
   lowerLeg: 0.42,
-  legR: 0.075,
-  footL: 0.26,
+  legR: 0.082,
+  ankleH: 0.075,          // ankle pivot above the sole
+  footL: 0.27,
+  footW: 0.115,
 };
 
 function mat(color, rough = 0.85, metal = 0) {

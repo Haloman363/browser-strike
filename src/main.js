@@ -48,7 +48,15 @@ const input = new Input(canvas);
 
 stage('rifle');
 const rifle = await tryLoad('./weapons/rifle.js',
-  (m) => new m.Rifle(renderer.scene, renderer.camera, world), 'rifle');
+  (m) => new m.Rifle(renderer.scene, renderer.camera, world, { materials }), 'rifle');
+
+// The viewmodel lives in its own scene, so it needs the environment map handed
+// to it explicitly — without one, gunmetal has nothing to reflect and renders
+// as a black silhouette no matter how bright the lights are.
+if (rifle?.vmScene) {
+  rifle.vmScene.environment = renderer.scene.environment;
+  rifle.vmScene.environmentIntensity = 0.85;
+}
 
 stage('bots');
 const bots = await tryLoad('./ai/bot.js', (m) => {
@@ -195,6 +203,30 @@ window.__shot = (pos, lookAt, fov = 90) => {
   renderer.render();
   return true;
 };
+// Park a bot at a fixed spot in a chosen pose, for visual inspection. The
+// model is slaved to the physics body, so move the body and tick once.
+window.__poseBot = (bot, { at = [0, 0, 0], yaw = 0, walk = 0 } = {}) => {
+  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  bot.velocity.set(0, 0, 0);
+  bot.yaw = bot.aimYaw = yaw;
+  bot.state = 'PATROL';
+  if (walk) {
+    // Advance the gait far enough to reach a clear mid-stride pose.
+    for (let i = 0; i < 24; i++) {
+      bot.velocity.set(Math.sin(yaw) * walk, 0, Math.cos(yaw) * walk);
+      bot.position.set(at[0], at[1] + 0.93, at[2]);
+      bot.update(1 / 60, new THREE.Vector3(0, 1.6, 40), new THREE.Vector3(0, 0, 40));
+    }
+  }
+  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  bot.update(1 / 60, new THREE.Vector3(0, 1.6, 40), new THREE.Vector3(0, 0, 40));
+  return {
+    modelPos: bot.model.position.toArray().map((v) => +v.toFixed(2)),
+    state: bot.state,
+    meshes: (() => { let n = 0; bot.model.traverse((o) => { if (o.isMesh) n++; }); return n; })(),
+  };
+};
+
 window.__dbg = { renderer, world, materials, mapData, movement, rifle, bots, THREE };
 // Set last: the capture script waits on this, so everything above must exist.
 stage('ready');
