@@ -465,14 +465,17 @@ function genPlaster(size, n) {
   // that made pass 1's plaster read as camouflage: a lot of small flakes plus a
   // few large failures, rather than uniformly-sized blobs at 50% coverage.
   const flake = (u, v) => {
-    const blob = n.fbm(u, v, 9, 9, 5);
-    const edge = n.fbm(u, v, 26, 26, 3);
-    const small = smooth(0.57, 0.64, blob * 0.7 + edge * 0.3);
-    // Large patches are rarer (higher threshold) and gated by a slow field so
-    // they cluster where water has been getting in.
-    const wet = smooth(0.48, 0.72, n.fbm(u, v, 3, 4, 2));
-    const large = smooth(0.60, 0.68, n.fbm(u, v, 4, 5, 4)) * wet;
-    return clamp01(small * 0.55 + large);
+    // Flakes are SMALL and clustered. Earlier versions drove them from a low
+    // frequency field, which produced wall-sized blobs that read as mould
+    // rather than as paint lifting off.
+    const blob = n.fbm(u, v, 17, 17, 5);
+    const edge = n.fbm(u, v, 44, 44, 3);
+    const small = smooth(0.58, 0.66, blob * 0.68 + edge * 0.32);
+    // A slow field only GATES where flaking happens (near damp), it never
+    // becomes a patch by itself.
+    const wet = smooth(0.50, 0.78, n.fbm(u, v, 3, 4, 2));
+    const mid = smooth(0.62, 0.70, n.fbm(u, v, 11, 12, 4)) * wet;
+    return clamp01(small * 0.6 + mid * 0.5);
   };
 
   // Crack network from ridged noise — thin, branching, deep. Thresholds sit
