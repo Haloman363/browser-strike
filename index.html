@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Browser Strike</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; background: #0b0a09; }
+    canvas { display: block; width: 100vw; height: 100vh; }
+
+    #hud {
+      position: fixed; inset: 0; pointer-events: none;
+      font: 500 14px/1.2 ui-monospace, "SF Mono", Menlo, monospace;
+      color: #e8dcc8; text-shadow: 0 1px 3px rgba(0,0,0,.9);
+    }
+
+    /* Crosshair: four ticks with a gap, gap widens with inaccuracy. */
+    #cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+    #cross i {
+      position: absolute; background: #5ef08a; display: block;
+      box-shadow: 0 0 2px rgba(0,0,0,.8);
+    }
+    #cross .v { width: 2px; height: 7px; left: -1px; }
+    #cross .h { height: 2px; width: 7px; top: -1px; }
+
+    #health {
+      position: absolute; left: 28px; bottom: 24px;
+      display: flex; align-items: baseline; gap: 8px;
+    }
+    #health b { font-size: 30px; font-weight: 600; letter-spacing: -.5px; }
+    #health span { font-size: 11px; opacity: .55; text-transform: uppercase; letter-spacing: .12em; }
+
+    #ammo {
+      position: absolute; right: 28px; bottom: 24px;
+      display: flex; align-items: baseline; gap: 6px;
+    }
+    #ammo b { font-size: 30px; font-weight: 600; letter-spacing: -.5px; }
+    #ammo u { font-size: 16px; opacity: .5; text-decoration: none; }
+
+    #hitmarker {
+      position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+      margin: -11px 0 0 -11px; opacity: 0;
+    }
+    #hitmarker::before, #hitmarker::after {
+      content: ''; position: absolute; inset: 0;
+      border-top: 2px solid #fff; border-left: 2px solid #fff;
+      width: 8px; height: 8px;
+    }
+    #hitmarker::after { transform: rotate(180deg); left: auto; right: 0; top: auto; bottom: 0; }
+
+    #damage {
+      position: absolute; inset: 0; opacity: 0;
+      background: radial-gradient(ellipse at center, transparent 35%, rgba(150,10,10,.75) 100%);
+      transition: opacity .35s ease-out;
+    }
+
+    #start {
+      position: fixed; inset: 0; display: grid; place-content: center;
+      text-align: center; background: rgba(8,7,6,.82); backdrop-filter: blur(6px);
+      font-family: ui-monospace, Menlo, monospace; color: #e8dcc8; cursor: pointer;
+    }
+    #start h1 {
+      font-size: 44px; font-weight: 600; letter-spacing: -1.5px; margin-bottom: 6px;
+    }
+    #start p { font-size: 13px; opacity: .6; line-height: 1.9; }
+    #start kbd {
+      background: rgba(255,255,255,.09); padding: 2px 6px; border-radius: 3px;
+      font-size: 12px;
+    }
+    #start.hidden { display: none; }
+    #err {
+      position: fixed; left: 0; right: 0; bottom: 0; max-height: 45vh; overflow: auto;
+      background: #2a0d0d; color: #ffb4b4; padding: 14px 18px; white-space: pre-wrap;
+      font: 12px/1.5 ui-monospace, monospace; display: none;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div id="cross">
+      <i class="v" id="ct" ></i><i class="v" id="cb"></i>
+      <i class="h" id="cl"></i><i class="h" id="cr"></i>
+    </div>
+    <div id="hitmarker"></div>
+    <div id="health"><b id="hp">100</b><span>health</span></div>
+    <div id="ammo"><b id="mag">30</b><u id="reserve">/ 90</u></div>
+    <div id="damage"></div>
+  </div>
+
+  <div id="start">
+    <h1>BROWSER STRIKE</h1>
+    <p>
+      <kbd>WASD</kbd> move &nbsp; <kbd>Space</kbd> jump &nbsp; <kbd>Ctrl</kbd> crouch<br>
+      <kbd>Mouse</kbd> aim &nbsp; <kbd>Click</kbd> fire &nbsp; <kbd>R</kbd> reload<br><br>
+      click to play
+    </p>
+  </div>
+
+  <pre id="err"></pre>
+
+  <script type="module" src="/src/main.js"></script>
+  <script>
+    // Surface module/runtime errors on-screen; a black canvas tells you nothing.
+    addEventListener('error', (e) => {
+      const el = document.getElementById('err');
+      el.style.display = 'block';
+      el.textContent += (e.error?.stack || e.message) + '\n';
+    });
+    addEventListener('unhandledrejection', (e) => {
+      const el = document.getElementById('err');
+      el.style.display = 'block';
+      el.textContent += 'Unhandled: ' + (e.reason?.stack || e.reason) + '\n';
+    });
+  </script>
+</body>
+</html>

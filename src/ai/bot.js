@@ -1,0 +1,1298 @@
+import * as THREE from 'three';
+import { MOVE } from '../player/movement.js';
+
+// Enemy bot: articulated primitive humanoid + procedural animation + a flat
+// state machine. Everything the combat math needs is a pure function at the
+// top of this file so it can be tested headlessly (see _testBot).
+
+export const BOT = {
+  health: 100,
+  eyeHeight: 1.52,          // metres above feet, standing
+  height: MOVE.standHeight, // share the player capsule so LOS reads the same
+  radius: MOVE.radius,
+  walkSpeed: 1.9,
+  runSpeed: 4.1,
+  strafeSpeed: 2.6,
+  accel: 14,
+  gravity: MOVE.gravity,
+
+  fovDeg: 110,
+  sightRange: 42,
+  // Human reaction time. Sampled per-acquisition so bots don't all snap at once.
+  reactionMin: 0.18,
+  reactionMax: 0.35,
+
+  // Aim error in radians: starts wide on acquisition, decays as the bot "settles"
+  // on target. 0.085 rad at 20m is ~1.7m off — a clear miss.
+  // aimErrorMin is deliberately NOT tight enough to guarantee a hit: at 15m it
+  // still throws ~0.42m, wider than a torso, so even a settled bot drops rounds.
+  // Tightening this below ~0.023 makes bots feel like aimbots.
+  aimErrorMax: 0.085,
+  aimErrorMin: 0.028,
+  aimSettleTime: 1.4,       // seconds of sustained sight to reach aimErrorMin
+
+  fireRate: 0.098,          // seconds between rounds, ~600 RPM
+  burstMin: 3,
+  burstMax: 7,
+  burstPauseMin: 0.35,
+  burstPauseMax: 0.85,
+  magSize: 30,
+  reloadTime: 2.4,
+  damage: 26,               // per round, before falloff
+  damageFalloffStart: 12,   // metres
+  damageFalloffEnd: 45,
+  damageFalloffMin: 0.55,
+
+  respawnDelay: 6,
+  loseSightGrace: 3.0,      // seconds of ALERT hunting after losing the player
+};
+
+// CS-style hitgroup multipliers.
+export const HITBOX_MULT = {
+  head: 4.0,
+  chest: 1.0,
+  stomach: 1.25,
+  arm: 0.75,
+  leg: 0.75,
+};
+
+// ---------------------------------------------------------------------------
+// Pure math — no THREE scene, no DOM. Tested by _testBot().
+// ---------------------------------------------------------------------------
+
+/**
+ * Is `target` inside a view cone of `fovDeg` centred on `forward` from `origin`?
+ * All vectors are plain {x,y,z}. The cone is full-angle, so half-angle compare.
+ */
+export function inViewCone(origin, forward, target, fovDeg, maxDist) {
+  const dx = target.x - origin.x, dy = target.y - origin.y, dz = target.z - origin.z;
+  const dist = Math.hypot(dx, dy, dz);
+  if (dist > maxDist || dist < 1e-6) return false;
+  const fl = Math.hypot(forward.x, forward.y, forward.z);
+  if (fl < 1e-6) return false;
+  const cos = (dx * forward.x + dy * forward.y + dz * forward.z) / (dist * fl);
+  return cos >= Math.cos((fovDeg * Math.PI / 180) / 2);
+}
+
+/**
+ * Aim error half-angle in radians given how long the bot has held sight.
+ * Decays exponentially so the first shots of a peek are the sloppy ones —
+ * that is the difference between "fun" and "aimbot".
+ */
+export function aimErrorFor(sightTime, cfg = BOT) {
+  const t = Math.max(0, Math.min(1, sightTime / cfg.aimSettleTime));
+  const eased = 1 - Math.pow(1 - t, 2);
+  return cfg.aimErrorMax + (cfg.aimErrorMin - cfg.aimErrorMax) * eased;
+}
+
+/** Distance falloff on bot damage, so cross-map pot shots sting less. */
+export function damageFalloff(distance, cfg = BOT) {
+  if (distance <= cfg.damageFalloffStart) return 1;
+  if (distance >= cfg.damageFalloffEnd) return cfg.damageFalloffMin;
+  const t = (distance - cfg.damageFalloffStart) /
+    (cfg.damageFalloffEnd - cfg.damageFalloffStart);
+  return 1 + (cfg.damageFalloffMin - 1) * t;
+}
+
+/** Final damage for one round landing on `part`. */
+export function damageForHit(base, part, mult = HITBOX_MULT) {
+  return base * (mult[part] ?? 1);
+}
+
+/**
+ * Does a shot with `errorRad` of aim error connect with a target of
+ * `targetRadius` at `distance`? Deterministic given `roll` in [0,1).
+ * Modelling the error as a uniform angular offset keeps this testable.
+ */
+export function shotConnects(errorRad, distance, targetRadius, roll) {
+  const offset = errorRad * roll * distance;
+  return offset <= targetRadius;
+}
+
+/** Ray vs sphere. Returns the near hit distance in [0,maxDist] or null. */
+export function raySphere(origin, dir, center, radius, maxDist) {
+  const ox = origin.x - center.x, oy = origin.y - center.y, oz = origin.z - center.z;
+  const b = ox * dir.x + oy * dir.y + oz * dir.z;
+  const c = ox * ox + oy * oy + oz * oz - radius * radius;
+  const disc = b * b - c;
+  if (disc < 0) return null;
+  const sq = Math.sqrt(disc);
+  let t = -b - sq;
+  if (t < 0) t = -b + sq;   // origin inside the sphere
+  if (t < 0 || t > maxDist) return null;
+  return t;
+}
+
+/** Shortest signed angle from a to b, in (-pi, pi]. */
+export function angleDelta(a, b) {
+  let d = (b - a) % (Math.PI * 2);
+  if (d > Math.PI) d -= Math.PI * 2;
+  if (d <= -Math.PI) d += Math.PI * 2;
+  return d;
+}
+
+/** Frame-rate independent exponential approach. rate = 1/e-folds per second. */
+export function damp(current, target, rate, dt) {
+  return current + (target - current) * (1 - Math.exp(-rate * dt));
+}
+
+const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const rand = (lo, hi) => lo + Math.random() * (hi - lo);
+
+// ---------------------------------------------------------------------------
+// Character model
+// ---------------------------------------------------------------------------
+
+// Militia palette. Desaturated and warm so the bot reads against Mirage's
+// sandstone without looking like a colour-picker accident.
+const SKIN = {
+  fatigue: 0xa8935f,   // tan trousers/sleeves
+  fatigueDark: 0x7d6b44,
+  vest: 0x2f2f2c,      // dark chest rig
+  vestTrim: 0x4a4740,
+  wrap: 0x8a3f32,      // terracotta head wrap
+  balaclava: 0x22201e,
+  skin: 0xb08a68,
+  boot: 0x1f1c19,
+  gun: 0x24211e,
+  gunWood: 0x5c3d24,
+};
+
+// Human proportions in metres for a 1.80m figure (~7.5 heads).
+const P = {
+  headR: 0.115,
+  neck: 0.07,
+  shoulderSpan: 0.45,
+  chestH: 0.30,
+  chestW: 0.40,
+  chestD: 0.24,
+  spineH: 0.18,
+  hipW: 0.32,
+  hipH: 0.14,
+  upperArm: 0.30,
+  lowerArm: 0.27,
+  armR: 0.055,
+  upperLeg: 0.44,
+  lowerLeg: 0.42,
+  legR: 0.075,
+  footL: 0.26,
+};
+
+function mat(color, rough = 0.85, metal = 0) {
+  return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
+}
+
+/** Add a mesh under `parent`, positioned by its centre. Everything casts. */
+function part(parent, geo, material, x = 0, y = 0, z = 0) {
+  const m = new THREE.Mesh(geo, material);
+  m.position.set(x, y, z);
+  m.castShadow = true;
+  m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+
+/**
+ * Build the articulated skeleton. Every joint is an Object3D pivot at the joint
+ * itself, with geometry hung below it — that is what makes rotating a node look
+ * like a limb bending rather than a box spinning in place.
+ *
+ * Returns { root, joints } where root sits at the bot's FEET.
+ */
+export function buildBotModel() {
+  const M = {
+    fatigue: mat(SKIN.fatigue, 0.92),
+    fatigueDark: mat(SKIN.fatigueDark, 0.92),
+    vest: mat(SKIN.vest, 0.75),
+    vestTrim: mat(SKIN.vestTrim, 0.8),
+    wrap: mat(SKIN.wrap, 0.95),
+    balaclava: mat(SKIN.balaclava, 0.9),
+    skin: mat(SKIN.skin, 0.72),
+    boot: mat(SKIN.boot, 0.7),
+    gun: mat(SKIN.gun, 0.55, 0.35),
+    gunWood: mat(SKIN.gunWood, 0.8),
+  };
+
+  const root = new THREE.Group();          // origin at the feet
+  const joints = {};
+
+  // --- Hips: the animation root. Bobs and leans; everything hangs off it.
+  const hips = new THREE.Group();
+  hips.position.y = P.upperLeg + P.lowerLeg + 0.09; // ~0.95m, top of the thighs
+  root.add(hips);
+  joints.hips = hips;
+
+  part(hips, new THREE.BoxGeometry(P.hipW, P.hipH, 0.20), M.fatigueDark, 0, 0, 0);
+  // Belt: a thin band reads as a waist and separates trousers from vest.
+  part(hips, new THREE.BoxGeometry(P.hipW + 0.015, 0.045, 0.21), M.boot, 0, P.hipH / 2, 0);
+
+  // --- Spine -> chest -> neck -> head
+  const spine = new THREE.Group();
+  spine.position.y = P.hipH / 2;
+  hips.add(spine);
+  joints.spine = spine;
+  part(spine, new THREE.BoxGeometry(0.30, P.spineH, 0.20), M.fatigue, 0, P.spineH / 2, 0);
+
+  const chest = new THREE.Group();
+  chest.position.y = P.spineH;
+  spine.add(chest);
+  joints.chest = chest;
+
+  // Torso is a tapered box: wider at the shoulders than the ribs. The taper is
+  // most of the silhouette read at range.
+  const torso = new THREE.CylinderGeometry(0.001, 0.001, 1, 4); // placeholder swap below
+  torso.dispose();
+  part(chest, new THREE.BoxGeometry(P.chestW, P.chestH, P.chestD), M.fatigue,
+    0, P.chestH / 2, 0);
+  // Chest rig over the top — the dark mass that says "armed combatant".
+  part(chest, new THREE.BoxGeometry(P.chestW + 0.03, P.chestH * 0.72, P.chestD + 0.05),
+    M.vest, 0, P.chestH * 0.52, 0);
+  // Magazine pouches: three small blocks across the front. Cheap, very readable.
+  for (let i = -1; i <= 1; i++) {
+    part(chest, new THREE.BoxGeometry(0.075, 0.11, 0.055), M.vestTrim,
+      i * 0.088, P.chestH * 0.40, (P.chestD + 0.05) / 2 + 0.02);
+  }
+  // Shoulder yoke: spans the full 0.45m so the silhouette is broad up top.
+  part(chest, new THREE.BoxGeometry(P.shoulderSpan, 0.09, 0.19), M.vest,
+    0, P.chestH * 0.92, 0);
+
+  const neck = new THREE.Group();
+  neck.position.y = P.chestH;
+  chest.add(neck);
+  part(neck, new THREE.CylinderGeometry(0.05, 0.055, P.neck, 8), M.balaclava,
+    0, P.neck / 2, 0);
+
+  const head = new THREE.Group();
+  head.position.y = P.neck;
+  neck.add(head);
+  joints.head = head;
+
+  // Skull: slightly ovoid, scaled sphere. Round heads read as balloons.
+  const skull = part(head, new THREE.SphereGeometry(P.headR, 16, 12), M.balaclava,
+    0, P.headR * 0.92, 0);
+  skull.scale.set(0.95, 1.05, 1.08);
+  // Face opening — a lighter patch so the head has a front.
+  part(head, new THREE.BoxGeometry(0.09, 0.055, 0.03), M.skin,
+    0, P.headR * 0.95, P.headR * 0.92);
+  // Head wrap: a torus band around the crown, tilted. Reads instantly as a
+  // shemagh and gives the head an asymmetric, non-robotic silhouette.
+  const wrap = part(head, new THREE.TorusGeometry(P.headR * 0.94, 0.032, 8, 16),
+    M.wrap, 0, P.headR * 1.28, -0.01);
+  wrap.rotation.x = Math.PI / 2;
+  wrap.rotation.z = 0.18;
+  // Trailing tail of the wrap over one shoulder.
+  const tail = part(head, new THREE.BoxGeometry(0.05, 0.20, 0.035), M.wrap,
+    -P.headR * 0.85, P.headR * 0.45, -0.05);
+  tail.rotation.z = 0.35;
+
+  // --- Arms. Shoulders sit at the yoke ends; elbows are child pivots.
+  const armY = P.chestH * 0.88;
+  for (const side of ['L', 'R']) {
+    const s = side === 'L' ? 1 : -1;
+
+    const shoulder = new THREE.Group();
+    shoulder.position.set(s * (P.shoulderSpan / 2 - 0.035), armY, 0);
+    chest.add(shoulder);
+    joints[`shoulder${side}`] = shoulder;
+
+    // Deltoid cap hides the joint gap when the arm swings.
+    part(shoulder, new THREE.SphereGeometry(P.armR * 1.35, 10, 8), M.vest, 0, 0, 0);
+    part(shoulder, new THREE.CapsuleGeometry(P.armR, P.upperArm - P.armR * 2, 4, 8),
+      M.fatigue, 0, -P.upperArm / 2, 0);
+
+    const elbow = new THREE.Group();
+    elbow.position.y = -P.upperArm;
+    shoulder.add(elbow);
+    joints[`elbow${side}`] = elbow;
+
+    part(elbow, new THREE.CapsuleGeometry(P.armR * 0.88, P.lowerArm - P.armR * 2, 4, 8),
+      M.fatigue, 0, -P.lowerArm / 2, 0);
+    // Glove.
+    part(elbow, new THREE.BoxGeometry(0.07, 0.09, 0.055), M.boot,
+      0, -P.lowerArm - 0.02, 0);
+
+    const hand = new THREE.Group();
+    hand.position.y = -P.lowerArm - 0.03;
+    elbow.add(hand);
+    joints[`hand${side}`] = hand;
+  }
+
+  // --- Legs.
+  for (const side of ['L', 'R']) {
+    const s = side === 'L' ? 1 : -1;
+
+    const hip = new THREE.Group();
+    hip.position.set(s * (P.hipW / 2 - 0.075), -P.hipH / 2, 0);
+    hips.add(hip);
+    joints[`hip${side}`] = hip;
+
+    part(hip, new THREE.CapsuleGeometry(P.legR, P.upperLeg - P.legR * 2, 4, 8),
+      M.fatigueDark, 0, -P.upperLeg / 2, 0);
+
+    const knee = new THREE.Group();
+    knee.position.y = -P.upperLeg;
+    hip.add(knee);
+    joints[`knee${side}`] = knee;
+
+    part(knee, new THREE.CapsuleGeometry(P.legR * 0.85, P.lowerLeg - P.legR * 2, 4, 8),
+      M.fatigueDark, 0, -P.lowerLeg / 2, 0);
+
+    const ankle = new THREE.Group();
+    ankle.position.y = -P.lowerLeg;
+    knee.add(ankle);
+    joints[`ankle${side}`] = ankle;
+
+    // Boot: extends forward from the ankle so the stride has a heel-to-toe read.
+    part(ankle, new THREE.BoxGeometry(0.11, 0.085, P.footL), M.boot,
+      0, -0.042, P.footL / 2 - 0.075);
+  }
+
+  // --- Rifle, held in the right hand, left hand supporting the foregrip.
+  const rifle = new THREE.Group();
+  joints.handR.add(rifle);
+  joints.rifle = rifle;
+  buildRifle(rifle, M);
+
+  // Muzzle marker so the shoot code can spawn tracers from the right place.
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, 0.03, 0.52);
+  rifle.add(muzzle);
+  joints.muzzle = muzzle;
+
+  return { root, joints, materials: M };
+}
+
+/** Simple AK-flavoured primitive rifle, +Z is the barrel direction. */
+function buildRifle(g, M) {
+  part(g, new THREE.BoxGeometry(0.055, 0.085, 0.34), M.gun, 0, 0.03, 0.10);       // receiver
+  part(g, new THREE.CylinderGeometry(0.013, 0.013, 0.42, 8), M.gun, 0, 0.055, 0.34)
+    .rotation.x = Math.PI / 2;                                                     // barrel
+  part(g, new THREE.BoxGeometry(0.05, 0.06, 0.16), M.gunWood, 0, 0.045, 0.26);    // handguard
+  part(g, new THREE.BoxGeometry(0.05, 0.075, 0.24), M.gunWood, 0, 0.02, -0.19);   // stock
+  part(g, new THREE.BoxGeometry(0.04, 0.09, 0.055), M.gun, 0, -0.045, 0.03);      // grip
+  // Curved magazine: two blocks at an angle sells the AK read in silhouette.
+  const mag = part(g, new THREE.BoxGeometry(0.035, 0.17, 0.06), M.gun, 0, -0.10, 0.14);
+  mag.rotation.x = -0.35;
+  part(g, new THREE.BoxGeometry(0.02, 0.035, 0.02), M.gun, 0, 0.09, 0.40);        // front sight
+}
+
+// ---------------------------------------------------------------------------
+// Hitboxes
+// ---------------------------------------------------------------------------
+
+// Spheres in bot-local space (origin at feet, +Z forward), radius in metres.
+// Ordered head-first so the multiplier resolution is stable when they overlap.
+// ponytail: spheres rather than oriented boxes. At CS ranges the difference is
+// under a pixel; swap for OBBs if the bots ever get prone/lean poses.
+const HITBOXES = [
+  { part: 'head', y: 1.68, r: 0.135 },
+  { part: 'chest', y: 1.36, r: 0.235 },
+  { part: 'stomach', y: 1.08, r: 0.215 },
+  // Three leg spheres: consecutive radii must overlap or shots slip through the
+  // shin. The self-check sweeps every 5cm of height to enforce that.
+  { part: 'leg', y: 0.76, r: 0.20 },
+  { part: 'leg', y: 0.50, r: 0.175 },
+  { part: 'leg', y: 0.25, r: 0.165 },
+  { part: 'arm', y: 1.32, r: 0.13, x: 0.27 },
+  { part: 'arm', y: 1.32, r: 0.13, x: -0.27 },
+];
+
+// ---------------------------------------------------------------------------
+// Bot
+// ---------------------------------------------------------------------------
+
+export const BotState = {
+  PATROL: 'PATROL',
+  ALERT: 'ALERT',
+  ENGAGE: 'ENGAGE',
+  RELOAD: 'RELOAD',
+  DEAD: 'DEAD',
+};
+
+export class Bot {
+  /**
+   * @param {THREE.Scene} scene
+   * @param {import('../world/collision.js').CollisionWorld} collisionWorld
+   * @param {THREE.Vector3} spawnPos  feet position
+   * @param {THREE.Vector3[]} patrolPoints
+   */
+  constructor(scene, collisionWorld, spawnPos, patrolPoints = []) {
+    this.scene = scene;
+    this.world = collisionWorld;
+    this.spawnPos = spawnPos.clone();
+    this.patrolPoints = patrolPoints.map(p => p.clone());
+
+    // Physics body: centre of the capsule, matching the player box.
+    this.position = spawnPos.clone();
+    this.position.y += BOT.height / 2;
+    this.velocity = new THREE.Vector3();
+    this.grounded = false;
+    this.half = new THREE.Vector3(BOT.radius, BOT.height / 2, BOT.radius);
+
+    this.yaw = 0;             // body facing
+    this.aimYaw = 0;          // upper body / weapon facing
+    this.aimPitch = 0;
+    this.headYaw = 0;         // head tracks independently within limits
+    this.headPitch = 0;
+
+    this.health = BOT.health;
+    this.state = BotState.PATROL;
+    this.stateTime = 0;
+
+    // Perception
+    this.canSee = false;
+    this.sightTime = 0;       // seconds of continuous sight, drives aim error
+    this.lostSightTime = 0;
+    this.reactionTimer = 0;
+    this.reactionDelay = 0;
+    this.lastKnownPos = new THREE.Vector3();
+
+    // Weapon
+    this.ammo = BOT.magSize;
+    this.fireTimer = 0;
+    this.burstLeft = 0;
+    this.burstPause = 0;
+
+    // Movement intent
+    this.patrolIndex = 0;
+    this.moveTarget = null;
+    this.strafeDir = 1;
+    this.strafeTimer = 0;
+    this.lookTimer = 0;
+    this.lookYawOffset = 0;
+
+    // Animation
+    this.phase = 0;           // gait phase in radians
+    this.speedNorm = 0;       // 0..1 blend weight for the walk cycle
+    this.breathe = Math.random() * Math.PI * 2;
+    this.deathTime = 0;
+    this.deathTumble = 0;
+    this.respawnTimer = 0;
+    this.muzzleFlashTime = 0;
+
+    /** Called with (damage) when the bot lands a shot on the player. */
+    this.onShootPlayer = null;
+    /** Called with (muzzleWorldPos, dirWorld, didHit) on every round fired. */
+    this.onFire = null;
+
+    // Scene construction is guarded so the math above is testable in Node.
+    if (scene) {
+      const built = buildBotModel();
+      this.model = built.root;
+      this.joints = built.joints;
+      this.model.position.copy(spawnPos);
+      scene.add(this.model);
+
+      this.muzzleFlash = new THREE.PointLight(0xffc070, 0, 6, 2);
+      this.joints.muzzle.add(this.muzzleFlash);
+    }
+
+    this.pickNextPatrolPoint();
+  }
+
+  get alive() { return this.state !== BotState.DEAD; }
+
+  /** Feet position — the model root and the AI's ground reference. */
+  get feet() {
+    return new THREE.Vector3(
+      this.position.x, this.position.y - BOT.height / 2, this.position.z);
+  }
+
+  /** Eye position, used for line-of-sight and as the shot origin. */
+  get eye() {
+    return new THREE.Vector3(
+      this.position.x,
+      this.position.y - BOT.height / 2 + BOT.eyeHeight,
+      this.position.z,
+    );
+  }
+
+  get forward() {
+    return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+  }
+
+  // -------------------------------------------------------------------------
+  // Combat surface
+  // -------------------------------------------------------------------------
+
+  /**
+   * Hitscan against the bot's hitboxes. Origin/dir in world space, dir normalised.
+   * @returns {{part:string, multiplier:number, point:THREE.Vector3, distance:number}|null}
+   */
+  raycastHitbox(origin, dir, maxDist = 1000) {
+    if (!this.alive) return null;
+
+    const feet = this.feet;
+    const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
+
+    let best = null;
+    for (const box of HITBOXES) {
+      // Rotate the local offset into world space around Y.
+      const lx = box.x ?? 0;
+      const cx = feet.x + lx * cos;
+      const cz = feet.z - lx * sin;
+      const center = { x: cx, y: feet.y + box.y, z: cz };
+
+      const t = raySphere(origin, dir, center, box.r, maxDist);
+      if (t === null) continue;
+      if (!best || t < best.distance) {
+        best = {
+          part: box.part,
+          multiplier: HITBOX_MULT[box.part],
+          distance: t,
+          point: new THREE.Vector3(
+            origin.x + dir.x * t, origin.y + dir.y * t, origin.z + dir.z * t),
+        };
+      }
+    }
+    return best;
+  }
+
+  takeDamage(amount, hitPoint) {
+    if (!this.alive) return;
+    this.health -= amount;
+
+    // Getting shot from behind is how bots find you — same as CS.
+    if (hitPoint) {
+      this.lastKnownPos.copy(hitPoint);
+      if (this.state === BotState.PATROL) {
+        this.setState(BotState.ALERT);
+        this.reactionDelay = rand(BOT.reactionMin, BOT.reactionMax);
+        this.reactionTimer = 0;
+      }
+    }
+
+    if (this.health <= 0) this.die(hitPoint);
+  }
+
+  die(hitPoint) {
+    this.health = 0;
+    this.setState(BotState.DEAD);
+    this.deathTime = 0;
+    this.respawnTimer = BOT.respawnDelay;
+    this.velocity.set(0, 0, 0);
+
+    // Fall away from the shot. Not physics, just a direction to topple in.
+    if (hitPoint) {
+      const dx = this.position.x - hitPoint.x;
+      const dz = this.position.z - hitPoint.z;
+      this.deathTumble = Math.atan2(dx, dz) - this.yaw;
+    } else {
+      this.deathTumble = rand(-0.6, 0.6);
+    }
+  }
+
+  respawn() {
+    this.position.copy(this.spawnPos);
+    this.position.y += BOT.height / 2;
+    this.velocity.set(0, 0, 0);
+    this.health = BOT.health;
+    this.ammo = BOT.magSize;
+    this.burstLeft = 0;
+    this.sightTime = 0;
+    this.canSee = false;
+    this.deathTime = 0;
+    this.setState(BotState.PATROL);
+    this.pickNextPatrolPoint();
+    if (this.model) this.model.visible = true;
+  }
+
+  setState(next) {
+    if (this.state === next) return;
+    this.state = next;
+    this.stateTime = 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Perception
+  // -------------------------------------------------------------------------
+
+  /** Cone test + a real LOS raycast against the map. */
+  checkVision(playerEye) {
+    const eye = this.eye;
+    // The cone is tested against the AIM direction, not the body: a bot that has
+    // turned its torso to look down a corridor should see down that corridor.
+    const fwd = { x: Math.sin(this.aimYaw), y: 0, z: Math.cos(this.aimYaw) };
+    if (!inViewCone(eye, fwd, playerEye, BOT.fovDeg, BOT.sightRange)) return false;
+
+    const dir = new THREE.Vector3().subVectors(playerEye, eye);
+    const dist = dir.length();
+    if (dist < 1e-4) return true;
+    dir.multiplyScalar(1 / dist);
+
+    const hit = this.world.raycast(eye, dir, dist);
+    // Anything solid between us and the player blocks sight.
+    return !hit || hit.distance >= dist - 0.05;
+  }
+
+  // -------------------------------------------------------------------------
+  // Update
+  // -------------------------------------------------------------------------
+
+  /**
+   * @param {number} dt
+   * @param {THREE.Vector3} playerEye
+   * @param {THREE.Vector3} playerPos  player capsule centre
+   */
+  update(dt, playerEye, playerPos) {
+    this.stateTime += dt;
+    this.muzzleFlashTime = Math.max(0, this.muzzleFlashTime - dt);
+
+    if (this.state === BotState.DEAD) {
+      this.deathTime += dt;
+      this.respawnTimer -= dt;
+      this.applyGravityOnly(dt);
+      if (this.respawnTimer <= 0) this.respawn();
+      this.animate(dt);
+      return;
+    }
+
+    // Perception runs every frame regardless of state.
+    const sees = this.checkVision(playerEye);
+    this.canSee = sees;
+    if (sees) {
+      this.sightTime += dt;
+      this.lostSightTime = 0;
+      this.lastKnownPos.copy(playerPos);
+      this.reactionTimer += dt;
+    } else {
+      this.lostSightTime += dt;
+      // Sight confidence bleeds off rather than resetting, so a bot that
+      // briefly loses you behind a crate doesn't have to re-aim from scratch.
+      this.sightTime = Math.max(0, this.sightTime - dt * 1.5);
+      this.reactionTimer = 0;
+    }
+
+    switch (this.state) {
+      case BotState.PATROL: this.updatePatrol(dt); break;
+      case BotState.ALERT: this.updateAlert(dt, playerPos); break;
+      case BotState.ENGAGE: this.updateEngage(dt, playerEye, playerPos); break;
+      case BotState.RELOAD: this.updateReload(dt, playerPos); break;
+    }
+
+    this.applyPhysics(dt);
+    this.animate(dt);
+  }
+
+  updatePatrol(dt) {
+    if (this.canSee) {
+      this.setState(BotState.ALERT);
+      this.reactionDelay = rand(BOT.reactionMin, BOT.reactionMax);
+      this.reactionTimer = 0;
+      return;
+    }
+
+    this.walkToward(this.moveTarget, BOT.walkSpeed, dt);
+
+    // Idle scanning: sweep the aim yaw around the walk direction so the bot
+    // looks like it's checking angles rather than staring at its feet.
+    this.lookTimer -= dt;
+    if (this.lookTimer <= 0) {
+      this.lookTimer = rand(1.2, 2.8);
+      this.lookYawOffset = rand(-0.7, 0.7);
+    }
+    this.aimYaw = damp(this.aimYaw, this.yaw + this.lookYawOffset, 3, dt);
+    this.aimPitch = damp(this.aimPitch, 0, 3, dt);
+
+    if (this.moveTarget &&
+        this.horizDistTo(this.moveTarget) < 0.9) this.pickNextPatrolPoint();
+  }
+
+  updateAlert(dt, playerPos) {
+    // Reaction gate: the bot has seen the player but hasn't reacted yet. It
+    // turns toward the contact, and only after the delay does it engage.
+    this.faceTarget(this.lastKnownPos, dt, 9);
+    this.velocity.x = damp(this.velocity.x, 0, 8, dt);
+    this.velocity.z = damp(this.velocity.z, 0, 8, dt);
+
+    if (this.canSee && this.reactionTimer >= this.reactionDelay) {
+      this.setState(BotState.ENGAGE);
+      this.burstLeft = 0;
+      this.burstPause = 0.05;
+      return;
+    }
+
+    if (!this.canSee) {
+      // Hunt toward the last known position for a while, then give up.
+      if (this.lostSightTime > BOT.loseSightGrace) {
+        this.setState(BotState.PATROL);
+        this.pickNextPatrolPoint();
+      } else if (this.horizDistTo(this.lastKnownPos) > 2) {
+        this.walkToward(this.lastKnownPos, BOT.runSpeed * 0.75, dt);
+      }
+    }
+  }
+
+  updateEngage(dt, playerEye, playerPos) {
+    if (this.ammo <= 0) { this.setState(BotState.RELOAD); return; }
+
+    if (!this.canSee) {
+      if (this.lostSightTime > 0.6) { this.setState(BotState.ALERT); }
+      // Keep aiming at where they were for the grace period.
+      this.faceTarget(this.lastKnownPos, dt, 8);
+      this.decelerate(dt);
+      return;
+    }
+
+    this.faceTarget(playerEye, dt, 12);
+
+    // Strafe: CS bots don't plant. Flip direction on a timer, or immediately if
+    // the strafe is blocked, so they shuffle in cover instead of hugging a wall.
+    this.strafeTimer -= dt;
+    if (this.strafeTimer <= 0) {
+      this.strafeTimer = rand(0.45, 1.1);
+      this.strafeDir = Math.random() < 0.5 ? -1 : 1;
+    }
+
+    const toPlayer = new THREE.Vector3().subVectors(playerPos, this.position);
+    toPlayer.y = 0;
+    const dist = toPlayer.length();
+    if (dist > 1e-4) toPlayer.multiplyScalar(1 / dist);
+    const right = new THREE.Vector3(toPlayer.z, 0, -toPlayer.x);
+
+    const wish = right.clone().multiplyScalar(this.strafeDir);
+    // Close the gap if far, back off if uncomfortably close.
+    if (dist > 14) wish.addScaledVector(toPlayer, 0.9);
+    else if (dist < 4.5) wish.addScaledVector(toPlayer, -0.8);
+    if (wish.lengthSq() > 1e-6) wish.normalize();
+
+    this.accelerateXZ(wish, BOT.strafeSpeed, dt);
+    this.tryFire(dt, playerEye, playerPos, dist);
+  }
+
+  updateReload(dt, playerPos) {
+    this.decelerate(dt);
+    // Break line of sight if we can — just back away from the last known spot.
+    if (this.stateTime < BOT.reloadTime * 0.6) {
+      const away = new THREE.Vector3().subVectors(this.position, this.lastKnownPos);
+      away.y = 0;
+      if (away.lengthSq() > 1e-4) {
+        away.normalize();
+        this.accelerateXZ(away, BOT.walkSpeed, dt);
+      }
+    }
+    this.faceTarget(this.lastKnownPos, dt, 5);
+
+    if (this.stateTime >= BOT.reloadTime) {
+      this.ammo = BOT.magSize;
+      this.setState(this.canSee ? BotState.ENGAGE : BotState.ALERT);
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Firing
+  // -------------------------------------------------------------------------
+
+  tryFire(dt, playerEye, playerPos, dist) {
+    this.fireTimer -= dt;
+
+    if (this.burstLeft <= 0) {
+      this.burstPause -= dt;
+      if (this.burstPause > 0) return;
+      this.burstLeft = Math.round(rand(BOT.burstMin, BOT.burstMax));
+    }
+
+    if (this.fireTimer > 0) return;
+    this.fireTimer = BOT.fireRate;
+    this.burstLeft--;
+    this.ammo--;
+    if (this.burstLeft <= 0) this.burstPause = rand(BOT.burstPauseMin, BOT.burstPauseMax);
+    if (this.ammo <= 0) this.setState(BotState.RELOAD);
+
+    this.muzzleFlashTime = 0.045;
+
+    // Accuracy. The error cone shrinks with sustained sight; a fresh peek is a
+    // spray, a bot that has watched you for 1.5s is dangerous.
+    const err = aimErrorFor(this.sightTime);
+    // roll^0.5 biases toward the edge of the cone — a flat roll makes bots hit
+    // far too often because most of the disc area is near the rim.
+    const roll = Math.sqrt(Math.random());
+    // Player torso is roughly 0.35m wide as a target.
+    const hit = shotConnects(err, dist, 0.35, roll);
+
+    if (this.onFire) {
+      const origin = this.eye;
+      const dir = new THREE.Vector3().subVectors(playerEye, origin).normalize();
+      // Scatter the visual ray by the same error so tracers match the outcome.
+      const off = err * roll;
+      dir.x += Math.cos(roll * 100) * off;
+      dir.y += Math.sin(roll * 100) * off * 0.6;
+      dir.normalize();
+      this.onFire(origin, dir, hit);
+    }
+
+    if (hit && this.onShootPlayer) {
+      this.onShootPlayer(BOT.damage * damageFalloff(dist));
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Movement
+  // -------------------------------------------------------------------------
+
+  pickNextPatrolPoint() {
+    if (!this.patrolPoints.length) { this.moveTarget = null; return; }
+    this.patrolIndex = (this.patrolIndex + 1) % this.patrolPoints.length;
+    this.moveTarget = this.patrolPoints[this.patrolIndex];
+  }
+
+  horizDistTo(p) {
+    return Math.hypot(p.x - this.position.x, p.z - this.position.z);
+  }
+
+  /** Turn the body (and aim) toward a world point. */
+  faceTarget(target, dt, rate) {
+    const wantYaw = Math.atan2(target.x - this.position.x, target.z - this.position.z);
+    this.yaw += angleDelta(this.yaw, wantYaw) * (1 - Math.exp(-rate * 0.6 * dt));
+    this.aimYaw += angleDelta(this.aimYaw, wantYaw) * (1 - Math.exp(-rate * dt));
+
+    const eye = this.eye;
+    const horiz = Math.hypot(target.x - eye.x, target.z - eye.z);
+    const wantPitch = Math.atan2(target.y - eye.y, Math.max(horiz, 1e-3));
+    this.aimPitch = damp(this.aimPitch, clamp(wantPitch, -0.7, 0.7), rate, dt);
+  }
+
+  walkToward(target, speed, dt) {
+    if (!target) { this.decelerate(dt); return; }
+    const dir = new THREE.Vector3(target.x - this.position.x, 0, target.z - this.position.z);
+    const d = dir.length();
+    if (d < 1e-4) { this.decelerate(dt); return; }
+    dir.multiplyScalar(1 / d);
+
+    // Face where we're going; walking sideways looks wrong on a biped.
+    const wantYaw = Math.atan2(dir.x, dir.z);
+    this.yaw += angleDelta(this.yaw, wantYaw) * (1 - Math.exp(-5 * dt));
+
+    this.accelerateXZ(dir, speed, dt);
+  }
+
+  accelerateXZ(wishDir, wishSpeed, dt) {
+    const target = wishDir.clone().multiplyScalar(wishSpeed);
+    this.velocity.x = damp(this.velocity.x, target.x, BOT.accel, dt);
+    this.velocity.z = damp(this.velocity.z, target.z, BOT.accel, dt);
+  }
+
+  decelerate(dt) {
+    this.velocity.x = damp(this.velocity.x, 0, 10, dt);
+    this.velocity.z = damp(this.velocity.z, 0, 10, dt);
+  }
+
+  applyPhysics(dt) {
+    if (this.grounded && this.velocity.y <= 0) this.velocity.y = 0;
+    else this.velocity.y -= BOT.gravity * dt;
+
+    const out = {};
+    this.world.moveSlide(this.position, this.half, this.velocity, dt, out);
+    this.world.depenetrate(this.position, this.half);
+    this.grounded = out.grounded || this.probeGround();
+
+    // Stuck against geometry while patrolling? Skip to the next waypoint rather
+    // than grinding a wall forever.
+    // ponytail: no navmesh, so patrol points must be mutually visible-ish.
+    // Upgrade path: A* over a coarse grid baked from the collision brushes.
+    if (this.state === BotState.PATROL &&
+        Math.hypot(this.velocity.x, this.velocity.z) < 0.25) {
+      this.stuckTime = (this.stuckTime || 0) + dt;
+      if (this.stuckTime > 1.2) { this.stuckTime = 0; this.pickNextPatrolPoint(); }
+    } else {
+      this.stuckTime = 0;
+    }
+  }
+
+  applyGravityOnly(dt) {
+    if (!this.grounded) this.velocity.y -= BOT.gravity * dt;
+    else this.velocity.y = 0;
+    this.velocity.x = damp(this.velocity.x, 0, 6, dt);
+    this.velocity.z = damp(this.velocity.z, 0, 6, dt);
+    const out = {};
+    this.world.moveSlide(this.position, this.half, this.velocity, dt, out);
+    this.world.depenetrate(this.position, this.half);
+    this.grounded = out.grounded || this.probeGround();
+  }
+
+  probeGround(tolerance = 0.06) {
+    const probe = this.position.clone();
+    probe.y += tolerance;
+    const hit = this.world.sweep(probe, this.half, new THREE.Vector3(0, -tolerance * 2, 0));
+    if (!hit || hit.normal.y <= 0.7) return false;
+    this.position.y = probe.y - tolerance * 2 * hit.t;
+    if (this.velocity.y < 0) this.velocity.y = 0;
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Procedural animation
+  // -------------------------------------------------------------------------
+
+  /**
+   * The whole rig is driven from three signals: gait phase, a 0..1 locomotion
+   * blend weight, and the aim offset between body yaw and aim yaw. Poses are
+   * written absolutely each frame (not accumulated) so state changes can't drift.
+   */
+  animate(dt) {
+    if (!this.model) return;
+    const J = this.joints;
+
+    this.model.position.copy(this.feet);
+
+    if (this.state === BotState.DEAD) { this.animateDeath(dt); return; }
+
+    // --- Gait phase advances by DISTANCE, not time. This is the single thing
+    // that stops the legs sliding: stride length is fixed, so at half speed the
+    // cycle runs at half rate and the feet stay planted relative to the ground.
+    const speed = Math.hypot(this.velocity.x, this.velocity.z);
+    const strideLength = 0.82;
+    this.phase += (speed * dt / strideLength) * Math.PI * 2;
+    if (this.phase > Math.PI * 4) this.phase -= Math.PI * 4;
+
+    // Blend weight ramps in over the walk range, so a bot creeping at 0.3 m/s
+    // gets a small shuffle rather than a full march.
+    const target = clamp(speed / BOT.runSpeed, 0, 1);
+    this.speedNorm = damp(this.speedNorm, target, 8, dt);
+    const w = this.speedNorm;
+    // Amplitude scales sub-linearly: walking and running differ in cadence more
+    // than in swing angle.
+    const amp = Math.pow(clamp(speed / BOT.runSpeed, 0, 1), 0.65);
+
+    const p = this.phase;
+    const sinP = Math.sin(p), cosP = Math.cos(p);
+    this.breathe += dt * 1.6;
+
+    // --- Hips: vertical bob at 2x gait (one dip per footfall), lateral sway at
+    // 1x (weight shifts onto the planted leg), plus breathing at rest.
+    const bob = -Math.abs(sinP) * 0.055 * amp;
+    const idleBreath = Math.sin(this.breathe) * 0.008 * (1 - w);
+    J.hips.position.y = (P.upperLeg + P.lowerLeg + 0.09) + bob + idleBreath;
+    J.hips.position.x = cosP * 0.022 * amp;
+    J.hips.rotation.z = -cosP * 0.055 * amp;   // pelvis tilt toward the swing leg
+    J.hips.rotation.y = sinP * 0.10 * amp;     // pelvis counter-rotation
+    // Lean into acceleration: forward when running, upright at rest.
+    J.hips.rotation.x = 0.04 + w * 0.10;
+
+    // --- Torso. Aim offset is the yaw difference between where the feet point
+    // and where the gun points; the spine absorbs it so the bot can strafe
+    // sideways while still covering the player.
+    const aimOff = clamp(angleDelta(this.yaw, this.aimYaw), -1.3, 1.3);
+    J.spine.rotation.y = damp(J.spine.rotation.y, aimOff * 0.4 - sinP * 0.06 * amp, 14, dt);
+    J.spine.rotation.x = damp(J.spine.rotation.x, -this.aimPitch * 0.15, 10, dt);
+    J.spine.rotation.z = sinP * 0.03 * amp;
+
+    J.chest.rotation.y = damp(J.chest.rotation.y, aimOff * 0.6, 14, dt);
+    J.chest.rotation.x = damp(J.chest.rotation.x,
+      -this.aimPitch * 0.35 + Math.sin(this.breathe) * 0.012 * (1 - w), 10, dt);
+
+    // --- Head: tracks the aim target but only within neck limits, and lags the
+    // torso slightly so it reads as looking rather than being welded on.
+    const headTargetYaw = clamp(aimOff - (J.spine.rotation.y + J.chest.rotation.y), -0.85, 0.85);
+    this.headYaw = damp(this.headYaw, headTargetYaw, 9, dt);
+    this.headPitch = damp(this.headPitch,
+      clamp(-this.aimPitch * 0.5, -0.5, 0.5), 9, dt);
+    J.head.rotation.y = this.headYaw;
+    J.head.rotation.x = this.headPitch + Math.abs(sinP) * 0.02 * amp;
+    J.head.rotation.z = -cosP * 0.03 * amp;
+
+    this.animateLegs(p, amp, dt);
+    this.animateArms(p, amp, w, dt);
+
+    if (this.muzzleFlash) {
+      this.muzzleFlash.intensity = this.muzzleFlashTime > 0 ? 14 : 0;
+    }
+  }
+
+  /**
+   * Leg cycle. Each leg runs a two-phase loop: swing (foot off the ground,
+   * knee bends a lot to clear) and stance (foot planted, leg nearly straight,
+   * rotating back under the body). The asymmetry between them is what reads as
+   * walking; a pure sine on both hip and knee reads as a marionette.
+   */
+  animateLegs(p, amp, dt) {
+    const J = this.joints;
+    for (const side of ['L', 'R']) {
+      const ph = side === 'L' ? p : p + Math.PI;
+      const s = Math.sin(ph), c = Math.cos(ph);
+
+      // Hip swings fore/aft. Slight forward bias so the bot leans into its stride.
+      const hipAngle = s * 0.62 * amp + 0.06 * amp;
+
+      // Knee: only flexes on the swing half. max(0, -cos) gates it to the half
+      // of the cycle where the foot is airborne. Knees never hyperextend.
+      const swing = Math.max(0, -c);
+      const kneeAngle = -(swing * swing * 1.15 + 0.10) * amp - 0.05;
+
+      // Ankle: toe-off at the end of stance, dorsiflex to clear during swing.
+      const ankleAngle = (c * 0.30 - swing * 0.18) * amp;
+
+      const hip = J[`hip${side}`], knee = J[`knee${side}`], ankle = J[`ankle${side}`];
+      hip.rotation.x = damp(hip.rotation.x, hipAngle, 20, dt);
+      // Splay slightly outward so the legs don't scissor through each other.
+      hip.rotation.z = damp(hip.rotation.z, (side === 'L' ? 1 : -1) * 0.045, 12, dt);
+      knee.rotation.x = damp(knee.rotation.x, kneeAngle, 20, dt);
+      ankle.rotation.x = damp(ankle.rotation.x, ankleAngle, 18, dt);
+    }
+  }
+
+  /**
+   * Arms. Both hands stay on the rifle, so unlike a normal walk cycle the arms
+   * cannot counter-swing freely — the whole weapon assembly sways as a unit and
+   * the elbows absorb the difference. This is what a carried-rifle walk is.
+   */
+  animateArms(p, amp, w, dt) {
+    const J = this.joints;
+    const sinP = Math.sin(p);
+    const aiming = this.state === BotState.ENGAGE || this.state === BotState.ALERT;
+
+    // Weapon sway: idle drift plus a bigger jostle while moving. Damped so it
+    // never snaps when the bot starts or stops.
+    const swayX = Math.sin(this.breathe * 0.7) * 0.045 * (1 - w * 0.6) + sinP * 0.09 * amp;
+    const swayY = Math.cos(this.breathe * 0.53) * 0.035 * (1 - w * 0.6);
+
+    // Right arm holds the grip; it stays tucked and high when aiming, dropped
+    // to a patrol carry otherwise.
+    const rShoulderX = aiming ? -1.28 : -0.95;
+    const rShoulderZ = aiming ? -0.30 : -0.18;
+    const rElbow = aiming ? -1.55 : -1.15;
+
+    // Left arm reaches across to the foregrip: further forward, more elbow bend.
+    const lShoulderX = aiming ? -1.42 : -1.05;
+    const lShoulderZ = aiming ? 0.52 : 0.38;
+    const lElbow = aiming ? -1.72 : -1.35;
+
+    const R = J.shoulderR, L = J.shoulderL;
+    R.rotation.x = damp(R.rotation.x, rShoulderX + swayX * 0.5, 9, dt);
+    R.rotation.z = damp(R.rotation.z, rShoulderZ + swayY, 9, dt);
+    R.rotation.y = damp(R.rotation.y, aiming ? -0.20 : -0.10, 9, dt);
+    J.elbowR.rotation.x = damp(J.elbowR.rotation.x, rElbow - swayX * 0.35, 9, dt);
+
+    L.rotation.x = damp(L.rotation.x, lShoulderX + swayX * 0.5, 9, dt);
+    L.rotation.z = damp(L.rotation.z, lShoulderZ + swayY, 9, dt);
+    L.rotation.y = damp(L.rotation.y, aiming ? 0.34 : 0.22, 9, dt);
+    J.elbowL.rotation.x = damp(J.elbowL.rotation.x, lElbow - swayX * 0.35, 9, dt);
+
+    // Rifle sits in the right hand pointing +Z (forward). Recoil kicks it up
+    // and settles fast — the visible tell that the bot is shooting.
+    const recoil = this.muzzleFlashTime > 0 ? 0.16 : 0;
+    J.rifle.rotation.set(
+      damp(J.rifle.rotation.x, 1.35 + recoil, 30, dt),
+      damp(J.rifle.rotation.y, 0.10, 12, dt),
+      damp(J.rifle.rotation.z, aiming ? 0.02 : 0.30, 10, dt),
+    );
+    J.rifle.position.set(0.01, -0.03, 0.04);
+  }
+
+  /**
+   * Death: a two-second collapse. The legs buckle first, the torso folds, then
+   * the whole root topples in the tumble direction and settles flat.
+   * ponytail: keyframed collapse rather than a ragdoll solver. It costs nothing
+   * and never explodes. Swap for verlet-constrained bones if bodies need to
+   * drape over crates.
+   */
+  animateDeath(dt) {
+    const J = this.joints;
+    const t = clamp(this.deathTime / 1.6, 0, 1);
+    // Ease-out: the initial buckle is fast, the settle is slow.
+    const e = 1 - Math.pow(1 - t, 3);
+
+    // Buckle: knees give way in the first third, dropping the hips.
+    const buckle = clamp(this.deathTime / 0.5, 0, 1);
+    J.hips.position.y = (P.upperLeg + P.lowerLeg + 0.09) * (1 - buckle * 0.55);
+
+    // Topple about the tumble axis. Rotating the ROOT (not the hips) is what
+    // makes the body end up lying on the ground rather than folded in place.
+    this.model.rotation.y = this.yaw;
+    this.model.rotation.x = Math.cos(this.deathTumble) * e * (Math.PI / 2) * 0.95;
+    this.model.rotation.z = Math.sin(this.deathTumble) * e * (Math.PI / 2) * 0.95;
+
+    J.hips.rotation.set(e * 0.35, 0, 0);
+    J.spine.rotation.set(e * 0.30, e * 0.12, 0);
+    J.chest.rotation.set(e * 0.22, -e * 0.18, 0);
+    // Head lolls, and keeps lolling slightly after the body has stopped.
+    J.head.rotation.set(e * 0.55, -e * 0.4, e * 0.25);
+
+    // Limbs go slack and splay.
+    J.shoulderL.rotation.set(-0.3 + e * 0.9, 0, 0.9 + e * 0.5);
+    J.shoulderR.rotation.set(-0.3 + e * 0.7, 0, -0.9 - e * 0.5);
+    J.elbowL.rotation.x = -0.9 + e * 0.55;
+    J.elbowR.rotation.x = -0.9 + e * 0.55;
+    J.hipL.rotation.set(e * 0.45, 0, 0.22);
+    J.hipR.rotation.set(e * 0.20, 0, -0.15);
+    J.kneeL.rotation.x = -e * 0.85;
+    J.kneeR.rotation.x = -e * 0.45;
+
+    if (this.muzzleFlash) this.muzzleFlash.intensity = 0;
+
+    // Fade out just before respawn so bodies don't pop.
+    if (this.respawnTimer < 0.4) this.model.visible = false;
+  }
+
+  dispose() {
+    if (!this.model) return;
+    this.model.traverse(o => {
+      if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); }
+    });
+    this.scene.remove(this.model);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Headless self-check. Run: node src/ai/bot.js
+// ---------------------------------------------------------------------------
+
+export function _testBot() {
+  let passed = 0, failed = 0;
+  const check = (name, fn) => {
+    try { fn(); passed++; console.log(`  ok    ${name}`); }
+    catch (e) { failed++; console.log(`  FAIL  ${name}\n        ${e.message}`); }
+  };
+  const assert = (c, m) => { if (!c) throw new Error(m); };
+
+  const O = { x: 0, y: 0, z: 0 };
+  const FWD = { x: 0, y: 0, z: 1 };
+
+  check('FOV cone accepts a target dead ahead', () => {
+    assert(inViewCone(O, FWD, { x: 0, y: 0, z: 10 }, BOT.fovDeg, BOT.sightRange),
+      'should see straight ahead');
+  });
+
+  check('FOV cone rejects a target directly behind', () => {
+    assert(!inViewCone(O, FWD, { x: 0, y: 0, z: -10 }, BOT.fovDeg, BOT.sightRange),
+      'must not see behind');
+  });
+
+  check('FOV cone rejects targets outside the half-angle', () => {
+    // 110 deg full cone => 55 deg half. 70 deg off-axis must fail, 40 must pass.
+    const at = deg => ({
+      x: Math.sin(deg * Math.PI / 180) * 10, y: 0, z: Math.cos(deg * Math.PI / 180) * 10,
+    });
+    assert(inViewCone(O, FWD, at(40), 110, 50), '40deg should be inside');
+    assert(!inViewCone(O, FWD, at(70), 110, 50), '70deg should be outside');
+    assert(inViewCone(O, FWD, at(-40), 110, 50), 'cone must be symmetric');
+  });
+
+  check('FOV cone rejects targets beyond sight range', () => {
+    assert(!inViewCone(O, FWD, { x: 0, y: 0, z: BOT.sightRange + 1 }, BOT.fovDeg, BOT.sightRange),
+      'out of range must fail');
+  });
+
+  check('damage multipliers apply per part', () => {
+    assert(damageForHit(26, 'head') === 26 * 4, 'head should be 4x');
+    assert(damageForHit(26, 'chest') === 26, 'chest should be 1x');
+    assert(damageForHit(26, 'stomach') === 26 * 1.25, 'stomach should be 1.25x');
+    assert(damageForHit(26, 'leg') === 26 * 0.75, 'leg should be 0.75x');
+    assert(damageForHit(26, 'arm') === 26 * 0.75, 'arm should be 0.75x');
+    assert(damageForHit(26, 'nonsense') === 26, 'unknown part falls back to 1x');
+  });
+
+  check('one headshot with the bot rifle is lethal to 100hp', () => {
+    assert(damageForHit(BOT.damage, 'head') >= 100, 'head should one-shot');
+    assert(damageForHit(BOT.damage, 'chest') < 100, 'chest must not one-shot');
+  });
+
+  check('aim error decreases with sustained visibility', () => {
+    const e0 = aimErrorFor(0);
+    const e1 = aimErrorFor(BOT.aimSettleTime * 0.5);
+    const e2 = aimErrorFor(BOT.aimSettleTime);
+    assert(e0 > e1 && e1 > e2, `error must decay monotonically: ${e0} ${e1} ${e2}`);
+    assert(Math.abs(e0 - BOT.aimErrorMax) < 1e-9, 'fresh sight uses max error');
+    assert(Math.abs(e2 - BOT.aimErrorMin) < 1e-9, 'settled sight uses min error');
+    assert(Math.abs(aimErrorFor(99) - BOT.aimErrorMin) < 1e-9, 'clamps past settle time');
+  });
+
+  check('fresh acquisitions miss more than settled aim', () => {
+    // Same deterministic rolls, both at 15m against a 0.35m torso.
+    let fresh = 0, settled = 0;
+    for (let i = 0; i < 100; i++) {
+      const roll = i / 100;
+      if (shotConnects(aimErrorFor(0), 15, 0.35, roll)) fresh++;
+      if (shotConnects(aimErrorFor(BOT.aimSettleTime), 15, 0.35, roll)) settled++;
+    }
+    assert(settled > fresh, `settled (${settled}) should out-hit fresh (${fresh})`);
+    assert(fresh > 0, 'fresh aim should still land some rounds');
+    assert(settled < 100, 'settled aim must still miss sometimes');
+  });
+
+  check('shot connection respects distance', () => {
+    const err = aimErrorFor(0.5);
+    const roll = 0.9;
+    assert(shotConnects(err, 3, 0.35, roll), 'point blank should connect');
+    assert(!shotConnects(err, 60, 0.35, roll), 'long range with error should miss');
+  });
+
+  check('damage falloff is 1x near and clamps far', () => {
+    assert(damageFalloff(5) === 1, 'inside falloff start is full damage');
+    assert(damageFalloff(BOT.damageFalloffEnd + 20) === BOT.damageFalloffMin, 'clamps at min');
+    const mid = damageFalloff((BOT.damageFalloffStart + BOT.damageFalloffEnd) / 2);
+    assert(mid < 1 && mid > BOT.damageFalloffMin, `midpoint should interpolate, got ${mid}`);
+  });
+
+  check('reaction delay gates firing', () => {
+    // Simulate the ALERT gate: sight is continuous, but firing waits.
+    const delay = 0.28;
+    let timer = 0, firedAt = null;
+    const dt = 1 / 128;
+    for (let i = 0; i < 128 && firedAt === null; i++) {
+      timer += dt;
+      if (timer >= delay) firedAt = timer;
+    }
+    assert(firedAt !== null, 'should eventually fire');
+    assert(firedAt >= delay, 'must not fire before the delay elapses');
+    assert(firedAt < delay + dt * 2, `should fire promptly after, got ${firedAt}`);
+    assert(BOT.reactionMin >= 0.18 && BOT.reactionMax <= 0.35, 'delay range is human');
+  });
+
+  check('ray-sphere hits a target ahead and misses one behind', () => {
+    const dir = { x: 0, y: 0, z: 1 };
+    assert(raySphere(O, dir, { x: 0, y: 0, z: 5 }, 0.2, 50) !== null, 'ahead should hit');
+    assert(raySphere(O, dir, { x: 0, y: 0, z: -5 }, 0.2, 50) === null, 'behind should miss');
+    assert(raySphere(O, dir, { x: 2, y: 0, z: 5 }, 0.2, 50) === null, 'offset should miss');
+    assert(raySphere(O, dir, { x: 0, y: 0, z: 5 }, 0.2, 3) === null, 'beyond maxDist misses');
+  });
+
+  check('hitboxes span a human silhouette without gaps', () => {
+    // Fire a horizontal ray at every 5cm of height through the model centre and
+    // assert the body is continuously covered from knee to crown.
+    const dir = { x: 0, y: 0, z: 1 };
+    for (let y = 0.25; y <= 1.75; y += 0.05) {
+      const origin = { x: 0, y, z: -5 };
+      const anyHit = HITBOXES.some(b =>
+        (b.x ?? 0) === 0 && raySphere(origin, dir, { x: 0, y: b.y, z: 0 }, b.r, 50) !== null);
+      assert(anyHit, `no hitbox covers height ${y.toFixed(2)}m`);
+    }
+  });
+
+  check('head hitbox sits above the chest hitbox', () => {
+    const head = HITBOXES.find(b => b.part === 'head');
+    const chest = HITBOXES.find(b => b.part === 'chest');
+    assert(head.y - head.r > chest.y, 'head must be clear of the chest box');
+    assert(head.y + head.r < BOT.height + 0.5, 'head should be at human height');
+  });
+
+  check('angleDelta takes the short way round', () => {
+    assert(Math.abs(angleDelta(3.0, -3.0) - 0.2831853) < 1e-4,
+      `should wrap forward, got ${angleDelta(3.0, -3.0)}`);
+    assert(Math.abs(angleDelta(0, Math.PI / 2) - Math.PI / 2) < 1e-9, 'simple case');
+    assert(Math.abs(angleDelta(1, 1)) < 1e-9, 'no delta to self');
+  });
+
+  check('damp converges and is stable at large dt', () => {
+    let v = 0;
+    for (let i = 0; i < 200; i++) v = damp(v, 10, 8, 1 / 128);
+    assert(Math.abs(v - 10) < 0.05, `should converge, got ${v}`);
+    // A 1-second frame must not overshoot — this is why it is exponential.
+    assert(damp(0, 10, 8, 1) <= 10, 'must never overshoot the target');
+  });
+
+  check('bot health and rifle damage give a sane time-to-kill', () => {
+    const perChest = damageForHit(BOT.damage, 'chest');
+    const rounds = Math.ceil(BOT.health / perChest);
+    assert(rounds >= 3 && rounds <= 5, `expected 3-5 chest rounds, got ${rounds}`);
+  });
+
+  console.log(`\n${passed} passed, ${failed} failed`);
+  return failed;
+}
+
+// Executed directly (node src/ai/bot.js) rather than imported by the game.
+if (typeof process !== 'undefined' && process.argv?.[1]?.endsWith('bot.js')) {
+  process.exit(_testBot() ? 1 : 0);
+}
