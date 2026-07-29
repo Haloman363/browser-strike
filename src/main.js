@@ -5,6 +5,9 @@ import { PlayerMovement } from './player/movement.js';
 import { PlayerCamera } from './player/camera.js';
 import { Input } from './player/input.js';
 
+const stage = (s) => { window.__stage = s; };
+
+stage('renderer');
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
 renderer.resize();
@@ -28,11 +31,13 @@ async function tryLoad(path, fn, label) {
 
 const maxAniso = renderer.renderer.capabilities.getMaxAnisotropy();
 
+stage('materials');
 const materials = await tryLoad('./render/materials.js', async (m) => {
   const mats = new m.Materials();
   return await mats.build(maxAniso);
 }, 'materials') ?? fallbackMaterials();
 
+stage('map');
 const mapData = await tryLoad('./world/map.js',
   (m) => m.buildMap(renderer.scene, world, materials), 'map') ?? fallbackMap();
 
@@ -41,9 +46,11 @@ const movement = new PlayerMovement(world, spawn.clone());
 const playerCam = new PlayerCamera(renderer.camera);
 const input = new Input(canvas);
 
+stage('rifle');
 const rifle = await tryLoad('./weapons/rifle.js',
   (m) => new m.Rifle(renderer.scene, renderer.camera, world), 'rifle');
 
+stage('bots');
 const bots = await tryLoad('./ai/bot.js', (m) => {
   const points = mapData.botPoints ?? [];
   return (mapData.spawns ?? []).slice(1, 3).map(
@@ -190,6 +197,7 @@ window.__shot = (pos, lookAt, fov = 90) => {
 };
 window.__dbg = { renderer, world, materials, mapData, movement, rifle, bots, THREE };
 // Set last: the capture script waits on this, so everything above must exist.
+stage('ready');
 window.__ready = true;
 
 export { renderer, world, movement, playerCam, mapData };

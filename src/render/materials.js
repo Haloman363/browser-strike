@@ -497,10 +497,12 @@ function genPlaster(size, n) {
     return h;
   });
 
-  const PAINT = [234, 222, 198];
-  const PAINT_DIRTY = [196, 181, 156];
-  const SUBSTRATE = [172, 146, 126];
-  const GRIME = [92, 80, 66];
+  const PAINT = [226, 210, 182];
+  const PAINT_DIRTY = [198, 180, 152];
+  // Substrate is the render coat under the paint, so it is close in value —
+  // a big paint/substrate contrast reads as camouflage blotching up close.
+  const SUBSTRATE = [196, 172, 143];
+  const GRIME = [96, 82, 66];
 
   const albedo = paint(size, (x, y, u, v) => {
     const f = flake(u, v);
@@ -616,17 +618,21 @@ function genConcrete(size, n) {
     return h;
   });
 
-  const BASE = [158, 152, 138];
-  const WARM = [176, 164, 140];
-  const STAIN = [120, 96, 74];
+  // Mirage's plaza is sun-bleached paving, not grey structural concrete. A
+  // neutral grey here reads as cold and drains the warmth out of every shot
+  // that includes the ground, which is most of them.
+  const BASE = [193, 174, 142];
+  const WARM = [209, 190, 155];
+  const STAIN = [132, 104, 76];
 
   const albedo = paint(size, (x, y, u, v) => {
     let c = mixRGB(BASE, WARM, n.fbm(u, v, 7, 7, 5));
     // Macro pour variation — concrete placed on different days never matches.
     c = shade(c, macro(n, u, v, 0.12, 4));
     c = shade(c, 0.92 + n.fbm(u, v, 55, 55, 4) * 0.16);
-    // Pits read darker because they self-shadow.
-    c = shade(c, 1 - pits(u, v) * 0.45);
+    // Pits read darker because they self-shadow. Kept shallow: at the ground's
+    // 12x repeat a strong value drop tiles as visible black speckling.
+    c = shade(c, 1 - pits(u, v) * 0.18);
     // Rust/dirt streaks running down.
     c = mixRGB(c, STAIN, streaks(n, u, v, { sharp: 0.5, width: 20 }) * 0.24);
     // Broad damp patches.

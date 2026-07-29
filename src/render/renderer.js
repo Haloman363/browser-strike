@@ -22,9 +22,11 @@ export const LOOK = {
 
   // Shadow fill. In desert light shadows are filled by warm bounce off sand,
   // not by blue sky — a saturated blue fill reads as cold and wrong.
-  fillSky: 0x9fb8d8,
-  fillGround: 0xc99a63,
-  fillIntensity: 0.42,
+  // Kept LOW on purpose: harsh sun means dark shadows, and a generous fill is
+  // what makes a scene read as flat and overcast no matter how bright the key.
+  fillSky: 0x8ba6c9,
+  fillGround: 0xb07f4a,
+  fillIntensity: 0.22,
 
   fogColor: 0xe0cda8,
   fogDensity: 0.0042,
@@ -124,7 +126,9 @@ export class Renderer {
     // plus convolution, which stalls indefinitely on a software rasterizer.
     // A blurry sky gradient is all that specular response actually needs.
     this.scene.environment = this.buildEnvMap(sunDir);
-    this.scene.environmentIntensity = 0.55;
+    // Enough for specular response on metal and glancing highlights, but not
+    // so much that it acts as a second ambient light and flattens the shadows.
+    this.scene.environmentIntensity = 0.3;
   }
 
   /**
@@ -197,8 +201,10 @@ export class Renderer {
     // negative bias leaks light under objects here.
     sun.shadow.bias = 0;
     sun.shadow.normalBias = 0.02;
-    sun.shadow.radius = 3.5;
-    sun.shadow.blurSamples = this.lowSpec ? 4 : 12;
+    // Tight penumbra: the sun is a half-degree disc, so its shadows are nearly
+    // hard. Wide blur is what makes outdoor shadows look like soft indoor ones.
+    sun.shadow.radius = 1.2;
+    sun.shadow.blurSamples = this.lowSpec ? 4 : 8;
     this.scene.add(sun);
     this.scene.add(sun.target);
     this.sun = sun;
