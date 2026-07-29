@@ -606,11 +606,14 @@ function genConcrete(size, n) {
   // the surface, which is blotch, not bug-holes).
   const pits = (u, v) => smooth(0.72, 0.82, n.fbm(u, v, 34, 34, 3));
 
-  // Where the form boards butted, cement paste bled and left a rough scar.
-  const boardLine = (v) => 1 - smooth(0, 0.018, Math.abs(((v * 4) % 1) - 0.5) * 0.5);
+  // Slab joints. This material is used for the plaza floor as well as poured
+  // walls, and a joint that runs in v only reads as timber decking from any
+  // elevated view. Running it in BOTH axes reads as paving either way up.
+  const jointAt = (t, n_) => 1 - smooth(0, 0.02, Math.abs(((t * n_) % 1) - 0.5) * 0.5);
+  const boardLine = (u, v) => Math.max(jointAt(v, 4), jointAt(u, 3));
 
   const height = paintScalar(size, (x, y, u, v) => {
-    const b = boardLine(v);
+    const b = boardLine(u, v);
     let h = 0.80 + (n.fbm(u, v, 8, 8, 5) - 0.5) * 0.09 + (n.fbm(u, v, 120, 120, 3) - 0.5) * 0.04;
     h -= pits(u, v) * 0.40;              // bug-holes are deep, not dimples
     h -= b * 0.14;                       // form-board joint, now a real step
@@ -638,7 +641,7 @@ function genConcrete(size, n) {
     // Broad damp patches.
     c = shade(c, 1 - smooth(0.48, 0.70, n.fbm(u, v, 3, 3, 3)) * 0.16);
     // Dirt collecting along the form-board scars.
-    c = mixRGB(c, STAIN, boardLine(v) * 0.18);
+    c = mixRGB(c, STAIN, boardLine(u, v) * 0.18);
     c = mixRGB(c, STAIN, grimePatches(n, u, v, 0.20, 6, 10));
     return c;
   });
@@ -650,7 +653,7 @@ function genConcrete(size, n) {
     r *= macro(n, u, v, 0.14, 9);
     // Rain-washed and hand-polished areas go smoother still.
     r = lerp(r, 0.48, smooth(0.6, 0.9, n.fbm(u, v, 4, 4, 3)) * 0.5);
-    return lerp(r, 0.95, boardLine(v) * 0.6);
+    return lerp(r, 0.95, boardLine(u, v) * 0.6);
   });
 
   return { albedo, height, rough };

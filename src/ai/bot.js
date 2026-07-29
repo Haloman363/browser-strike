@@ -182,14 +182,17 @@ const P = {
   spineH: 0.18,           // floating ribs down to the waist
   hipW: 0.34,
   hipH: 0.16,
-  hipY: 0.90,             // hip pivot height = half of 1.80m
+  // Hip pivot at HALF body height. thigh + shin + ankle = 0.915, leaving a
+  // ~0.015m rest flex at the knee — nobody stands with locked knees, and it
+  // also guarantees the knee bends the correct way when the cycle starts.
+  hipY: 0.90,
   upperArm: 0.29,
   lowerArm: 0.25,
   armR: 0.052,
   upperLeg: 0.44,
-  lowerLeg: 0.42,
+  lowerLeg: 0.415,
   legR: 0.082,
-  ankleH: 0.075,          // ankle pivot above the sole
+  ankleH: 0.06,           // ankle pivot above the sole
   footL: 0.27,
   footW: 0.115,
 };
@@ -217,16 +220,24 @@ function part(parent, geo, material, x = 0, y = 0, z = 0) {
  */
 export function buildBotModel() {
   const M = {
-    fatigue: mat(SKIN.fatigue, 0.92),
-    fatigueDark: mat(SKIN.fatigueDark, 0.92),
-    vest: mat(SKIN.vest, 0.75),
-    vestTrim: mat(SKIN.vestTrim, 0.8),
-    wrap: mat(SKIN.wrap, 0.95),
-    balaclava: mat(SKIN.balaclava, 0.9),
-    skin: mat(SKIN.skin, 0.72),
-    boot: mat(SKIN.boot, 0.7),
-    gun: mat(SKIN.gun, 0.55, 0.35),
-    gunWood: mat(SKIN.gunWood, 0.8),
+    fatigue: mat(SKIN.fatigue, 0.94),
+    fatigueLit: mat(SKIN.fatigueLit, 0.94),
+    trouser: mat(SKIN.trouser, 0.95),
+    trouserDark: mat(SKIN.trouserDark, 0.95),
+    vest: mat(SKIN.vest, 0.88),
+    vestDark: mat(SKIN.vestDark, 0.9),
+    pouch: mat(SKIN.pouch, 0.92),
+    belt: mat(SKIN.belt, 0.8),
+    wrap: mat(SKIN.wrap, 0.96),
+    wrapPale: mat(SKIN.wrapPale, 0.96),
+    balaclava: mat(SKIN.balaclava, 0.93),
+    skin: mat(SKIN.skin, 0.7),
+    boot: mat(SKIN.boot, 0.6),
+    bootSole: mat(SKIN.bootSole, 0.85),
+    glove: mat(SKIN.glove, 0.8),
+    gun: mat(SKIN.gun, 0.4, 0.8),
+    gunMetal: mat(SKIN.gunMetal, 0.35, 0.85),
+    gunWood: mat(SKIN.gunWood, 0.75),
   };
 
   const root = new THREE.Group();          // origin at the feet
@@ -234,133 +245,236 @@ export function buildBotModel() {
 
   // --- Hips: the animation root. Bobs and leans; everything hangs off it.
   const hips = new THREE.Group();
-  hips.position.y = P.upperLeg + P.lowerLeg + 0.09; // ~0.95m, top of the thighs
+  hips.position.y = P.hipY;
   root.add(hips);
   joints.hips = hips;
 
-  part(hips, new THREE.BoxGeometry(P.hipW, P.hipH, 0.20), M.fatigueDark, 0, 0, 0);
-  // Belt: a thin band reads as a waist and separates trousers from vest.
-  part(hips, new THREE.BoxGeometry(P.hipW + 0.015, 0.045, 0.21), M.boot, 0, P.hipH / 2, 0);
+  // Pelvis block plus a slightly wider seat behind it — a flat box reads as a
+  // plank from the side, which was half of the "slab" problem.
+  part(hips, new THREE.BoxGeometry(P.hipW, P.hipH, 0.24), M.trouser, 0, 0, 0);
+  part(hips, new THREE.BoxGeometry(P.hipW - 0.03, P.hipH * 0.8, 0.10), M.trouser,
+    0, -0.02, -0.11);
+  // Belt with a buckle: separates trousers from vest and gives a waist line.
+  part(hips, new THREE.BoxGeometry(P.hipW + 0.02, 0.05, 0.25), M.belt, 0, P.hipH / 2 - 0.01, 0);
+  // Hip pouch on the left — asymmetry is what stops a rig reading as a toy.
+  part(hips, new THREE.BoxGeometry(0.09, 0.13, 0.08), M.pouch, 0.19, -0.02, 0.02);
 
   // --- Spine -> chest -> neck -> head
   const spine = new THREE.Group();
   spine.position.y = P.hipH / 2;
   hips.add(spine);
   joints.spine = spine;
-  part(spine, new THREE.BoxGeometry(0.30, P.spineH, 0.20), M.fatigue, 0, P.spineH / 2, 0);
+  // Waist: narrower than both hips and chest. The pinch is the taper.
+  part(spine, new THREE.BoxGeometry(0.29, P.spineH + 0.03, 0.20), M.fatigue,
+    0, P.spineH / 2, 0);
 
   const chest = new THREE.Group();
   chest.position.y = P.spineH;
   spine.add(chest);
   joints.chest = chest;
 
-  // Torso is a tapered box: wider at the shoulders than the ribs. The taper is
-  // most of the silhouette read at range.
-  const torso = new THREE.CylinderGeometry(0.001, 0.001, 1, 4); // placeholder swap below
-  torso.dispose();
-  part(chest, new THREE.BoxGeometry(P.chestW, P.chestH, P.chestD), M.fatigue,
-    0, P.chestH / 2, 0);
-  // Chest rig over the top — the dark mass that says "armed combatant".
-  part(chest, new THREE.BoxGeometry(P.chestW + 0.03, P.chestH * 0.72, P.chestD + 0.05),
-    M.vest, 0, P.chestH * 0.52, 0);
-  // Magazine pouches: three small blocks across the front. Cheap, very readable.
-  for (let i = -1; i <= 1; i++) {
-    part(chest, new THREE.BoxGeometry(0.075, 0.11, 0.055), M.vestTrim,
-      i * 0.088, P.chestH * 0.40, (P.chestD + 0.05) / 2 + 0.02);
+  // Ribcage as a real volume: a 4-sided cylinder flares from the waist up to
+  // the shoulders, so the torso has depth and taper instead of being a slab.
+  const rib = part(chest,
+    new THREE.CylinderGeometry(P.chestW / 2, P.chestW / 2 - 0.055, P.chestH, 10),
+    M.fatigue, 0, P.chestH / 2, 0);
+  rib.scale.z = P.chestD / P.chestW;       // squash front-to-back into an oval
+  // Upper back slab fills the cylinder's flat back so the pack has something
+  // to sit against.
+  part(chest, new THREE.BoxGeometry(P.chestW - 0.06, P.chestH * 0.8, 0.06), M.fatigue,
+    0, P.chestH * 0.52, -P.chestD / 2 + 0.02);
+
+  // Plate carrier: a SEPARATE layer sitting proud of the ribcage with real
+  // thickness, front and back plates plus a cummerbund wrapping the sides.
+  const plateW = P.chestW - 0.04, plateH = P.chestH * 0.66;
+  part(chest, new THREE.BoxGeometry(plateW, plateH, 0.055), M.vest,
+    0, P.chestH * 0.55, P.chestD / 2 - 0.01);                       // front plate
+  part(chest, new THREE.BoxGeometry(plateW, plateH, 0.05), M.vest,
+    0, P.chestH * 0.55, -P.chestD / 2 + 0.01);                      // back plate
+  part(chest, new THREE.BoxGeometry(P.chestW + 0.03, plateH * 0.5, P.chestD + 0.02),
+    M.vestDark, 0, P.chestH * 0.40, 0);                             // cummerbund
+  // Shoulder straps over the trapezius, joining front plate to back plate.
+  for (const sx of [-1, 1]) {
+    part(chest, new THREE.BoxGeometry(0.07, 0.05, P.chestD + 0.06), M.vestDark,
+      sx * 0.095, P.chestH * 0.90, 0);
   }
-  // Shoulder yoke: spans the full 0.45m so the silhouette is broad up top.
-  part(chest, new THREE.BoxGeometry(P.shoulderSpan, 0.09, 0.19), M.vest,
-    0, P.chestH * 0.92, 0);
+  // Mag pouches: three across the front, standing off the plate.
+  for (let i = -1; i <= 1; i++) {
+    part(chest, new THREE.BoxGeometry(0.082, 0.125, 0.06), M.pouch,
+      i * 0.093, P.chestH * 0.50, P.chestD / 2 + 0.035);
+  }
+  // Radio pouch high on the left chest — breaks the three-pouch symmetry.
+  part(chest, new THREE.BoxGeometry(0.07, 0.09, 0.05), M.pouch,
+    0.115, P.chestH * 0.76, P.chestD / 2 + 0.03);
+  // Sling running diagonally across the chest. Strong soldier cue in silhouette.
+  const sling = part(chest, new THREE.BoxGeometry(0.035, P.chestH * 1.15, 0.02),
+    M.vestDark, 0.01, P.chestH * 0.55, P.chestD / 2 + 0.035);
+  sling.rotation.z = 0.62;
+  // Bedroll strapped across the back — mass behind the shoulders.
+  const roll = part(chest, new THREE.CapsuleGeometry(0.055, 0.24, 4, 8), M.wrapPale,
+    0, P.chestH * 0.60, -P.chestD / 2 - 0.06);
+  roll.rotation.z = Math.PI / 2;
+  // Small pack under it, so the back is not a flat plane.
+  part(chest, new THREE.BoxGeometry(0.24, 0.20, 0.09), M.vestDark,
+    0, P.chestH * 0.36, -P.chestD / 2 - 0.05);
+
+  // Deltoid yoke: spans the full shoulder width so the top of the silhouette is
+  // broad. Sits BEHIND the deltoid balls so no gap can open at the joint.
+  part(chest, new THREE.BoxGeometry(P.shoulderSpan - 0.09, 0.10, 0.18), M.fatigueLit,
+    0, P.chestH * 0.94, 0);
 
   const neck = new THREE.Group();
   neck.position.y = P.chestH;
   chest.add(neck);
-  part(neck, new THREE.CylinderGeometry(0.05, 0.055, P.neck, 8), M.balaclava,
-    0, P.neck / 2, 0);
+  joints.neck = neck;
+  // Neck overlaps down into the collar so turning the head never opens a hole.
+  part(neck, new THREE.CylinderGeometry(0.052, 0.068, P.neck + 0.05, 10), M.skin,
+    0, P.neck / 2 - 0.03, 0);
+  // Collar of the shemagh bunched at the base of the neck.
+  const collar = part(neck, new THREE.TorusGeometry(0.072, 0.033, 8, 14), M.wrap,
+    0, -0.005, 0);
+  collar.rotation.x = Math.PI / 2;
 
   const head = new THREE.Group();
   head.position.y = P.neck;
   neck.add(head);
   joints.head = head;
 
-  // Skull: slightly ovoid, scaled sphere. Round heads read as balloons.
+  // Skull: an ovoid, longer front-to-back than it is wide, with a jaw block
+  // beneath. A bare sphere is what read as a black ball.
   const skull = part(head, new THREE.SphereGeometry(P.headR, 16, 12), M.balaclava,
-    0, P.headR * 0.92, 0);
-  skull.scale.set(0.95, 1.05, 1.08);
-  // Face opening — a lighter patch so the head has a front.
-  part(head, new THREE.BoxGeometry(0.09, 0.055, 0.03), M.skin,
-    0, P.headR * 0.95, P.headR * 0.92);
-  // Head wrap: a torus band around the crown, tilted. Reads instantly as a
-  // shemagh and gives the head an asymmetric, non-robotic silhouette.
-  const wrap = part(head, new THREE.TorusGeometry(P.headR * 0.94, 0.032, 8, 16),
-    M.wrap, 0, P.headR * 1.28, -0.01);
-  wrap.rotation.x = Math.PI / 2;
-  wrap.rotation.z = 0.18;
-  // Trailing tail of the wrap over one shoulder.
-  const tail = part(head, new THREE.BoxGeometry(0.05, 0.20, 0.035), M.wrap,
-    -P.headR * 0.85, P.headR * 0.45, -0.05);
-  tail.rotation.z = 0.35;
+    0, P.headR * 0.95, -0.005);
+  skull.scale.set(0.92, 1.02, 1.10);
+  const jaw = part(head, new THREE.BoxGeometry(0.145, 0.085, 0.15), M.balaclava,
+    0, P.headR * 0.55, 0.012);
+  jaw.rotation.x = -0.08;
+  // Face plane: a flat inset with brow above and the balaclava mouth below, so
+  // the head has an unambiguous front at any distance.
+  part(head, new THREE.BoxGeometry(0.115, 0.075, 0.02), M.skin,
+    0, P.headR * 1.02, P.headR * 0.98);
+  part(head, new THREE.BoxGeometry(0.125, 0.028, 0.03), M.balaclava,
+    0, P.headR * 1.36, P.headR * 0.93);                        // brow band
+  for (const ex of [-1, 1]) {
+    part(head, new THREE.SphereGeometry(0.016, 8, 6), M.balaclava,
+      ex * 0.032, P.headR * 1.02, P.headR * 1.02);             // eyes
+  }
+  // Shemagh: a wrapped crown plus two offset fold bands. The offsets are what
+  // make it read as cloth wound round a head rather than a hat.
+  const crown = part(head, new THREE.SphereGeometry(P.headR * 1.04, 14, 10), M.wrap,
+    0, P.headR * 1.10, -0.015);
+  crown.scale.set(0.98, 0.78, 1.06);
+  const fold1 = part(head, new THREE.TorusGeometry(P.headR * 0.98, 0.028, 8, 16),
+    M.wrapPale, 0, P.headR * 1.30, -0.012);
+  fold1.rotation.set(Math.PI / 2, 0, 0.20);
+  // Cloth drape down the back of the neck, and a tail over one shoulder.
+  const drape = part(head, new THREE.BoxGeometry(0.155, 0.13, 0.045), M.wrap,
+    0, P.headR * 0.72, -P.headR * 0.92);
+  drape.rotation.x = 0.22;
+  const tail = part(head, new THREE.BoxGeometry(0.055, 0.22, 0.035), M.wrap,
+    -P.headR * 0.92, P.headR * 0.30, -0.06);
+  tail.rotation.z = 0.38;
 
   // --- Arms. Shoulders sit at the yoke ends; elbows are child pivots.
-  const armY = P.chestH * 0.88;
+  // Every segment is over-long by `lap` and the joints carry a ball, so no gap
+  // can open at the extremes of the walk cycle.
+  const lap = 0.03;
+  const armY = P.chestH * 0.86;
   for (const side of ['L', 'R']) {
     const s = side === 'L' ? 1 : -1;
 
     const shoulder = new THREE.Group();
-    shoulder.position.set(s * (P.shoulderSpan / 2 - 0.035), armY, 0);
+    shoulder.position.set(s * (P.shoulderSpan / 2 - 0.045), armY, 0);
     chest.add(shoulder);
     joints[`shoulder${side}`] = shoulder;
 
-    // Deltoid cap hides the joint gap when the arm swings.
-    part(shoulder, new THREE.SphereGeometry(P.armR * 1.35, 10, 8), M.vest, 0, 0, 0);
-    part(shoulder, new THREE.CapsuleGeometry(P.armR, P.upperArm - P.armR * 2, 4, 8),
-      M.fatigue, 0, -P.upperArm / 2, 0);
+    // Deltoid ball: bigger than the sleeve so it covers the socket from every
+    // angle. This is the fix for the "floating sausage" arms.
+    const delt = part(shoulder, new THREE.SphereGeometry(P.armR * 1.55, 12, 10),
+      M.fatigueLit, 0, 0.005, 0);
+    delt.scale.set(1.0, 1.15, 1.0);
+    // Shoulder tab of the vest riding over the deltoid.
+    part(shoulder, new THREE.BoxGeometry(0.10, 0.04, 0.13), M.vestDark, 0, 0.045, 0);
+    part(shoulder,
+      new THREE.CapsuleGeometry(P.armR, P.upperArm - P.armR * 2 + lap, 4, 10),
+      M.fatigue, 0, -(P.upperArm - lap) / 2, 0);
 
     const elbow = new THREE.Group();
     elbow.position.y = -P.upperArm;
     shoulder.add(elbow);
     joints[`elbow${side}`] = elbow;
 
-    part(elbow, new THREE.CapsuleGeometry(P.armR * 0.88, P.lowerArm - P.armR * 2, 4, 8),
-      M.fatigue, 0, -P.lowerArm / 2, 0);
-    // Glove.
-    part(elbow, new THREE.BoxGeometry(0.07, 0.09, 0.055), M.boot,
-      0, -P.lowerArm - 0.02, 0);
+    part(elbow, new THREE.SphereGeometry(P.armR * 1.05, 10, 8), M.fatigue, 0, 0, 0);
+    part(elbow,
+      new THREE.CapsuleGeometry(P.armR * 0.9, P.lowerArm - P.armR * 2 + lap, 4, 10),
+      M.fatigue, 0, -(P.lowerArm - lap) / 2, 0);
+    // Rolled cuff at the wrist.
+    part(elbow, new THREE.CylinderGeometry(P.armR * 0.95, P.armR * 0.85, 0.045, 8),
+      M.fatigueLit, 0, -P.lowerArm + 0.02, 0);
 
     const hand = new THREE.Group();
-    hand.position.y = -P.lowerArm - 0.03;
+    hand.position.y = -P.lowerArm - 0.005;
     elbow.add(hand);
     joints[`hand${side}`] = hand;
+    // Gloved fist, wrapping slightly forward so it reads as gripping.
+    part(hand, new THREE.BoxGeometry(0.062, 0.095, 0.075), M.glove, 0, -0.045, 0.008);
+    part(hand, new THREE.BoxGeometry(0.05, 0.035, 0.055), M.glove, 0, -0.085, 0.02);
   }
 
-  // --- Legs.
+  // --- Legs. Trousers are visibly bulkier than the shins and blouse into the
+  // boot tops, which is most of the "soldier not mannequin" read below the belt.
   for (const side of ['L', 'R']) {
     const s = side === 'L' ? 1 : -1;
 
     const hip = new THREE.Group();
-    hip.position.set(s * (P.hipW / 2 - 0.075), -P.hipH / 2, 0);
+    hip.position.set(s * (P.hipW / 2 - 0.085), -P.hipH / 2, 0);
     hips.add(hip);
     joints[`hip${side}`] = hip;
 
-    part(hip, new THREE.CapsuleGeometry(P.legR, P.upperLeg - P.legR * 2, 4, 8),
-      M.fatigueDark, 0, -P.upperLeg / 2, 0);
+    // Hip ball covers the socket during the swing extremes.
+    part(hip, new THREE.SphereGeometry(P.legR * 1.2, 10, 8), M.trouser, 0, 0.01, 0);
+    part(hip,
+      new THREE.CapsuleGeometry(P.legR * 1.12, P.upperLeg - P.legR * 2 + lap, 4, 10),
+      M.trouser, 0, -(P.upperLeg - lap) / 2, 0);
+    // Thigh cargo pocket.
+    part(hip, new THREE.BoxGeometry(0.075, 0.13, 0.05), M.trouserDark,
+      s * 0.075, -P.upperLeg * 0.55, 0.03);
 
     const knee = new THREE.Group();
     knee.position.y = -P.upperLeg;
     hip.add(knee);
     joints[`knee${side}`] = knee;
 
-    part(knee, new THREE.CapsuleGeometry(P.legR * 0.85, P.lowerLeg - P.legR * 2, 4, 8),
-      M.fatigueDark, 0, -P.lowerLeg / 2, 0);
+    part(knee, new THREE.SphereGeometry(P.legR * 1.05, 10, 8), M.trouser, 0, 0, 0);
+    // Calf tapers toward the ankle — a straight capsule reads as a pipe.
+    part(knee,
+      new THREE.CapsuleGeometry(P.legR * 0.92, P.lowerLeg * 0.62, 4, 10),
+      M.trouser, 0, -P.lowerLeg * 0.34, 0);
+    // Bloused cuff bunched over the boot top.
+    part(knee, new THREE.CylinderGeometry(P.legR * 1.02, P.legR * 0.86, 0.09, 10),
+      M.trouserDark, 0, -P.lowerLeg + 0.055, 0);
+    part(knee, new THREE.CapsuleGeometry(P.legR * 0.7, 0.10, 4, 8),
+      M.trouserDark, 0, -P.lowerLeg + 0.09, 0);
 
     const ankle = new THREE.Group();
     ankle.position.y = -P.lowerLeg;
     knee.add(ankle);
     joints[`ankle${side}`] = ankle;
 
-    // Boot: extends forward from the ankle so the stride has a heel-to-toe read.
-    part(ankle, new THREE.BoxGeometry(0.11, 0.085, P.footL), M.boot,
-      0, -0.042, P.footL / 2 - 0.075);
+    // BOOT. Built as ankle collar -> foot mass -> sole -> toe cap, all forward
+    // of the ankle pivot, so heel-strike and toe-off actually read in the gait.
+    // Local geometry: y=0 is the ankle, sole bottom at y=-P.ankleH, toe at +Z.
+    const toeZ = P.footL - 0.085;   // ankle sits ~8.5cm back from the toe
+    part(ankle, new THREE.CylinderGeometry(P.legR * 0.85, P.legR * 0.8, 0.09, 10),
+      M.boot, 0, -0.015, 0.005);                                   // ankle collar
+    part(ankle, new THREE.BoxGeometry(P.footW, 0.075, P.footL - 0.06), M.boot,
+      0, -P.ankleH + 0.05, (toeZ - 0.085) / 2 + 0.01);             // foot mass
+    part(ankle, new THREE.BoxGeometry(P.footW + 0.012, 0.028, P.footL), M.bootSole,
+      0, -P.ankleH + 0.012, (toeZ - 0.085) / 2 + 0.01);            // sole
+    const toe = part(ankle, new THREE.BoxGeometry(P.footW - 0.01, 0.055, 0.06),
+      M.boot, 0, -P.ankleH + 0.045, toeZ - 0.03);                  // toe cap
+    toe.rotation.x = -0.14;                                        // toe spring
+    part(ankle, new THREE.BoxGeometry(P.footW - 0.02, 0.05, 0.035), M.bootSole,
+      0, -P.ankleH + 0.03, -0.075);                                // heel block
   }
 
   // --- Rifle, held in the right hand, left hand supporting the foregrip.
@@ -371,7 +485,7 @@ export function buildBotModel() {
 
   // Muzzle marker so the shoot code can spawn tracers from the right place.
   const muzzle = new THREE.Object3D();
-  muzzle.position.set(0, 0.03, 0.52);
+  muzzle.position.set(0, 0.055, 0.56);
   rifle.add(muzzle);
   joints.muzzle = muzzle;
 
@@ -380,16 +494,20 @@ export function buildBotModel() {
 
 /** Simple AK-flavoured primitive rifle, +Z is the barrel direction. */
 function buildRifle(g, M) {
-  part(g, new THREE.BoxGeometry(0.055, 0.085, 0.34), M.gun, 0, 0.03, 0.10);       // receiver
-  part(g, new THREE.CylinderGeometry(0.013, 0.013, 0.42, 8), M.gun, 0, 0.055, 0.34)
+  part(g, new THREE.BoxGeometry(0.055, 0.09, 0.34), M.gun, 0, 0.03, 0.10);        // receiver
+  part(g, new THREE.BoxGeometry(0.058, 0.03, 0.12), M.gunMetal, 0, 0.075, 0.02);  // dust cover
+  part(g, new THREE.CylinderGeometry(0.012, 0.012, 0.42, 8), M.gunMetal, 0, 0.058, 0.36)
     .rotation.x = Math.PI / 2;                                                     // barrel
-  part(g, new THREE.BoxGeometry(0.05, 0.06, 0.16), M.gunWood, 0, 0.045, 0.26);    // handguard
-  part(g, new THREE.BoxGeometry(0.05, 0.075, 0.24), M.gunWood, 0, 0.02, -0.19);   // stock
-  part(g, new THREE.BoxGeometry(0.04, 0.09, 0.055), M.gun, 0, -0.045, 0.03);      // grip
-  // Curved magazine: two blocks at an angle sells the AK read in silhouette.
-  const mag = part(g, new THREE.BoxGeometry(0.035, 0.17, 0.06), M.gun, 0, -0.10, 0.14);
+  part(g, new THREE.CylinderGeometry(0.019, 0.019, 0.06, 8), M.gunMetal, 0, 0.058, 0.55)
+    .rotation.x = Math.PI / 2;                                                     // muzzle brake
+  part(g, new THREE.BoxGeometry(0.052, 0.065, 0.18), M.gunWood, 0, 0.042, 0.27);  // handguard
+  part(g, new THREE.BoxGeometry(0.05, 0.075, 0.24), M.gunWood, 0, 0.018, -0.19);  // stock
+  part(g, new THREE.BoxGeometry(0.038, 0.09, 0.055), M.gun, 0, -0.048, 0.03);     // grip
+  // Curved magazine: an angled block sells the AK read in silhouette.
+  const mag = part(g, new THREE.BoxGeometry(0.035, 0.19, 0.065), M.gun, 0, -0.105, 0.145);
   mag.rotation.x = -0.35;
-  part(g, new THREE.BoxGeometry(0.02, 0.035, 0.02), M.gun, 0, 0.09, 0.40);        // front sight
+  part(g, new THREE.BoxGeometry(0.018, 0.04, 0.02), M.gunMetal, 0, 0.095, 0.44);  // front sight
+  part(g, new THREE.BoxGeometry(0.03, 0.028, 0.02), M.gunMetal, 0, 0.088, 0.12);  // rear sight
 }
 
 // ---------------------------------------------------------------------------
@@ -978,7 +1096,7 @@ export class Bot {
     // 1x (weight shifts onto the planted leg), plus breathing at rest.
     const bob = -Math.abs(sinP) * 0.055 * amp;
     const idleBreath = Math.sin(this.breathe) * 0.008 * (1 - w);
-    J.hips.position.y = (P.upperLeg + P.lowerLeg + 0.09) + bob + idleBreath;
+    J.hips.position.y = P.hipY + bob + idleBreath;
     J.hips.position.x = cosP * 0.022 * amp;
     J.hips.rotation.z = -cosP * 0.055 * amp;   // pelvis tilt toward the swing leg
     J.hips.rotation.y = sinP * 0.10 * amp;     // pelvis counter-rotation
@@ -1035,8 +1153,14 @@ export class Bot {
       const swing = Math.max(0, -c);
       const kneeAngle = -(swing * swing * 1.15 + 0.10) * amp - 0.05;
 
-      // Ankle: toe-off at the end of stance, dorsiflex to clear during swing.
-      const ankleAngle = (c * 0.30 - swing * 0.18) * amp;
+      // Ankle. Now that there is an actual foot forward of this pivot, the
+      // ankle drives the visible part of the gait: positive rotation.x pitches
+      // the toe DOWN (plantarflex), negative lifts it (dorsiflex).
+      //   stance, late  (c ~ -1..0 rising)  -> toe-off, toe pushes down
+      //   swing, early  (swing high)        -> dorsiflex to clear the ground
+      //   swing, late   (s ~ +1)            -> level out for heel-strike
+      const heelStrike = Math.max(0, s) * (1 - swing);
+      const ankleAngle = (c * 0.40 - swing * 0.34 - heelStrike * 0.14) * amp;
 
       const hip = J[`hip${side}`], knee = J[`knee${side}`], ankle = J[`ankle${side}`];
       hip.rotation.x = damp(hip.rotation.x, hipAngle, 20, dt);
@@ -1062,37 +1186,75 @@ export class Bot {
     const swayX = Math.sin(this.breathe * 0.7) * 0.045 * (1 - w * 0.6) + sinP * 0.09 * amp;
     const swayY = Math.cos(this.breathe * 0.53) * 0.035 * (1 - w * 0.6);
 
-    // Right arm holds the grip; it stays tucked and high when aiming, dropped
-    // to a patrol carry otherwise.
-    const rShoulderX = aiming ? -1.28 : -0.95;
-    const rShoulderZ = aiming ? -0.30 : -0.18;
-    const rElbow = aiming ? -1.55 : -1.15;
+    // Right arm holds the pistol grip: elbow tucked in and DOWN so the weapon
+    // sits at chest height, not slung at the waist.
+    const rShoulderX = aiming ? -1.05 : -0.82;
+    const rShoulderZ = aiming ? -0.34 : -0.24;
+    const rElbow = aiming ? -1.68 : -1.35;
 
-    // Left arm reaches across to the foregrip: further forward, more elbow bend.
-    const lShoulderX = aiming ? -1.42 : -1.05;
-    const lShoulderZ = aiming ? 0.52 : 0.38;
-    const lElbow = aiming ? -1.72 : -1.35;
+    // Left arm crosses the body to the foregrip. Higher shoulder abduction plus
+    // a deeper elbow is what closes the arms-plus-rifle triangle; without it
+    // the left hand hangs in space and the gun reads as unheld.
+    const lShoulderX = aiming ? -1.22 : -0.98;
+    const lShoulderZ = aiming ? 0.86 : 0.66;
+    const lElbow = aiming ? -1.92 : -1.58;
 
     const R = J.shoulderR, L = J.shoulderL;
     R.rotation.x = damp(R.rotation.x, rShoulderX + swayX * 0.5, 9, dt);
     R.rotation.z = damp(R.rotation.z, rShoulderZ + swayY, 9, dt);
-    R.rotation.y = damp(R.rotation.y, aiming ? -0.20 : -0.10, 9, dt);
+    R.rotation.y = damp(R.rotation.y, aiming ? -0.26 : -0.14, 9, dt);
     J.elbowR.rotation.x = damp(J.elbowR.rotation.x, rElbow - swayX * 0.35, 9, dt);
+    J.elbowR.rotation.y = damp(J.elbowR.rotation.y, aiming ? -0.30 : -0.18, 9, dt);
 
     L.rotation.x = damp(L.rotation.x, lShoulderX + swayX * 0.5, 9, dt);
     L.rotation.z = damp(L.rotation.z, lShoulderZ + swayY, 9, dt);
-    L.rotation.y = damp(L.rotation.y, aiming ? 0.34 : 0.22, 9, dt);
+    L.rotation.y = damp(L.rotation.y, aiming ? 0.52 : 0.36, 9, dt);
     J.elbowL.rotation.x = damp(J.elbowL.rotation.x, lElbow - swayX * 0.35, 9, dt);
+    J.elbowL.rotation.y = damp(J.elbowL.rotation.y, aiming ? 0.40 : 0.26, 9, dt);
 
     // Rifle sits in the right hand pointing +Z (forward). Recoil kicks it up
     // and settles fast — the visible tell that the bot is shooting.
     const recoil = this.muzzleFlashTime > 0 ? 0.16 : 0;
     J.rifle.rotation.set(
-      damp(J.rifle.rotation.x, 1.35 + recoil, 30, dt),
-      damp(J.rifle.rotation.y, 0.10, 12, dt),
-      damp(J.rifle.rotation.z, aiming ? 0.02 : 0.30, 10, dt),
+      damp(J.rifle.rotation.x, 1.42 + recoil, 30, dt),
+      damp(J.rifle.rotation.y, 0.14, 12, dt),
+      damp(J.rifle.rotation.z, aiming ? 0.02 : 0.26, 10, dt),
     );
-    J.rifle.position.set(0.01, -0.03, 0.04);
+    // Offset so the pistol grip lands IN the fist rather than beside it.
+    J.rifle.position.set(0.005, -0.05, 0.03);
+
+    // Snap the left hand onto the foregrip. Two-bone IK would be nicer, but a
+    // direct world-space placement of the hand pivot is exact and costs one
+    // matrix update — and this joint carries no geometry of its own beyond the
+    // fist, so nothing shears.
+    // ponytail: positional snap, no elbow-plane solve. If the left arm ever
+    // needs to look right from behind, swap in a proper 2-bone IK here.
+    this.snapLeftHandToForegrip();
+  }
+
+  /**
+   * Place the LEFT hand on the rifle's foregrip so both arms close a triangle
+   * onto the weapon. Reads the rifle's world matrix, so it must run after the
+   * arm poses above are written.
+   */
+  snapLeftHandToForegrip() {
+    const J = this.joints;
+    if (!J.rifle || !J.handL) return;
+    if (!this._gripLocal) this._gripLocal = new THREE.Vector3(0, 0.055, 0.27);
+    if (!this._gripWorld) this._gripWorld = new THREE.Vector3();
+
+    // Both chains hang off the chest, so updating from there is enough.
+    J.chest.updateMatrixWorld(true);
+    this._gripWorld.copy(this._gripLocal).applyMatrix4(J.rifle.matrixWorld);
+    J.handL.parent.worldToLocal(this._gripWorld);
+    // Clamp the reach so a bad aim pose can never rip the hand off the forearm.
+    const maxReach = 0.14;
+    const rest = -P.lowerArm - 0.005;
+    this._gripWorld.y -= 0;
+    const dx = this._gripWorld.x, dy = this._gripWorld.y - rest, dz = this._gripWorld.z;
+    const d = Math.hypot(dx, dy, dz);
+    const k = d > maxReach ? maxReach / d : 1;
+    J.handL.position.set(dx * k, rest + dy * k, dz * k);
   }
 
   /**
@@ -1110,7 +1272,7 @@ export class Bot {
 
     // Buckle: knees give way in the first third, dropping the hips.
     const buckle = clamp(this.deathTime / 0.5, 0, 1);
-    J.hips.position.y = (P.upperLeg + P.lowerLeg + 0.09) * (1 - buckle * 0.55);
+    J.hips.position.y = P.hipY * (1 - buckle * 0.55);
 
     // Topple about the tumble axis. Rotating the ROOT (not the hips) is what
     // makes the body end up lying on the ground rather than folded in place.
