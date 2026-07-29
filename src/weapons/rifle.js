@@ -439,7 +439,10 @@ export class Rifle {
     // Scale 0.58 keeps the muzzle clear of the crosshair at screen centre.
     gun.scale.setScalar(0.58);
     gun.position.set(0.140, -0.100, -0.370);
-    gun.rotation.set(-0.15, 0.21, 0.10);
+    // Yaw stays small: at 0.21 the weapon turned broadside and you looked at
+    // its left flank with the barrel crossing the screen. CS keeps the bore
+    // nearly parallel to the view so the muzzle reads as pointing downrange.
+    gun.rotation.set(-0.11, 0.075, 0.055);
     this.gun = gun;
     this.gunHome = { pos: gun.position.clone(), rot: gun.rotation.clone() };
     this.vmRoot.add(gun);
