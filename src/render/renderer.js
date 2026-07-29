@@ -24,9 +24,11 @@ export const LOOK = {
   // not by blue sky — a saturated blue fill reads as cold and wrong.
   // Kept LOW on purpose: harsh sun means dark shadows, and a generous fill is
   // what makes a scene read as flat and overcast no matter how bright the key.
-  fillSky: 0x8ba6c9,
-  fillGround: 0xb07f4a,
-  fillIntensity: 0.22,
+  // Sky term stays dim so shadows read dark; the ground term carries most of
+  // the fill so what light does reach the shadows is warm bounce off paving.
+  fillSky: 0x7d97bd,
+  fillGround: 0xc8935a,
+  fillIntensity: 0.3,
 
   fogColor: 0xe0cda8,
   fogDensity: 0.0042,
@@ -220,7 +222,7 @@ export class Renderer {
     // the read for none of the cost.
     // ponytail: static bounce light, not GI. Bake an irradiance volume if the
     // map ever gets interiors that need it.
-    const bounce = new THREE.DirectionalLight(0xd9a877, 0.55);
+    const bounce = new THREE.DirectionalLight(0xe0aa77, 0.75);
     bounce.position.set(-sun.position.x, 12, -sun.position.z);
     this.scene.add(bounce);
     this.bounce = bounce;

@@ -900,8 +900,11 @@ function genCrate(size, n) {
 
   const grain = (u, v, idx) => {
     const off = idx * 2.91;
-    const rings = n.fbm(u + off, v + off, 176, 9, 4);
-    return Math.sin(rings * 30) * 0.5 + 0.5;
+    const rings = n.fbm(u + off, v + off, 88, 7, 4);
+    // Ring frequency has to stay low: a 1m crate fills little screen space, and
+    // packing many light/dark bands into it aliases into a shredded texture
+    // rather than reading as wood.
+    return Math.sin(rings * 9) * 0.5 + 0.5;
   };
 
   const height = paintScalar(size, (x, y, u, v) => {
@@ -922,8 +925,8 @@ function genCrate(size, n) {
     return h;
   });
 
-  const PINE_L = [196, 162, 112];
-  const PINE_D = [134, 102, 64];
+  const PINE_L = [188, 156, 110];
+  const PINE_D = [152, 120, 80];
   const WEATHERED = [128, 118, 100];
   const DIRT = [76, 62, 46];
 
