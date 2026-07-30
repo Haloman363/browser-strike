@@ -192,8 +192,123 @@ const _sy = new THREE.Vector3();
 const MAX_DECALS = 64;
 const MAX_SHELLS = 16;
 const MAX_SPARKS = 24;
-const MUZZLE_FLASH_TIME = 0.04;
+const MUZZLE_FLASH_TIME = 0.045;
 const VIEWMODEL_FOV = 56;
+
+// ---------------------------------------------------------------------------
+// Procedural sprite textures
+// ---------------------------------------------------------------------------
+// Every one of these effects was originally an untextured PlaneGeometry with a
+// flat colour, which is why they all rendered as literal opaque SQUARES: a
+// grey card taped to the wall for a bullet hole, a sheet of paper at the
+// muzzle, cream tiles for sparks. An alpha ramp is the entire difference
+// between "quad" and "effect", and a 2D canvas gives us one with no asset
+// files and no dependency. Built lazily so `node rifle.js --test` — which has
+// no `document` — can still construct the scene graph.
+
+function canvasTex(size, draw) {
+  if (typeof document === 'undefined') return null;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  draw(c.getContext('2d'), size);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+let _flashTex = null, _decalTex = null, _sparkTex = null;
+
+/** Muzzle flash: a hot core with a ragged multi-lobed star around it. */
+function flashTexture() {
+  if (_flashTex !== undefined && _flashTex) return _flashTex;
+  return (_flashTex = canvasTex(128, (g, s) => {
+    const c = s / 2;
+    g.clearRect(0, 0, s, s);
+    // Star lobes first, so the core burns over the top of them.
+    g.globalCompositeOperation = 'lighter';
+    const lobes = 7;
+    for (let i = 0; i < lobes; i++) {
+      const a = (i / lobes) * Math.PI * 2;
+      const len = c * (i % 2 ? 0.95 : 0.55);
+      const wid = 0.16 + (i % 3) * 0.05;
+      const grd = g.createLinearGradient(c, c, c + Math.cos(a) * len, c + Math.sin(a) * len);
+      grd.addColorStop(0, 'rgba(255,236,190,0.95)');
+      grd.addColorStop(0.45, 'rgba(255,178,60,0.42)');
+      grd.addColorStop(1, 'rgba(255,120,20,0)');
+      g.fillStyle = grd;
+      g.beginPath();
+      g.moveTo(c, c);
+      g.arc(c, c, len, a - wid, a + wid);
+      g.closePath();
+      g.fill();
+    }
+    // Core: small, white-hot, falling off fast. This is what the eye reads as
+    // "bright" — without it the star alone looks like a paper snowflake.
+    const core = g.createRadialGradient(c, c, 0, c, c, c * 0.42);
+    core.addColorStop(0, 'rgba(255,255,248,1)');
+    core.addColorStop(0.25, 'rgba(255,226,150,0.92)');
+    core.addColorStop(0.6, 'rgba(255,150,40,0.30)');
+    core.addColorStop(1, 'rgba(255,110,10,0)');
+    g.fillStyle = core;
+    g.fillRect(0, 0, s, s);
+  }));
+}
+
+/** Bullet hole: dark punched centre, lighter spalled rim, soft dusty edge. */
+function decalTexture() {
+  if (_decalTex) return _decalTex;
+  return (_decalTex = canvasTex(64, (g, s) => {
+    const c = s / 2;
+    g.clearRect(0, 0, s, s);
+    // Outer dust halo — the smudge of pulverised material around the hit.
+    const halo = g.createRadialGradient(c, c, c * 0.18, c, c, c);
+    halo.addColorStop(0, 'rgba(60,54,48,0.55)');
+    halo.addColorStop(0.55, 'rgba(70,62,54,0.22)');
+    halo.addColorStop(1, 'rgba(80,72,64,0)');
+    g.fillStyle = halo;
+    g.fillRect(0, 0, s, s);
+    // Spall ring: slightly BRIGHTER than the wall, the chipped-out crater lip.
+    // This is the cue that sells "hole" rather than "stain".
+    g.strokeStyle = 'rgba(196,182,162,0.5)';
+    g.lineWidth = s * 0.045;
+    g.beginPath();
+    for (let i = 0; i <= 20; i++) {
+      const a = (i / 20) * Math.PI * 2;
+      const r = c * (0.30 + Math.sin(i * 2.3) * 0.035 + Math.cos(i * 1.7) * 0.03);
+      const x = c + Math.cos(a) * r, y = c + Math.sin(a) * r;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.closePath();
+    g.stroke();
+    // The hole itself: near-black, irregular, small.
+    g.fillStyle = 'rgba(14,11,9,0.95)';
+    g.beginPath();
+    for (let i = 0; i <= 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      const r = c * (0.24 + Math.sin(i * 3.1) * 0.045);
+      const x = c + Math.cos(a) * r, y = c + Math.sin(a) * r;
+      i ? g.lineTo(x, y) : g.moveTo(x, y);
+    }
+    g.closePath();
+    g.fill();
+  }));
+}
+
+/** Spark: a soft round glow. Additive, so only the alpha ramp matters. */
+function sparkTexture() {
+  if (_sparkTex) return _sparkTex;
+  return (_sparkTex = canvasTex(32, (g, s) => {
+    const c = s / 2;
+    g.clearRect(0, 0, s, s);
+    const grd = g.createRadialGradient(c, c, 0, c, c, c);
+    grd.addColorStop(0, 'rgba(255,255,240,1)');
+    grd.addColorStop(0.3, 'rgba(255,214,130,0.75)');
+    grd.addColorStop(0.7, 'rgba(255,140,40,0.20)');
+    grd.addColorStop(1, 'rgba(255,110,20,0)');
+    g.fillStyle = grd;
+    g.fillRect(0, 0, s, s);
+  }));
+}
 
 export class Rifle {
   /**
@@ -462,9 +577,17 @@ export class Rifle {
 
   buildMuzzleFlash() {
     // Flash geometry: two crossed quads so it reads as volumetric from any
-    // angle without needing a real billboard sprite or a texture file.
+    // angle without needing a real billboard sprite or an asset file.
+    //
+    // SIZE is the thing that was wrong. At 0.16m these quads were as tall as
+    // the entire receiver and, being untextured and additive over a bright
+    // sky, clipped to solid white — the flash rendered as a sheet of paper
+    // stapled to the muzzle with visible polygon corners. A real flash is a
+    // small star roughly the width of the brake. 0.085m with an alpha ramp
+    // reads as light; 0.16m of flat colour reads as cardboard.
     const mat = new THREE.MeshBasicMaterial({
-      color: 0xffd070,
+      color: 0xffcf8a,
+      map: flashTexture(),
       transparent: true,
       opacity: 0,
       depthWrite: false,
@@ -474,10 +597,33 @@ export class Rifle {
     this.flashMat = mat;
     this.flash = new THREE.Group();
     for (let i = 0; i < 2; i++) {
-      const q = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.16), mat);
-      q.rotation.y = i * Math.PI / 2;
+      const q = new THREE.Mesh(new THREE.PlaneGeometry(0.115, 0.115), mat);
+      q.rotation.z = i * Math.PI / 2;   // roll the crossed pair about the BORE
       this.flash.add(q);
     }
+    // A third quad lying across the bore, so from behind the shooter (the only
+    // angle that actually matters) there is still a lobe facing the camera
+    // rather than two planes seen edge-on.
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(0.10, 0.10), mat);
+    front.rotation.y = Math.PI / 2;
+    this.flash.add(front);
+    // A stubby cone of flame pushed out of the bore, sitting just ahead of the
+    // brake. Gives the flash depth along the barrel so it does not read as a
+    // flat sticker when the weapon swings across the view.
+    const coneMat = new THREE.MeshBasicMaterial({
+      color: 0xffb347,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    this.flashConeMat = coneMat;
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.075, 7, 1, true), coneMat);
+    cone.rotation.x = -Math.PI / 2;     // point down the bore (-Z)
+    cone.position.z = -0.035;
+    this.flash.add(cone);
+
     this.flash.visible = false;
     this.muzzle.add(this.flash);
 
@@ -492,11 +638,16 @@ export class Rifle {
   buildEffects() {
     // Decal pool: one shared geometry, per-instance mesh. A ring buffer means
     // the oldest decal is silently recycled once we hit the cap.
-    const decalGeo = new THREE.PlaneGeometry(0.075, 0.075);
+    // 0.075m was too big AND, being an untextured flat-grey plane, it rendered
+    // as a literal grey square taped to the wall. The texture carries a small
+    // dark hole inside a wider dust halo, so the *quad* can stay ~5cm while the
+    // punched hole itself reads at ~1.5cm, which is what a rifle round makes.
+    const decalGeo = new THREE.PlaneGeometry(0.052, 0.052);
     const decalMat = new THREE.MeshBasicMaterial({
-      color: 0x2e2b28,
+      color: 0xffffff,
+      map: decalTexture(),
       transparent: true,
-      opacity: 0.82,
+      opacity: 1,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -4,
@@ -512,9 +663,16 @@ export class Rifle {
     }
 
     // Shell pool.
-    const shellGeo = new THREE.CylinderGeometry(0.0045, 0.0045, 0.019, 6);
+    // Slightly oversized versus a real 7.62x39 case (which is 9mm x 39mm).
+    // At arm's length under a 90 degree FOV a true-scale case is about two
+    // pixels and simply is not there; every shooter game fudges this.
+    const shellGeo = new THREE.CylinderGeometry(0.006, 0.0052, 0.028, 7);
+    // metalness 0.9 with no env map in the WORLD scene is fine (the world has
+    // one), but the brass still needs a lifted base colour to catch the light
+    // while tumbling — at 0.9/0.35 it read as a dark speck against the paving.
     const shellMat = new THREE.MeshStandardMaterial({
-      color: 0xc9a03a, roughness: 0.35, metalness: 0.9 });
+      color: 0xd8a93c, roughness: 0.28, metalness: 0.75,
+      emissive: 0x4a3208, emissiveIntensity: 0.35 });
     this.shells = [];
     for (let i = 0; i < MAX_SHELLS; i++) {
       const m = new THREE.Mesh(shellGeo, shellMat);
@@ -530,9 +688,10 @@ export class Rifle {
     this.shellCursor = 0;
 
     // Spark/puff pool: tiny additive quads that fly off the impact point.
-    const sparkGeo = new THREE.PlaneGeometry(0.02, 0.02);
+    const sparkGeo = new THREE.PlaneGeometry(0.026, 0.026);
     const sparkMat = new THREE.MeshBasicMaterial({
       color: 0xffd9a0,
+      map: sparkTexture(),
       transparent: true,
       opacity: 1,
       depthWrite: false,
@@ -549,6 +708,7 @@ export class Rifle {
     this.sparkCursor = 0;
 
     this.flashTimer = 0;
+    this.flashScale = 1;
   }
 
   // -- input ----------------------------------------------------------------
@@ -588,9 +748,15 @@ export class Rifle {
     this.triggerKick();
     this.spawnShell();
     this.flashTimer = MUZZLE_FLASH_TIME;
-    this.flash.rotation.z = Math.random() * Math.PI * 2; // no two flashes alike
-    const s = 0.8 + Math.random() * 0.5;
-    this.flash.scale.set(s, s, s);
+    // No two flashes alike: roll about the BORE (z is down the barrel in gun
+    // space, and the muzzle marker inherits that), plus a little yaw/pitch
+    // wobble so the star's lobes do not land in the same screen spots twice.
+    this.flash.rotation.set(
+      (Math.random() * 2 - 1) * 0.25,
+      (Math.random() * 2 - 1) * 0.25,
+      Math.random() * Math.PI * 2,
+    );
+    this.flashScale = 0.85 + Math.random() * 0.45;
 
     if (!hit) return null;
 
@@ -648,21 +814,24 @@ export class Rifle {
   }
 
   spawnSparks(point, normal) {
-    const n = 4;
+    // 4 was too sparse to read as a burst — at 5m you saw three separate dots
+    // and no event. 7 is still cheap and reads as a spray.
+    const n = 7;
     for (let i = 0; i < n; i++) {
       const p = this.sparks[this.sparkCursor];
       this.sparkCursor = (this.sparkCursor + 1) % MAX_SPARKS;
-      p.mesh.position.copy(point).addScaledVector(normal, 0.01);
+      p.mesh.position.copy(point).addScaledVector(normal, 0.012);
       p.mesh.visible = true;
-      p.life = 0.16 + Math.random() * 0.14;
+      p.life = 0.13 + Math.random() * 0.16;
       p.maxLife = p.life;
+      p.born = p.life;
       // Scatter into the hemisphere around the surface normal.
       p.vel.set(
         (Math.random() * 2 - 1),
         (Math.random() * 2 - 1),
         (Math.random() * 2 - 1),
-      ).normalize().multiplyScalar(1.2 + Math.random() * 1.8);
-      p.vel.addScaledVector(normal, 2.2);
+      ).normalize().multiplyScalar(1.6 + Math.random() * 2.6);
+      p.vel.addScaledVector(normal, 2.6);
     }
   }
 
@@ -670,22 +839,77 @@ export class Rifle {
     const s = this.shells[this.shellCursor];
     this.shellCursor = (this.shellCursor + 1) % MAX_SHELLS;
     // Shells live in the WORLD scene (they should fall on the floor and be
-    // occluded by it), so convert the eject port out of viewmodel space by
-    // hand: viewmodel space is camera space, so camera.localToWorld does it.
-    const local = this.ejectPort.position.clone().add(this.gun.position);
+    // occluded by it), so convert the eject port out of viewmodel space.
+    // Viewmodel space IS camera space, so camera.localToWorld does the job —
+    // but only if the offset handed to it is a real viewmodel-space point.
+    //
+    // The old code built it as ejectPort.position + gun.position, which adds a
+    // GUN-LOCAL offset to a viewmodel-space one while ignoring the gun's 0.58
+    // scale and its rotation entirely. The result put shells ~0.4m directly in
+    // front of the eye at eye height, so from the shooter's POV brass burst out
+    // of thin air at the centre of the screen and flew off to the right.
+    // updateMatrixWorld + getWorldPosition on the marker applies the full
+    // parent chain (scale, rotation, kick, bob) and is what actually tracks the
+    // port as the weapon animates.
+    this.vmRoot.updateMatrixWorld(true);
+    const local = this.ejectPort.getWorldPosition(new THREE.Vector3());
+
+    // FOV RECONCILIATION, and this is the subtle half of the bug. The eject
+    // port's camera-space point is correct, but the viewmodel is drawn through
+    // a 56 degree camera while the shell is drawn through the world's 90. The
+    // same camera-space point therefore lands in two completely different
+    // places on screen: at 90 degrees everything is pulled 1.88x toward the
+    // centre, so brass placed at the true port position appeared to burst out
+    // of the middle of the view instead of out of the gun.
+    // To land on the same SCREEN position, the lateral offset scales by the
+    // ratio of the half-angle tangents — world over viewmodel, because the
+    // wider world camera needs a proportionally larger offset at the same
+    // depth to reach the same normalised device coordinate. (Getting this
+    // ratio upside down puts the brass near screen centre, above and left of
+    // the weapon, which is what the first attempt at this did.)
+    // The depth itself cancels out of the NDC entirely, so it is free to pick:
+    // far enough not to clip the near plane, close enough to look attached.
+    const k = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) /
+              Math.tan(THREE.MathUtils.degToRad(VIEWMODEL_FOV / 2));
+    const depth = 0.5;                        // metres in front of the eye
+    const stretch = depth / Math.abs(local.z || 1);
+    local.set(local.x * k * stretch, local.y * k * stretch, -depth);
     s.mesh.position.copy(this.camera.localToWorld(local));
 
     const right = new THREE.Vector3();
     const up = new THREE.Vector3();
-    this.camera.matrixWorld.extractBasis(right, up, new THREE.Vector3());
-    s.vel.copy(right).multiplyScalar(2.0 + Math.random() * 1.0)
-      .addScaledVector(up, 1.4 + Math.random() * 0.8);
+    const fwd = new THREE.Vector3();
+    this.camera.matrixWorld.extractBasis(right, up, fwd);
+    // Right and slightly UP and BACK. Modest speeds on purpose: the shell now
+    // spawns only 0.5m from the eye, where a couple of m/s of lateral velocity
+    // crosses the whole screen in three frames and reads as a glitch rather
+    // than as brass being thrown.
+    s.vel.copy(right).multiplyScalar(1.15 + Math.random() * 0.5)
+      .addScaledVector(up, 1.15 + Math.random() * 0.45)
+      .addScaledVector(fwd, 0.35 + Math.random() * 0.3); // +fwd is BEHIND the cam
     s.spin.set(
       (Math.random() * 2 - 1) * 22,
       (Math.random() * 2 - 1) * 22,
       (Math.random() * 2 - 1) * 22,
     );
-    s.life = 3.0;
+    // Start on a random attitude too — every shell leaving the port at the
+    // exact same angle is visible as a stutter when you spray.
+    s.mesh.rotation.set(
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+      Math.random() * Math.PI * 2,
+    );
+    // 3s was pure waste: with no bounce the shell is metres below the floor
+    // after ~1s and just burns a pool slot. Short life means the 16-slot pool
+    // never recycles a shell that is still on screen during a 30-round spray.
+    s.life = 1.1;
+    // One downward ray AT SPAWN (not per frame) finds the surface the brass is
+    // heading for, so it disappears at the floor it is actually above rather
+    // than at a hardcoded height. Falls back to 2m down if nothing is under us.
+    const down = this.world.raycast(
+      s.mesh.position.clone(), _DOWN, 6);
+    s.floorY = down ? s.mesh.position.y - down.distance + 0.01
+      : s.mesh.position.y - 2.0;
     s.mesh.visible = true;
   }
 
@@ -693,11 +917,26 @@ export class Rifle {
     if (this.flashTimer > 0) {
       this.flashTimer -= dt;
       const t = Math.max(0, this.flashTimer / MUZZLE_FLASH_TIME);
+      // Cubed falloff, not linear. A muzzle flash is a detonation: full
+      // brightness for one frame then effectively gone. The old linear ramp
+      // spread a dim glow over five frames, which read as a lamp switching off
+      // rather than a shot going off.
+      // Square, not cube, and NOT lifted off a floor — an opacity that bottoms
+      // out at a constant holds a visible ghost of the flash on screen for
+      // several frames after the shot, which is exactly the "lamp switching
+      // off" look. This reaches a true zero at the end of the window.
+      const e = t * t;
       this.flash.visible = true;
-      this.flashMat.opacity = t;
-      this.flashLight.intensity = t * 6;
+      this.flashMat.opacity = e;
+      this.flashConeMat.opacity = e * 0.75;
+      this.flashLight.intensity = e * 9;
+      // Shrink as it dies, so the flash collapses back into the bore.
+      const k = this.flashScale * (0.72 + e * 0.28);
+      this.flash.scale.set(k, k, k);
     } else if (this.flash.visible) {
       this.flash.visible = false;
+      this.flashMat.opacity = 0;
+      this.flashConeMat.opacity = 0;
       this.flashLight.intensity = 0;
     }
 
@@ -710,24 +949,37 @@ export class Rifle {
       s.mesh.rotation.x += s.spin.x * dt;
       s.mesh.rotation.y += s.spin.y * dt;
       s.mesh.rotation.z += s.spin.z * dt;
-      // ponytail: no bounce, shells fall through the floor and expire. Add a
-      // single downward raycast per shell per frame if that ever reads wrong.
+      // ponytail: still no bounce — but a shell sinking visibly THROUGH the
+      // paving reads much worse than one that simply leaves the frame, so cut
+      // it at roughly floor level relative to where it was ejected. Ceiling:
+      // shells vanish in mid-air on a balcony or stairs, where "floor" is not
+      // 1.5m below the muzzle. Upgrade path: one downward raycast at spawn to
+      // find the real floor height, then rest the shell on it and stop it.
+      if (s.mesh.position.y < s.floorY) { s.life = 0; s.mesh.visible = false; }
     }
 
+    let hottest = 0;
     for (const p of this.sparks) {
       if (p.life <= 0) continue;
       p.life -= dt;
       if (p.life <= 0) { p.mesh.visible = false; continue; }
-      p.vel.y -= 9 * dt;
+      p.vel.y -= 11 * dt;
+      p.vel.multiplyScalar(Math.max(0, 1 - 4.0 * dt)); // drag: sparks bleed speed
       p.mesh.position.addScaledVector(p.vel, dt);
       p.mesh.quaternion.copy(this.camera.quaternion); // cheap billboard
       const t = p.life / p.maxLife;
-      p.mesh.scale.setScalar(0.4 + t * 0.9);
+      if (t > hottest) hottest = t;
+      // Shrink toward nothing rather than holding a fixed size and blinking
+      // out — a spark that vanishes at full size reads as a deleted object.
+      p.mesh.scale.setScalar(0.25 + t * t * 1.15);
     }
-    // One shared material means one opacity for all sparks. They are spawned in
-    // bursts and live ~0.2s, so the visual difference is not worth per-particle
-    // materials or a custom shader.
-    this.sparkMat.opacity = 0.9;
+    // One shared material means one opacity for all sparks. Driving it from the
+    // YOUNGEST live spark means a burst fades out as a group instead of being
+    // clamped bright until the last particle expires, which is what made the
+    // old constant 0.9 read as a hard pop-off.
+    // ponytail: per-particle alpha needs per-particle materials or a shader;
+    // at ~0.2s of life the group fade is indistinguishable in motion.
+    this.sparkMat.opacity = 0.35 + hottest * 0.65;
   }
 
   // -- viewmodel animation --------------------------------------------------
@@ -774,20 +1026,38 @@ export class Rifle {
     if (this.reloading > 0) {
       const t = 1 - this.reloading / RIFLE.reloadTime;
       // Tilt in, hold, tilt back out.
+      //
+      // The old amounts (rz 0.55, ry 0.32, py -0.09) rolled and dropped the
+      // weapon so far that the receiver, grip and magwell all left the bottom
+      // of the frame — the entire reload played out off-screen and you watched
+      // an empty courtyard with a barrel along the bottom edge. A reload has to
+      // bring the magwell TOWARD the centre of the view, not out of it. So:
+      // roughly half the roll, and LIFT (+py) instead of dropping.
       const tilt = Math.sin(Math.min(1, t * 1.25) * Math.PI);
-      rz = tilt * 0.55;
-      ry = tilt * 0.32;
-      px = -tilt * 0.05;
-      py = -tilt * 0.09;
-      pz = tilt * 0.06;
+      rz = tilt * 0.26;
+      ry = tilt * 0.20;
+      // Cant the magwell up enough to see it, but not so far that the muzzle
+      // swings up across the view — the weapon must stay in the lower-right
+      // quadrant and never occlude the crosshair, even mid-reload.
+      rx = tilt * 0.16;
+      px = tilt * 0.028;     // OUT toward the right, not in toward centre
+      py = tilt * 0.075;     // lift enough that the mag drop stays in frame
+      pz = tilt * 0.050;
 
-      // Magazine drops out over the first third, new one seats in the last.
+      // Magazine: drops out over the first third, gone through the middle,
+      // new one seats over the last third.
       const magOut = t < 0.34 ? t / 0.34 : (t > 0.62 ? 1 - (t - 0.62) / 0.38 : 1);
-      const gone = magOut < 0.98;
+      // `visible` was previously `magOut < 0.98`, i.e. the mag was SHOWN while
+      // sliding and hidden only at the very extreme. Combined with a 0.30 drop
+      // it slid ~17cm below the frame and blinked off where nobody could see
+      // it, so the mag never appeared to leave the weapon at all. Hide it once
+      // it has cleared the magwell and let the travel sell the drop.
+      const shown = magOut < 0.72;
       for (let i = 0; i < this.magParts.length; i++) {
         this.magParts[i].position.copy(this.magHome[i]);
-        this.magParts[i].position.y -= magOut * 0.30;
-        this.magParts[i].visible = gone;
+        this.magParts[i].position.y -= magOut * 0.26;
+        this.magParts[i].position.z += magOut * 0.05; // falls away from the gun
+        this.magParts[i].visible = shown;
       }
     } else {
       for (let i = 0; i < this.magParts.length; i++) {
@@ -895,6 +1165,7 @@ const NORMAL_PROBES = [
   new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
 ];
 const _euler = new THREE.Euler();
+const _DOWN = new THREE.Vector3(0, -1, 0);
 
 // innerWidth is absent under Node; the aspect is corrected on first render.
 function innerWidthOr(fallback) {
