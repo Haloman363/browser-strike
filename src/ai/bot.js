@@ -157,7 +157,14 @@ function footTarget(u, stanceFrac, stride, amp) {
     // STANCE: sweep from in-front to behind at a constant rate. Constant is
     // what matters — any easing here is skate.
     const k = u / stanceFrac;
-    return { z: lerp(half, -half, k), y: 0, plant: 1 };
+    // Foot roll: toe up at heel-strike, flat through midstance, heel up at
+    // toe-off. Negative pitches the toe up, positive drives it down.
+    const roll = k < 0.18
+      ? lerp(-0.30, 0, k / 0.18)                    // heel-strike to flat
+      : k < 0.62
+        ? 0                                          // foot flat, bearing load
+        : lerp(0, 0.42, (k - 0.62) / 0.38);          // rolling onto the toe
+    return { z: lerp(half, -half, k), y: 0, plant: 1, roll };
   }
   // SWING: lift and reach back to the front. Sine arc peaks mid-swing, and the
   // horizontal uses a smoothstep so the foot decelerates into heel-strike
@@ -168,6 +175,8 @@ function footTarget(u, stanceFrac, stride, amp) {
     z: lerp(-half, half, ease),
     y: Math.sin(k * Math.PI) * (0.10 + 0.06 * amp),
     plant: 0,
+    // Carry the toe-off through, then level out for the next heel-strike.
+    roll: lerp(0.42, -0.30, ease),
   };
 }
 
@@ -209,10 +218,14 @@ function solveLegIK(J, side, target, amp, dt, lean = 0) {
   knee.rotation.x = kneeFold;
   hip.rotation.z = damp(hip.rotation.z, (side === 'L' ? 1 : -1) * 0.045, 12, dt);
 
-  // Ankle keeps the sole parallel to the ground while planted (so it reads as
-  // bearing weight), and dorsiflexes to clear during swing.
+  // Ankle. Flat-to-ground is the baseline; `roll` rides on top of it to give
+  // the heel-strike -> foot-flat -> toe-off progression. Without it the boot is
+  // a rigid paddle that pivots as a slab, which is the clearest read that a
+  // character is being posed rather than walking.
+  // ponytail: roll comes from the ankle alone, no metatarsal joint. Add a toe
+  // joint under the ankle if the push-off needs the sole to actually bend.
   const soleFlat = -(hip.rotation.x + kneeFold);
-  ankle.rotation.x = soleFlat + (1 - target.plant) * -0.22 * amp;
+  ankle.rotation.x = soleFlat + target.roll * amp + (1 - target.plant) * -0.22 * amp;
 }
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 
@@ -704,6 +717,9 @@ export class Bot {
 
     // Animation
     this.phase = 0;           // gait phase in radians
+    // Angular velocity of the weapon spring — this is what carries the lag and
+    // overshoot that make the rifle feel like it has mass.
+    this.rifleVel = { x: 0, y: 0, z: 0 };
     this.speedNorm = 0;       // 0..1 blend weight for the walk cycle
     this.breathe = Math.random() * Math.PI * 2;
     this.deathTime = 0;
@@ -1218,7 +1234,19 @@ export class Bot {
     // at double-support. cos(2p) gives both halves of that travel; -|sin| only
     // ever went DOWN, so the body read as a constant slight crouch with no
     // rise-and-fall at all — the main reason the walk looked floaty.
-    const bob = Math.cos(p * 2) * 0.032 * amp;
+      // Pelvis vertical excursion. Real is 40-50mm walking, 70-100mm running for
+    // a 1.8m frame; 32mm read as gliding.
+    const bobAmp = lerp(0.024, 0.045, clamp(w, 0, 1));
+    const bob = Math.cos(p * 2) * bobAmp * amp;
+
+    // Loading response: the pelvis DROPS fast just after each foot strike, then
+    // recovers slowly. Because the foot is IK-pinned to the ground, dropping
+    // the pelvis is what flexes the stance knee — this is the weight cue, and
+    // gating knee flex to the swing half is what previously disabled it.
+    // Two strikes per cycle, so this runs at 2x on a sawtooth-ish curve.
+    const sinceStrike = ((p / Math.PI) % 1 + 1) % 1;
+    const absorb = -Math.exp(-sinceStrike * 9) * Math.sin(sinceStrike * Math.PI * 1.6)
+      * 0.030 * amp;
     const idleBreath = Math.sin(this.breathe) * 0.008 * (1 - w);
     // Flight phase: past a jog the body is briefly airborne between steps, so
     // the whole rig lifts around the double-support moments. Ramped in from
@@ -1228,7 +1256,7 @@ export class Bot {
     // holds the stance foot on the ground, so excess lift just tears contact.
     const airborne = clamp((speed - 2.1) / (BOT.runSpeed - 2.1), 0, 1);
     const flight = Math.max(0, -Math.cos(p * 2)) * 0.022 * airborne;
-    J.hips.position.y = HIPS_Y + bob + idleBreath + flight;
+    J.hips.position.y = HIPS_Y + bob + absorb + idleBreath + flight;
 
     // Standing idle needs its own life or the bot reads as a statue between
     // patrol legs. Two slow incommensurate periods so the shift never loops
@@ -1332,7 +1360,11 @@ export class Bot {
     // never snaps when the bot starts or stops.
     // The stride term has to be big enough to survive the damping below, or
     // the weapon rides the torso motionlessly and the carry reads as rigid.
-    const swayX = Math.sin(this.breathe * 0.7) * 0.045 * (1 - w * 0.6) + sinP * 0.22 * amp;
+    // Gait sway lives on the RIFLE spring below, not on the shoulders: swinging
+    // the shoulders pushes the left hand off the foregrip past what the reach
+    // clamp can pull back, breaking the two-handed grip. Rotating the weapon
+    // about the grip moves the muzzle without moving either hand.
+    const swayX = Math.sin(this.breathe * 0.7) * 0.045 * (1 - w * 0.6) + sinP * 0.06 * amp;
     const swayY = Math.cos(this.breathe * 0.53) * 0.035 * (1 - w * 0.6)
       + Math.cos(p * 2) * 0.07 * amp;   // weapon lifts and drops with the bob
 
@@ -1372,11 +1404,33 @@ export class Bot {
     // barrel points down +Z with the muzzle level at ~1.22m — chest height.
     // Recoil kicks it up and settles fast: the visible tell that it is firing.
     const recoil = this.muzzleFlashTime > 0 ? 0.16 : 0;
-    J.rifle.rotation.set(
-      damp(J.rifle.rotation.x, 1.86 + recoil, 30, dt),
-      damp(J.rifle.rotation.y, -0.35, 12, dt),
-      damp(J.rifle.rotation.z, aiming ? -0.40 : -0.20, 10, dt),
-    );
+
+    // Weapon inertia. A rifle is ~3.5kg held away from the body: it LAGS the
+    // torso and overshoots when the torso changes direction. These rotations
+    // were three constants, so the weapon inherited the chest transform exactly
+    // and read as welded on — the loudest "this is posed, not animated" tell in
+    // a shooter. A second-order spring toward the carry pose gives the lag and
+    // the overshoot for one vector of state.
+    // Muzzle excursion GROWS with speed; the old sway shrank with it.
+    const gait = Math.sin(p) * 0.11 * amp;
+    const gaitLift = Math.cos(p * 2) * 0.07 * amp;
+
+    const tx = 1.86 + recoil + gaitLift;
+    const ty = -0.35 + gait;
+    const tz = (aiming ? -0.40 : -0.20) + gait * 0.5;
+
+    // Critically-ish damped spring: stiffness sets how hard it chases, damping
+    // just under critical leaves a little overshoot, which is the "weight".
+    const K = 190, D = 22;
+    // A stiff explicit spring goes unstable past its stable step, so cap dt
+    // rather than letting a hitched frame fling the weapon.
+    const h = Math.min(dt, 1 / 60);
+    const r = J.rifle.rotation;
+    const v = this.rifleVel;
+    v.x += (K * (tx - r.x) - D * v.x) * h;
+    v.y += (K * (ty - r.y) - D * v.y) * h;
+    v.z += (K * (tz - r.z) - D * v.z) * h;
+    J.rifle.rotation.set(r.x + v.x * h, r.y + v.y * h, r.z + v.z * h);
     J.rifle.position.set(0, 0, 0);
 
     // Snap the left hand onto the foregrip. Two-bone IK would be nicer, but a
@@ -1690,6 +1744,42 @@ export function _testBot() {
     const tones = new Set();
     model.root.traverse(o => { if (o.isMesh) tones.add(o.material.color.getHex()); });
     assert(tones.size >= 8, `expected varied per-part colour, got ${tones.size} tones`);
+  });
+
+  check('the weapon spring settles and stays stable at any frame rate', () => {
+    // A stiff explicit spring is the classic thing that detonates on a hitched
+    // frame. Drive the real update at absurd steps and assert the weapon does
+    // not run away, then that it actually converges.
+    // animateArms only touches joints and the spring state, so exercise it on a
+    // bare object rather than standing up a whole Bot with a world.
+    const bot = {
+      joints: model.joints,
+      rifleVel: { x: 0, y: 0, z: 0 },
+      state: BotState.PATROL,
+      breathe: 0,
+      muzzleFlashTime: 0,
+      animateArms: Bot.prototype.animateArms,
+      snapLeftHandToForegrip: Bot.prototype.snapLeftHandToForegrip,
+    };
+    for (const step of [1 / 240, 1 / 60, 1 / 8, 0.5, 2.0]) {
+      for (let i = 0; i < 200; i++) bot.animateArms(i * 0.3, 1, 1, step);
+      const r = model.joints.rifle.rotation;
+      assert(Number.isFinite(r.x) && Number.isFinite(r.y) && Number.isFinite(r.z),
+        `weapon rotation went non-finite at dt=${step}`);
+      assert(Math.abs(r.x) < 10 && Math.abs(r.y) < 10 && Math.abs(r.z) < 10,
+        `weapon spring diverged at dt=${step}: ${r.x.toFixed(1)},${r.y.toFixed(1)},${r.z.toFixed(1)}`);
+    }
+    // Settling: at rest the carry pose is reached rather than orbited forever.
+    for (let i = 0; i < 400; i++) bot.animateArms(0, 0, 0, 1 / 60);
+    assert(Math.abs(model.joints.rifle.rotation.x - 1.86) < 0.05,
+      `weapon should settle to the carry pose, got ${model.joints.rifle.rotation.x.toFixed(3)}`);
+
+    // Restore the shared rig. animateArms drives snapLeftHandToForegrip, which
+    // TRANSLATES the hand pivot; leaving that displacement in place fails later
+    // grip checks for a reason that has nothing to do with what they test.
+    model.joints.handL.position.set(0, -P.lowerArm, 0);
+    model.joints.rifle.rotation.set(1.86, -0.35, -0.40);
+    model.root.updateMatrixWorld(true);
   });
 
   check('the foot trajectory plants on the ground and sweeps back at stride rate', () => {
