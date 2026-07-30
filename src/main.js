@@ -16,9 +16,14 @@ const world = new CollisionWorld();
 
 // Modules built by parallel agents. Load each defensively: a failure in one
 // should leave the rest of the game inspectable rather than blanking the page.
-async function tryLoad(path, fn, label) {
+//
+// The loader takes a thunk, not a path string. An `import(path)` on a variable
+// is opaque to Vite, so the module never gets bundled and 404s in production
+// while working fine against the dev server. A literal import() inside the
+// caller's thunk is statically analysable and bundles correctly.
+async function tryLoad(load, fn, label) {
   try {
-    const mod = await import(/* @vite-ignore */ path);
+    const mod = await load();
     return await fn(mod);
   } catch (e) {
     console.error(`[${label}] unavailable:`, e);
@@ -32,13 +37,13 @@ async function tryLoad(path, fn, label) {
 const maxAniso = renderer.renderer.capabilities.getMaxAnisotropy();
 
 stage('materials');
-const materials = await tryLoad('./render/materials.js', async (m) => {
+const materials = await tryLoad(() => import('./render/materials.js'), async (m) => {
   const mats = new m.Materials();
   return await mats.build(maxAniso);
 }, 'materials') ?? fallbackMaterials();
 
 stage('map');
-const mapData = await tryLoad('./world/map.js',
+const mapData = await tryLoad(() => import('./world/map.js'),
   (m) => m.buildMap(renderer.scene, world, materials), 'map') ?? fallbackMap();
 
 const spawn = mapData.spawns?.[0] ?? new THREE.Vector3(0, 2, 0);
@@ -47,7 +52,7 @@ const playerCam = new PlayerCamera(renderer.camera);
 const input = new Input(canvas);
 
 stage('rifle');
-const rifle = await tryLoad('./weapons/rifle.js',
+const rifle = await tryLoad(() => import('./weapons/rifle.js'),
   (m) => new m.Rifle(renderer.scene, renderer.camera, world, { materials }), 'rifle');
 
 // The viewmodel lives in its own scene, so it needs the environment map handed
@@ -59,7 +64,7 @@ if (rifle?.vmScene) {
 }
 
 stage('bots');
-const bots = await tryLoad('./ai/bot.js', (m) => {
+const bots = await tryLoad(() => import('./ai/bot.js'), (m) => {
   const points = mapData.botPoints ?? [];
   return (mapData.spawns ?? []).slice(1, 3).map(
     (p) => new m.Bot(renderer.scene, world, p.clone(), points));
