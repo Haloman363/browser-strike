@@ -1173,7 +1173,13 @@ export class Bot {
     J.spine.rotation.x = damp(J.spine.rotation.x, -this.aimPitch * 0.15, 10, dt);
     J.spine.rotation.z = sinP * 0.03 * amp;
 
-    J.chest.rotation.y = damp(J.chest.rotation.y, aimOff * 0.6, 14, dt);
+    // Chest counter-rotates AGAINST the pelvis. The pelvis turns +sinP, so the
+    // chest turning -sinP is the shoulder/hip opposition every walk has; without
+    // it the whole upper body rides the hips as one rigid block and the arms
+    // and weapon read as welded on.
+    J.chest.rotation.y = damp(J.chest.rotation.y,
+      aimOff * 0.6 - sinP * 0.13 * amp, 14, dt);
+    J.chest.rotation.z = cosP * 0.045 * amp;
     J.chest.rotation.x = damp(J.chest.rotation.x,
       -this.aimPitch * 0.35 + Math.sin(this.breathe) * 0.012 * (1 - w), 10, dt);
 
@@ -1262,8 +1268,11 @@ export class Bot {
 
     // Weapon sway: idle drift plus a bigger jostle while moving. Damped so it
     // never snaps when the bot starts or stops.
-    const swayX = Math.sin(this.breathe * 0.7) * 0.045 * (1 - w * 0.6) + sinP * 0.09 * amp;
-    const swayY = Math.cos(this.breathe * 0.53) * 0.035 * (1 - w * 0.6);
+    // The stride term has to be big enough to survive the damping below, or
+    // the weapon rides the torso motionlessly and the carry reads as rigid.
+    const swayX = Math.sin(this.breathe * 0.7) * 0.045 * (1 - w * 0.6) + sinP * 0.22 * amp;
+    const swayY = Math.cos(this.breathe * 0.53) * 0.035 * (1 - w * 0.6)
+      + Math.cos(p * 2) * 0.07 * amp;   // weapon lifts and drops with the bob
 
     // These angles are SOLVED, not eyeballed: a search over the arm chain for
     // the pose that puts the right fist on the pistol grip with the barrel
@@ -1284,17 +1293,17 @@ export class Bot {
     const lElbowY = -1.00;
 
     const R = J.shoulderR, L = J.shoulderL;
-    R.rotation.x = damp(R.rotation.x, rShoulderX + swayX * 0.5, 9, dt);
-    R.rotation.y = damp(R.rotation.y, rShoulderY, 9, dt);
-    R.rotation.z = damp(R.rotation.z, rShoulderZ + swayY, 9, dt);
-    J.elbowR.rotation.x = damp(J.elbowR.rotation.x, rElbow - swayX * 0.35, 9, dt);
-    J.elbowR.rotation.y = damp(J.elbowR.rotation.y, rElbowY, 9, dt);
+    R.rotation.x = damp(R.rotation.x, rShoulderX + swayX * 0.5, 17, dt);
+    R.rotation.y = damp(R.rotation.y, rShoulderY, 17, dt);
+    R.rotation.z = damp(R.rotation.z, rShoulderZ + swayY, 17, dt);
+    J.elbowR.rotation.x = damp(J.elbowR.rotation.x, rElbow - swayX * 0.35, 17, dt);
+    J.elbowR.rotation.y = damp(J.elbowR.rotation.y, rElbowY, 17, dt);
 
-    L.rotation.x = damp(L.rotation.x, lShoulderX + swayX * 0.5, 9, dt);
-    L.rotation.y = damp(L.rotation.y, lShoulderY, 9, dt);
-    L.rotation.z = damp(L.rotation.z, lShoulderZ + swayY, 9, dt);
-    J.elbowL.rotation.x = damp(J.elbowL.rotation.x, lElbow - swayX * 0.35, 9, dt);
-    J.elbowL.rotation.y = damp(J.elbowL.rotation.y, lElbowY, 9, dt);
+    L.rotation.x = damp(L.rotation.x, lShoulderX + swayX * 0.5, 17, dt);
+    L.rotation.y = damp(L.rotation.y, lShoulderY, 17, dt);
+    L.rotation.z = damp(L.rotation.z, lShoulderZ + swayY, 17, dt);
+    J.elbowL.rotation.x = damp(J.elbowL.rotation.x, lElbow - swayX * 0.35, 17, dt);
+    J.elbowL.rotation.y = damp(J.elbowL.rotation.y, lElbowY, 17, dt);
 
     // Rifle pivots about the PISTOL GRIP (see GRIP_OFFSET), so these rotations
     // turn the weapon in the fist rather than swinging the hand. Solved so the
