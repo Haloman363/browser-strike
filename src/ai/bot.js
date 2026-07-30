@@ -784,6 +784,12 @@ export class Bot {
     // Angular velocity of the weapon spring — this is what carries the lag and
     // overshoot that make the rifle feel like it has mass.
     this.rifleVel = { x: 0, y: 0, z: 0 };
+    // Damped AIM components, kept separate from the cyclic gait terms that get
+    // added on top — see animate(). Mixing them in one damp() filters the gait.
+    this.spineAim = 0;
+    this.chestAim = 0;
+    this.spinePitch = 0;
+    this.chestPitch = 0;
     this.speedNorm = 0;       // 0..1 blend weight for the walk cycle
     this.breathe = Math.random() * Math.PI * 2;
     this.deathTime = 0;
@@ -1345,19 +1351,29 @@ export class Bot {
     // and where the gun points; the spine absorbs it so the bot can strafe
     // sideways while still covering the player.
     const aimOff = clamp(angleDelta(this.yaw, this.aimYaw), -1.3, 1.3);
-    J.spine.rotation.y = damp(J.spine.rotation.y, aimOff * 0.4 - sinP * 0.06 * amp, 14, dt);
-    J.spine.rotation.x = damp(J.spine.rotation.x, -this.aimPitch * 0.15, 10, dt);
+
+    // Damp the AIM only, then ADD the cyclic gait term undamped.
+    // Passing both through one damp() was costing ~24% of the counter-rotation
+    // amplitude and delaying it ~50ms, and the loss varied with frame rate —
+    // a filter smooths a periodic signal it can never catch up to. Aim offsets
+    // are step changes and genuinely want smoothing; gait terms do not.
+    this.spineAim = damp(this.spineAim, aimOff * 0.4, 14, dt);
+    this.chestAim = damp(this.chestAim, aimOff * 0.6, 14, dt);
+    this.spinePitch = damp(this.spinePitch, -this.aimPitch * 0.15, 10, dt);
+    this.chestPitch = damp(this.chestPitch, -this.aimPitch * 0.35, 10, dt);
+
+    J.spine.rotation.y = this.spineAim - sinP * 0.06 * amp;
+    J.spine.rotation.x = this.spinePitch;
     J.spine.rotation.z = sinP * 0.03 * amp;
 
     // Chest counter-rotates AGAINST the pelvis. The pelvis turns +sinP, so the
     // chest turning -sinP is the shoulder/hip opposition every walk has; without
     // it the whole upper body rides the hips as one rigid block and the arms
-    // and weapon read as welded on.
-    J.chest.rotation.y = damp(J.chest.rotation.y,
-      aimOff * 0.6 - sinP * 0.13 * amp, 14, dt);
+    // and weapon read as welded on. Raised toward the ~7 degrees a real
+    // thoracic counter-rotation carries.
+    J.chest.rotation.y = this.chestAim - sinP * 0.19 * amp;
     J.chest.rotation.z = cosP * 0.045 * amp;
-    J.chest.rotation.x = damp(J.chest.rotation.x,
-      -this.aimPitch * 0.35 + Math.sin(this.breathe) * 0.012 * (1 - w), 10, dt);
+    J.chest.rotation.x = this.chestPitch + Math.sin(this.breathe) * 0.012 * (1 - w);
 
     // --- Head: tracks the aim target but only within neck limits, and lags the
     // torso slightly so it reads as looking rather than being welded on.
