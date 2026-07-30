@@ -1338,9 +1338,19 @@ export class Bot {
     const shift = Math.sin(this.breathe * 0.42) * still;
     const settle = Math.sin(this.breathe * 0.29 + 2.1) * still;
 
-    J.hips.position.x = cosP * 0.022 * amp + shift * 0.018;
-    J.hips.rotation.z = -cosP * 0.055 * amp + shift * 0.035;
-    J.hips.rotation.y = sinP * 0.10 * amp + settle * 0.025;
+    // Idle amplitudes have to clear the perceptual floor. At 18mm and 2 degrees
+    // the shift was real in the numbers and invisible on screen — a standing
+    // bot still read as a statue. A person shifting weight moves their hips
+    // 40-60mm and lists the pelvis several degrees.
+    // Walking lateral sway also raised: real pelvic excursion toward the
+    // support leg is 35-50mm, not the 19mm this had.
+    J.hips.position.x = cosP * 0.040 * amp + shift * 0.048;
+    // Trendelenburg drop leads the weight shift rather than mirroring it: the
+    // pelvis lists toward the SWING side while the body moves onto the stance
+    // leg. Driving both from cosP put them in phase, so they cancelled and
+    // neither read.
+    J.hips.rotation.z = -Math.cos(p - 0.9) * 0.055 * amp + shift * 0.075;
+    J.hips.rotation.y = sinP * 0.14 * amp + settle * 0.055;
     // Lean into the run. A walking trunk is within 2-4 degrees of vertical and
     // even a hard run is under 10; earlier values hit 12 walking and 19
     // running, which is caricature and also pitched the legs out of reach of
