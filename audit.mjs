@@ -155,20 +155,41 @@ if (want('traverse')) {
     const TICKS = 420;            // 7s at 60Hz — crosses 30m at full run
     const dt = 1 / 60;
     const results = { runs: 0, stuck: 0, inBrush: 0, outOfBounds: 0, fell: 0,
-                      worst: [], stuckAt: [], brushAt: [], oobAt: [] };
+                      skipped: 0, stuckAt: [], brushAt: [], oobAt: [] };
+
+    // A resting player sits flush on a surface, so overlaps() — which uses
+    // strict inequalities — reports true on exact contact. Only count a brush
+    // event when the box is genuinely INSIDE, by more than float slop.
+    const penetration = (p, half) => {
+      let worst = 0;
+      for (const b of world.brushes) {
+        const ox = Math.min(p.x + half.x, b.max.x) - Math.max(p.x - half.x, b.min.x);
+        const oy = Math.min(p.y + half.y, b.max.y) - Math.max(p.y - half.y, b.min.y);
+        const oz = Math.min(p.z + half.z, b.max.z) - Math.max(p.z - half.z, b.min.z);
+        if (ox > 0 && oy > 0 && oz > 0) worst = Math.max(worst, Math.min(ox, oy, oz));
+      }
+      return worst;
+    };
+    const PEN_TOL = 0.02;   // 2cm — well above contact slop, well below a body
 
     for (let sx = -26; sx <= 26; sx += 6.5) {
       for (let sz = -26; sz <= 26; sz += 6.5) {
-        // Skip starts that are inside a building mass — not player-reachable,
-        // so a "stuck" there is meaningless.
-        const start = new THREE.Vector3(sx, MOVE.standHeight / 2 + 0.02, sz);
-        if (world.overlaps(start, HP)) continue;
+        // Seed by dropping from above and letting gravity seat the player, so
+        // the start is a real standing position rather than a guessed Y.
+        const seed = new Ctl(world, new THREE.Vector3(sx, 3.0, sz));
+        for (let t = 0; t < 150; t++)
+          seed.update({ forward: 0, right: 0, jump: false, crouch: false }, 0, dt);
+        // Starts inside a building mass are not player-reachable; a "stuck"
+        // there would be measuring nothing.
+        if (seed.position.y < 0.1 || penetration(seed.position, seed.halfExtents) > PEN_TOL) {
+          results.skipped++;
+          continue;
+        }
 
         for (let d = 0; d < DIRS; d++) {
           const yaw = (d / DIRS) * Math.PI * 2;
-          const m = new Ctl(world, start.clone());
+          const m = new Ctl(world, seed.position.clone());
           results.runs++;
-          let minY = 99, maxSpeedSeen = 0;
           let stuckTicks = 0, worstStuck = 0;
 
           for (let t = 0; t < TICKS; t++) {
@@ -177,34 +198,34 @@ if (want('traverse')) {
             m.update({ forward: 1, right: 0, jump: t % 40 === 39, crouch: false },
                      yaw, dt);
             const moved = m.position.distanceTo(before);
-            const speed = Math.hypot(m.velocity.x, m.velocity.z);
-            maxSpeedSeen = Math.max(maxSpeedSeen, speed);
-            minY = Math.min(minY, m.position.y);
 
-            // Stuck = barely moving while grounded and asking to move, AND
-            // nothing solid directly ahead to justify it.
-            if (m.grounded && moved < 0.004) {
+            // Stuck = no progress while grounded, with NOTHING blocking the
+            // way. Standing still against a wall you are walking into is not
+            // stuck, it is correct — and a perfectly perpendicular approach
+            // legitimately zeroes velocity, since there is no tangential
+            // component left to slide along. So the test is a sweep of the
+            // player's own box, not a ray: does the body actually have room?
+            if (t > 10 && m.grounded && moved < 0.004) {
               const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
-              const eye = m.position.clone();
-              const hit = world.raycast(eye, fwd, 1.2);
-              if (!hit) { stuckTicks++; worstStuck = Math.max(worstStuck, stuckTicks); }
+              const probe = m.position.clone();
+              const blocked = world.sweep(probe, m.halfExtents,
+                fwd.clone().multiplyScalar(0.5)) !== null ||
+                world.overlaps(probe.clone().addScaledVector(fwd, 0.5), m.halfExtents);
+              if (!blocked) { stuckTicks++; worstStuck = Math.max(worstStuck, stuckTicks); }
               else stuckTicks = 0;
             } else stuckTicks = 0;
 
-            if (world.overlaps(m.position, m.halfExtents)) {
+            if (penetration(m.position, m.halfExtents) > PEN_TOL) {
               results.inBrush++;
-              results.brushAt.push([sx, sz, d, m.position.toArray().map((k) => +k.toFixed(1))]);
+              results.brushAt.push([sx, sz, d, m.position.toArray().map((k) => +k.toFixed(2))]);
               break;
             }
             if (Math.abs(m.position.x) > 30.5 || Math.abs(m.position.z) > 30.5) {
               results.outOfBounds++;
-              results.oobAt.push([sx, sz, d, m.position.toArray().map((k) => +k.toFixed(1))]);
+              results.oobAt.push([sx, sz, d, m.position.toArray().map((k) => +k.toFixed(2))]);
               break;
             }
-            if (m.position.y < -1.5) {
-              results.fell++;
-              break;
-            }
+            if (m.position.y < -0.5) { results.fell++; break; }
           }
           // 30 consecutive ticks (0.5s) of no progress with open space ahead.
           if (worstStuck > 30) {
@@ -219,11 +240,45 @@ if (want('traverse')) {
     results.stuckAt = results.stuckAt.slice(0, 12);
     return results;
   });
-  console.log(`\n== TRAVERSAL ==  ${r.runs} runs x 420 ticks (7s each)`);
+  console.log(`\n== TRAVERSAL ==  ${r.runs} runs x 420 ticks (7s each), ${r.skipped} starts skipped (inside geometry)`);
   console.log(`  inBrush:${r.inBrush}  outOfBounds:${r.outOfBounds}  fellOut:${r.fell}  stuck:${r.stuck}`);
   if (r.brushAt.length) console.log('  brush: ' + JSON.stringify(r.brushAt));
   if (r.oobAt.length) console.log('  oob:   ' + JSON.stringify(r.oobAt));
   if (r.stuckAt.length) console.log('  stuck: ' + JSON.stringify(r.stuckAt));
+}
+
+// --------------------------------------------------------------------------
+// 4b. Floor-sink sweep. depenetrate() escapes along the shortest axis, so a
+// box overlapping the ground brush near its top face can be pushed DOWN,
+// through the world. Prove no reachable standing position does that.
+// --------------------------------------------------------------------------
+if (want('sink')) {
+  const r = await run(() => {
+    const { world, THREE } = window.__dbg;
+    const Ctl = window.__dbg.movement.constructor;
+    const HP = new THREE.Vector3(0.42, 0.685, 0.42);
+    const S = 1.0, N = 60, xs = (i) => -30 + 0.5 + i * S;
+    let runs = 0, sank = 0; const sankAt = [];
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      if (world.overlaps(new THREE.Vector3(xs(i), 0.72, xs(j)), HP)) continue;
+      for (let d = 0; d < 4; d++) {
+        const yaw = (d / 4) * Math.PI * 2;
+        const m = new Ctl(world, new THREE.Vector3(xs(i), 0.685, xs(j)));
+        runs++;
+        for (let t = 0; t < 180; t++) {
+          m.update({ forward: 1, right: 0, jump: t % 30 === 29, crouch: false }, yaw, 1 / 60);
+          if (m.position.y < 0.1) {
+            sank++;
+            if (sankAt.length < 12) sankAt.push([xs(i), xs(j), d, +m.position.y.toFixed(2)]);
+            break;
+          }
+        }
+      }
+    }
+    return { runs, sank, sankAt };
+  });
+  console.log(`\n== FLOOR SINK ==  ${r.runs} runs from every open cell x4 dirs, ${r.sank} sank below the floor`);
+  if (r.sankAt.length) console.log('  ' + JSON.stringify(r.sankAt));
 }
 
 // --------------------------------------------------------------------------
@@ -273,45 +328,123 @@ if (want('routes')) {
     const { world, THREE } = window.__dbg;
     const Ctl = window.__dbg.movement.constructor;
     const dt = 1 / 60;
-    // Steer toward a goal with a simple seek, and see if we arrive.
-    const ROUTES = [
-      ['spawnN->courtyard', [0, 0.71, -24], [0, 1]],
-      ['spawnS->courtyard', [0, 0.71, 24], [0, -1]],
-      ['west flank N->S', [-24, 0.71, -14], [-24, 14]],
-      ['west flank S->N', [-24, 0.71, 14], [-24, -14]],
-      ['east flank N->S', [24, 0.71, -14], [24, 14]],
-      ['east flank S->N', [24, 0.71, 14], [24, -14]],
-      ['courtyard->W arch', [-6, 0.71, 0], [-16, 0]],
-      ['courtyard->E arch', [6, 0.71, 0], [16, 0]],
-      ['courtyard->N arch', [0, 0.71, -6], [0, -15]],
-      ['courtyard->S arch', [0, 0.71, 8], [0, 17]],
-      ['market row', [-12, 0.71, 12], [8, 13]],
-      ['stairs->balcony', [-22, 0.71, 10], [-22, 3.0]],
-      ['balcony->north drop', [-20, 3.9, 3], [-20, -5]],
-      ['mid past shed', [-8, 0.71, -8], [12, -8]],
-    ];
-    return ROUTES.map(([name, p, goal]) => {
-      const m = new Ctl(world, new THREE.Vector3(...p));
-      const g = new THREE.Vector2(goal[0], goal[1]);
-      let best = 1e9, arrived = false, ticks = 0;
-      for (let t = 0; t < 900; t++) {
-        ticks = t;
-        const to = new THREE.Vector2(g.x - m.position.x, g.y - m.position.z);
-        const d = to.length();
-        best = Math.min(best, d);
-        if (d < 1.6) { arrived = true; break; }
-        // yaw such that forward=1 heads toward the goal.
-        const yaw = Math.atan2(-to.x, -to.y);
-        m.update({ forward: 1, right: 0, jump: t % 45 === 44, crouch: false }, yaw, dt);
+    const HP = new THREE.Vector3(0.42, 0.685, 0.42);
+
+    // Walkability grid. A cell is open if a standing player fits at any of the
+    // sampled floor heights — ground, plinth, balcony, roofs.
+    const S = 0.5, N = Math.round(60 / S);
+    const idx = (i, j) => i * N + j;
+    const xs = (i) => -30 + S / 2 + i * S;
+    const open = new Uint8Array(N * N);
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      let ok = 0;
+      for (const fy of [0.72, 1.13, 2.0, 2.35, 3.72])
+        if (!world.overlaps(new THREE.Vector3(xs(i), fy, xs(j)), HP)) { ok = 1; break; }
+      open[idx(i, j)] = ok;
+    }
+
+    // Connectivity: flood from the north spawn. Any open cell that is not
+    // reached is a pocket the player can never get to.
+    const flood = (si, sj) => {
+      const seen = new Uint8Array(N * N);
+      if (!open[idx(si, sj)]) return { seen, count: 0 };
+      seen[idx(si, sj)] = 1; const q = [[si, sj]]; let h = 0, count = 1;
+      while (h < q.length) {
+        const [i, j] = q[h++];
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const a = i + di, b = j + dj;
+          if (a < 0 || b < 0 || a >= N || b >= N || !open[idx(a, b)] || seen[idx(a, b)]) continue;
+          seen[idx(a, b)] = 1; count++; q.push([a, b]);
+        }
       }
-      return { name, arrived, closest: +best.toFixed(2), ticks,
+      return { seen, count };
+    };
+    const spawnI = Math.round((0 + 30) / S), spawnJ = Math.round((-24 + 30) / S);
+    const { seen, count } = flood(spawnI, spawnJ);
+    let totalOpen = 0; for (let k = 0; k < N * N; k++) if (open[k]) totalOpen++;
+    const pockets = [];
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++)
+      if (open[idx(i, j)] && !seen[idx(i, j)] && pockets.length < 30)
+        pockets.push([+xs(i).toFixed(1), +xs(j).toFixed(1)]);
+
+    // BFS distance field to a goal, then steer down its gradient using the
+    // REAL controller. A route is walkable only if the actual movement code
+    // can follow a valid path along it — not if a straight line happens to
+    // be clear, which is what a naive seek actually measures.
+    const field = (gx, gz) => {
+      const d = new Int32Array(N * N).fill(-1);
+      let gi = Math.round((gx + 30) / S), gj = Math.round((gz + 30) / S);
+      if (!open[idx(gi, gj)]) {          // snap a goal that landed on cover
+        let bd = 1e9, bi = -1, bj = -1;
+        for (let a = 0; a < N; a++) for (let b = 0; b < N; b++) {
+          if (!open[idx(a, b)]) continue;
+          const v = (a - gi) ** 2 + (b - gj) ** 2;
+          if (v < bd) { bd = v; bi = a; bj = b; }
+        }
+        if (bi < 0) return null; gi = bi; gj = bj;
+      }
+      d[idx(gi, gj)] = 0; const q = [[gi, gj]]; let h = 0;
+      while (h < q.length) {
+        const [i, j] = q[h++];
+        for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const a = i + di, b = j + dj;
+          if (a < 0 || b < 0 || a >= N || b >= N || !open[idx(a, b)] || d[idx(a, b)] >= 0) continue;
+          d[idx(a, b)] = d[idx(i, j)] + 1; q.push([a, b]);
+        }
+      }
+      return d;
+    };
+
+    const ROUTES = [
+      ['spawnN->courtyard', [0, -24], [3, 4]],
+      ['spawnS->courtyard', [0, 24], [3, 4]],
+      ['west flank N->S', [-24, -14], [-24, 13]],
+      ['west flank S->N', [-24, 13], [-24, -14]],
+      ['east flank N->S', [24, -14], [24, 13]],
+      ['east flank S->N', [24, 13], [24, -14]],
+      ['courtyard->W arch', [-6, 0], [-16, 0]],
+      ['courtyard->E arch', [6, 0], [16, 0]],
+      ['courtyard->N arch', [0, -6], [0, -15]],
+      ['courtyard->S arch', [0, 8], [0, 17]],
+      ['market row', [-12, 12], [8, 13]],
+      ['stairs->balcony', [-22, 10], [-19.5, 2]],
+      ['mid past shed', [-8, -8], [12, -8]],
+      ['spawnN->spawnS', [0, -24], [0, 24]],
+      ['spawnN->balcony', [0, -24], [-19.5, 2]],
+      ['spawnS->balcony', [0, 24], [-19.5, 2]],
+    ];
+    const routes = ROUTES.map(([name, from, goal]) => {
+      const d = field(goal[0], goal[1]);
+      if (!d) return { name, arrived: false, err: 'goal unreachable' };
+      const m = new Ctl(world, new THREE.Vector3(from[0], 3, from[1]));
+      for (let t = 0; t < 150; t++)
+        m.update({ forward: 0, right: 0, jump: false, crouch: false }, 0, dt);
+      let best = 1e9, arrived = false, ticks = 0;
+      for (let t = 0; t < 2400; t++) {
+        ticks = t;
+        const dist = Math.hypot(goal[0] - m.position.x, goal[1] - m.position.z);
+        best = Math.min(best, dist);
+        if (dist < 1.6) { arrived = true; break; }
+        const i = Math.round((m.position.x + 30) / S), j = Math.round((m.position.z + 30) / S);
+        let bi = i, bj = j, bd = 1e9;
+        for (let a = i - 1; a <= i + 1; a++) for (let b = j - 1; b <= j + 1; b++) {
+          if (a < 0 || b < 0 || a >= N || b >= N || !open[idx(a, b)]) continue;
+          const v = d[idx(a, b)]; if (v >= 0 && v < bd) { bd = v; bi = a; bj = b; }
+        }
+        const yaw = Math.atan2(-(xs(bi) - m.position.x), -(xs(bj) - m.position.z));
+        m.update({ forward: 1, right: 0, jump: t % 50 === 49, crouch: false }, yaw, dt);
+      }
+      return { name, arrived, closest: +best.toFixed(2), secs: +(ticks / 60).toFixed(1),
                end: [+m.position.x.toFixed(1), +m.position.y.toFixed(1), +m.position.z.toFixed(1)] };
     });
+    return { totalOpen, reachable: count, pockets, routes };
   });
-  const fail = r.filter((x) => !x.arrived);
-  console.log(`\n== ROUTES ==  ${r.length} routes, ${fail.length} unreachable`);
-  for (const x of r)
-    console.log(`  ${x.arrived ? 'ok' : '!!'} ${x.name.padEnd(20)} closest:${x.closest}m end:${JSON.stringify(x.end)}`);
+  console.log(`\n== CONNECTIVITY ==  ${r.reachable}/${r.totalOpen} open cells reachable from north spawn, ${r.totalOpen - r.reachable} isolated`);
+  if (r.pockets.length) console.log('  pockets: ' + JSON.stringify(r.pockets));
+  const fail = r.routes.filter((x) => !x.arrived);
+  console.log(`\n== ROUTES ==  ${r.routes.length} routes, ${fail.length} unwalkable`);
+  for (const x of r.routes)
+    console.log(`  ${x.arrived ? 'ok' : '!!'} ${x.name.padEnd(20)} closest:${x.closest}m t:${x.secs}s end:${JSON.stringify(x.end)}${x.err ? ' ' + x.err : ''}`);
 }
 
 // --------------------------------------------------------------------------

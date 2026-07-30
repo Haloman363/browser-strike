@@ -149,12 +149,24 @@ const lerp = (a, b, t) => a + (b - a) * t;
  * more sweep than this and the IK bottoms out with the "planted" foot hanging
  * in the air, which is exactly the defect the IK rewrite was meant to kill.
  */
+// How far the pelvis drops at the stride extremes. Shared between the reach
+// solve and the actual pelvis motion — when these two disagreed the foot
+// targets were unreachable and the IK dragged the sole through the paving.
+const GAIT_DIP = 0.06;
+
+// Standing, the feet sit slightly ahead of the hip. Solved: at 0.10m the
+// standing knee carries ~6 degrees of flex, which is what a relaxed stand
+// looks like. Targeting straight down (0) needs ~15 degrees and reads as a
+// half-crouch.
+const REST_FOOT_Z = 0.10;
+
 function contactSweep() {
-  // Solved at the RESTING hip height, not a dipped one. Budgeting for a dip
-  // that has not happened yet makes the sweep unreachable whenever the pelvis
-  // is high, and the clamp then drags the sole down through the floor.
+  // Solved at the hip's LOWEST point in the cycle, because that is when the
+  // foot is furthest fore/aft — the pelvis dip is exactly what buys the reach
+  // in a real walk. Solving at the resting hip instead gives almost no sweep
+  // (the standing leg is nearly straight), and the gait collapses to a shuffle.
   const reach = (P.upperLeg + P.lowerLeg) * 0.96;
-  const hipH = P.hipY - P.ankleH;
+  const hipH = P.hipY - P.ankleH - GAIT_DIP;
   return 2 * Math.sqrt(Math.max(0.0001, reach * reach - hipH * hipH));
 }
 
@@ -326,7 +338,7 @@ const P = {
   // Hip pivot at HALF body height. thigh + shin + ankle = 0.915, leaving a
   // ~0.015m rest flex at the knee — nobody stands with locked knees, and it
   // also guarantees the knee bends the correct way when the cycle starts.
-  hipY: 0.90,
+  hipY: 0.92,
   // Neutral standing flex, solved so the ankle lands directly under the hip
   // with the sole flat on y=0: 0.44cos(h) + 0.415cos(h+k) = 0.90 - ankleH.
   // SIGNS MATTER: the model faces -Z, so a negative rotation.x swings a
@@ -343,13 +355,14 @@ const P = {
   upperArm: 0.29,
   lowerArm: 0.25,
   armR: 0.052,
-  // Leg segments must sum to MORE than the hip-to-sole distance (0.84), or the
-  // leg is fully extended just standing and has zero horizontal reach — every
-  // planted foot target is then unreachable, the IK clamp silently lifts the
-  // ankle, and the character walks on air. At 0.44+0.415=0.855 against a 0.838
-  // usable reach that is exactly what happened. A 1.8m human has a ~0.94m leg.
-  upperLeg: 0.484,
-  lowerLeg: 0.456,
+  // Leg length trades a natural STAND against stride REACH, and the two pull
+  // opposite ways: a leg long enough to swing a wide planted stride is a leg
+  // that must fold to stand on. 0.484+0.456=0.94 fixed the reach but left the
+  // bot standing in a 58-degree squat. 0.86 total against a 0.92 hip gives a
+  // ~15-degree standing knee and still opens a 0.46m contact sweep once the
+  // pelvis dips, which is how a real walk buys its reach.
+  upperLeg: 0.443,
+  lowerLeg: 0.417,
   legR: 0.082,
   ankleH: 0.067,          // ankle pivot above the sole (measured off the boot)
   footL: 0.27,
@@ -624,7 +637,7 @@ export function buildBotModel() {
     // ended up standing on a leg that was shorter than the distance it had to
     // span; deriving them guarantees the stand and the gait always agree.
     solveLegIK({ [`hip${side}`]: hip, [`knee${side}`]: knee, [`ankle${side}`]: ankle },
-      side, { z: 0, y: 0, plant: 1, roll: 0 }, 0, 1);
+      side, { z: REST_FOOT_Z, y: 0, plant: 1, roll: 0 }, 0, 1);
 
     // BOOT. Built as ankle collar -> foot mass -> sole -> toe cap, all forward
     // of the ankle pivot, so heel-strike and toe-off actually read in the gait.
@@ -1309,8 +1322,12 @@ export class Bot {
     // rise-and-fall at all — the main reason the walk looked floaty.
       // Pelvis vertical excursion. Real is 40-50mm walking, 70-100mm running for
     // a 1.8m frame; 32mm read as gliding.
-    const bobAmp = lerp(0.024, 0.045, clamp(w, 0, 1));
-    const bob = Math.cos(p * 2) * bobAmp * amp;
+    // cos(2p) is high at midstance (leg under the body, hip at its tallest) and
+    // low at the stride extremes — which is exactly when the reach is needed,
+    // so the trough must deliver GAIT_DIP. Offset so the peak sits at the
+    // standing height rather than above it.
+    const bobAmp = GAIT_DIP * lerp(0.8, 1.0, clamp(w, 0, 1));
+    const bob = (Math.cos(p * 2) - 1) * 0.5 * bobAmp * amp;
 
     // Loading response: the pelvis DROPS fast just after each foot strike, then
     // recovers slowly. Because the foot is IK-pinned to the ground, dropping
@@ -1442,6 +1459,11 @@ export class Bot {
       // Normalised cycle time in [0,1), offset half a cycle between legs.
       const u = (((side === 'L' ? p : p + Math.PI) / (Math.PI * 2)) % 1 + 1) % 1;
       const target = footTarget(u, stanceFrac, this.strideLength * amp, amp, gait);
+      // Standing, the feet sit slightly FORWARD of the hip, not directly under
+      // it. Targeting straight down forces the leg to fold to reach — that is
+      // what left the bot standing in a 45-degree squat. Blend the offset out
+      // as the stride opens up, since the gait then places the feet itself.
+      target.z += REST_FOOT_Z * (1 - amp);
       // Ground-relative: the foot must hold its height as the body rises.
       target.y -= hipRise;
       // Lean rotates the hip joint, carrying the leg with it; counter it so the
