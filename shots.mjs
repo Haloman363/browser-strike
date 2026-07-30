@@ -7,16 +7,22 @@ const outDir = process.argv[2] || 'shots/pass1';
 const showHud = process.argv.includes('--hud');
 mkdirSync(outDir, { recursive: true });
 
+// The player's eye is at 1.28m, NOT 1.7m: PlayerMovement puts it at
+// position.y + height/2 - 0.09, and a standing player settles at y=0.685.
+// Every earlier capture used 1.7, i.e. 42cm above the player's own head,
+// which flatters every sightline in the map.
+const EYE = 1.28;
+
 // [name, cameraPos, lookAt, fov]
 // Vantage points along the map's real playable space. The long axis runs
 // north-south (spawns sit at z=+-24), so most views look down it.
 const VIEWS = [
-  ['01-approach',   [0, 1.7, 18],    [0, 1.6, 0],     90],
-  ['02-courtyard',  [3.5, 1.7, 8],   [-2, 1.6, -6],   90],
-  ['03-centre',     [0, 1.7, -6],    [6, 1.7, 10],    90],
-  ['04-balcony',    [-13, 4.6, 4],   [4, 1.5, -2],    85],
-  ['05-material',   [-6.5, 1.5, 7],  [-9.5, 1.2, 3],  60],
-  ['06-skyline',    [0, 11, 26],     [0, 3, -4],      72],
+  ['01-approach',   [0, EYE, 18],       [0, EYE, 0],        90],
+  ['02-courtyard',  [3.5, EYE, 8],      [-2, EYE, -6],      90],
+  ['03-centre',     [0, EYE, -6],       [6, EYE, 10],       90],
+  ['04-balcony',    [-13, 3.0 + EYE, 4], [4, 1.5, -2],      85],
+  ['05-material',   [-6.5, EYE, 7],     [-9.5, 1.1, 3],     60],
+  ['06-skyline',    [0, 11, 26],        [0, 3, -4],         72],
 ];
 
 const browser = await chromium.launch({

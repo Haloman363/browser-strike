@@ -454,7 +454,10 @@ if (want('routes')) {
 if (want('sight')) {
   const r = await run(() => {
     const { world, THREE } = window.__dbg;
-    const EYE = 1.7;
+    // The real standing eye: a player settles at y=0.685 on flat ground and
+    // the eye sits at position.y + height/2 - 0.09. Sampling from 1.7 would
+    // shoot every sightline from 42cm above the head and flatter the cover.
+    const EYE = 0.685 + 1.37 / 2 - 0.09;   // 1.28
     // Sample targets on a grid at chest height across the playable floor.
     const targets = [];
     for (let x = -27; x <= 27; x += 3) {
@@ -467,7 +470,7 @@ if (want('sight')) {
     }
     const SPOTS = [
       ['courtyard centre', [0, EYE, 4]],
-      ['balcony south', [-19.5, 3.0 + EYE, 3]],
+      ['balcony south', [-19.5, 3.0 + EYE, 3]],   // deck top 3.0
       ['balcony north', [-19.5, 3.0 + EYE, -2]],
       ['shed roof', [-13.5, 2.1 + EYE, 8.5]],
       ['north spawn', [0, EYE, -24]],

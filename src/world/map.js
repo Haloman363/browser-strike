@@ -82,8 +82,9 @@ function box(ctx, material, cx, cy, cz, sx, sy, sz, opts = {}) {
 }
 
 /** Thin decorative strip — cornice, trim, sill. Never collides. */
-function trim(ctx, material, cx, cy, cz, sx, sy, sz) {
-  return box(ctx, material, cx, cy, cz, sx, sy, sz, { solid: false, receive: true });
+function trim(ctx, material, cx, cy, cz, sx, sy, sz, rotY = 0) {
+  return box(ctx, material, cx, cy, cz, sx, sy, sz,
+    { solid: false, receive: true, rotY });
 }
 
 /**
@@ -221,11 +222,16 @@ function stairs(ctx, def) {
 /** A wooden crate. `stack` values raise it onto whatever is below. */
 function crate(ctx, x, y, z, s, rotY = 0) {
   box(ctx, ctx.mat.crate, x, y + s / 2, z, s, s, s, { rotY });
-  // Corner banding: four thin strips. Sells the crate as built, not extruded.
+  // Banding on the two faces normal to the crate's local Z. The offset has to
+  // be rotated INTO world space with the crate — scaling it by cos(rotY)
+  // instead pulled the strip toward the centre, so any crate turned more than
+  // ~0.35rad wore its bands inside the box where nothing could see them.
   const b = s * 0.5 + 0.012;
+  const sin = Math.sin(rotY), cos = Math.cos(rotY);
   for (const sign of [-1, 1]) {
-    trim(ctx, ctx.mat.wood, x, y + s / 2, z + sign * b * Math.cos(rotY),
-      s * 0.94, s * 0.1, 0.03);
+    trim(ctx, ctx.mat.wood,
+      x + sign * b * sin, y + s / 2, z + sign * b * cos,
+      s * 0.94, s * 0.1, 0.03, rotY);
   }
 }
 
@@ -887,12 +893,19 @@ function elevated(ctx) {
   box(ctx, ctx.mat.concrete, -20.0, TOP - 0.2, 0.5, 5.6, 0.4, 9.0);
   trim(ctx, ctx.mat.plaster, -20.0, TOP + 0.02, 0.5, 5.9, 0.14, 9.3);
 
-  // Chest-high balustrade on the courtyard side — cover for a defender holding
-  // the high ground, and it stops a careless walk-off.
-  box(ctx, ctx.mat.sandstone, -17.3, TOP + 0.48, 0.5, 0.32, 0.96, 9.0);
-  trim(ctx, ctx.mat.concrete, -17.3, TOP + 1.0, 0.5, 0.5, 0.14, 9.2);
+  // Balustrade on the courtyard side. Height is set against the eye, not by
+  // eye: a player standing on the deck has their eye 1.28m above it, so the
+  // 0.96m rail this started at left only 32cm of sightline and the balcony
+  // saw 13.7% of the courtyard — less than any position on the ground, and
+  // nothing at all when crouched. At 0.70m the standing eye clears by 58cm
+  // (shoot over it, hold the courtyard) while the crouched eye sits 18cm
+  // below the cap (duck and you are genuinely hidden). That is the whole
+  // point of an elevated position: a peek that costs you cover.
+  const RAIL = 0.70;
+  box(ctx, ctx.mat.sandstone, -17.3, TOP + RAIL / 2, 0.5, 0.32, RAIL, 9.0);
+  trim(ctx, ctx.mat.concrete, -17.3, TOP + RAIL + 0.04, 0.5, 0.5, 0.14, 9.2);
   // Gap in the balustrade at the north end: a drop-down escape route.
-  box(ctx, ctx.mat.sandstone, -20.0, TOP + 0.48, -3.85, 5.6, 0.96, 0.32);
+  box(ctx, ctx.mat.sandstone, -20.0, TOP + RAIL / 2, -3.85, 5.6, RAIL, 0.32);
 
   // Support posts under the deck, so it doesn't read as floating.
   for (const pz of [-3.0, 0.5, 4.0]) {
@@ -903,7 +916,11 @@ function elevated(ctx) {
   // near -13.2/5.2 with a jump. Rewards knowing the map.
   box(ctx, ctx.mat.concrete, -13.5, 1.85, 8.5, 6.0, 0.5, 5.0);
   trim(ctx, ctx.mat.terracotta, -13.5, 2.16, 8.5, 6.5, 0.2, 5.5);
-  for (const [px, pz] of [[-16.0, 6.4], [-11.0, 6.4], [-16.0, 10.6], [-11.0, 10.6]]) {
+  // Three posts, not four: the deck's north-west corner abuts the SW block
+  // (which spans x -25..-13, z 10..24), so a post at (-16.0, 10.6) would sit
+  // entirely inside that solid mass — invisible, unreachable, and still
+  // costing a draw call and a collision brush. The wall carries that corner.
+  for (const [px, pz] of [[-16.0, 6.4], [-11.0, 6.4], [-11.0, 10.6]]) {
     box(ctx, ctx.mat.wood, px, 0.8, pz, 0.22, 1.6, 0.22);
   }
 }
