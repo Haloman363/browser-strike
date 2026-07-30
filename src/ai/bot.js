@@ -138,6 +138,82 @@ export function damp(current, target, rate, dt) {
 
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const lerp = (a, b, t) => a + (b - a) * t;
+
+/**
+ * Where the foot should BE, in hip-local space, at cycle time `u` in [0,1).
+ *
+ * This is the inversion the whole gait rests on. Posing hip/knee/ankle with
+ * open-loop sinusoids and letting the foot land wherever trigonometry puts it
+ * gives a foot that never actually touches the ground and slides when it is
+ * supposed to be planted. Authoring the CONTACT instead — the foot holds y=0
+ * and travels backward at exactly stride speed through stance — makes planting
+ * and skate-free travel true by construction.
+ *
+ * @returns {{z:number, y:number, plant:number}} plant is 1 while grounded.
+ */
+function footTarget(u, stanceFrac, stride, amp) {
+  const half = stride / 2;
+  if (u < stanceFrac) {
+    // STANCE: sweep from in-front to behind at a constant rate. Constant is
+    // what matters — any easing here is skate.
+    const k = u / stanceFrac;
+    return { z: lerp(half, -half, k), y: 0, plant: 1 };
+  }
+  // SWING: lift and reach back to the front. Sine arc peaks mid-swing, and the
+  // horizontal uses a smoothstep so the foot decelerates into heel-strike
+  // rather than slamming forward at constant speed.
+  const k = (u - stanceFrac) / (1 - stanceFrac);
+  const ease = k * k * (3 - 2 * k);
+  return {
+    z: lerp(-half, half, ease),
+    y: Math.sin(k * Math.PI) * (0.10 + 0.06 * amp),
+    plant: 0,
+  };
+}
+
+/**
+ * Two-bone analytic IK. Places the ankle at `target` (hip-local) by solving the
+ * knee angle with the law of cosines, then aiming the thigh at the target.
+ * The knee always folds backward, which is the sign convention this rig uses.
+ */
+function solveLegIK(J, side, target, amp, dt, lean = 0) {
+  const A = P.upperLeg, B = P.lowerLeg;
+
+  // Hip sits at HIPS_Y; the target's y is measured from the ground, so the
+  // reach is from the hip down to the foot.
+  const dz = target.z;
+  const dy = -(P.hipY - P.ankleH - target.y);
+  let dist = Math.hypot(dz, dy);
+  // Never fully extend: a locked leg looks like a stilt and the solve goes
+  // singular. Leaving a few millimetres keeps a soft knee at full stride.
+  dist = clamp(dist, Math.abs(A - B) + 1e-3, (A + B) * 0.995);
+
+  // Interior angle at the knee, then converted to the joint's fold angle.
+  const cosKnee = clamp((A * A + B * B - dist * dist) / (2 * A * B), -1, 1);
+  const kneeFold = Math.PI - Math.acos(cosKnee);
+
+  // Angle from straight-down to the target, plus the offset between the thigh
+  // and the hip-to-ankle line.
+  const toTarget = Math.atan2(dz, -dy);
+  const cosThigh = clamp((A * A + dist * dist - B * B) / (2 * A * dist), -1, 1);
+  const hipAngle = -(toTarget + Math.acos(cosThigh) - Math.PI / 2) - Math.PI / 2;
+
+  const hip = J[`hip${side}`], knee = J[`knee${side}`], ankle = J[`ankle${side}`];
+
+  // Cyclic targets are written DIRECTLY, not damped. Damping a periodic target
+  // makes the rendered pose lag by a frame-rate-dependent amount, which never
+  // reaches the target and breaks the loop at the cycle boundary.
+  // Subtract the pelvis lean: the hip joint is a child of the pelvis, so it
+  // inherits that rotation and would otherwise double-apply it.
+  hip.rotation.x = hipAngle - lean;
+  knee.rotation.x = kneeFold;
+  hip.rotation.z = damp(hip.rotation.z, (side === 'L' ? 1 : -1) * 0.045, 12, dt);
+
+  // Ankle keeps the sole parallel to the ground while planted (so it reads as
+  // bearing weight), and dorsiflexes to clear during swing.
+  const soleFlat = -(hip.rotation.x + kneeFold);
+  ankle.rotation.x = soleFlat + (1 - target.plant) * -0.22 * amp;
+}
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 
 // ---------------------------------------------------------------------------
@@ -1111,6 +1187,7 @@ export class Bot {
     // the cycle run at nearly double rate, which is what made the legs look
     // like they were shuffling and skating rather than striding.
     const strideLength = 1.5;
+    this.strideLength = strideLength;
     if (speed > 0.15) {
       this.phase += (speed * dt / strideLength) * Math.PI * 2;
       if (this.phase > Math.PI * 4) this.phase -= Math.PI * 4;
@@ -1146,8 +1223,11 @@ export class Bot {
     // Flight phase: past a jog the body is briefly airborne between steps, so
     // the whole rig lifts around the double-support moments. Ramped in from
     // half speed, because a walk always keeps one foot down.
-    const airborne = Math.max(0, w - 0.5) * 2;
-    const flight = Math.max(0, -Math.cos(p * 2)) * 0.045 * airborne;
+    // Flight only above a real walk/run transition (~2.1 m/s for a 1.8m human),
+    // and only as much lift as the legs can still reach down through — the IK
+    // holds the stance foot on the ground, so excess lift just tears contact.
+    const airborne = clamp((speed - 2.1) / (BOT.runSpeed - 2.1), 0, 1);
+    const flight = Math.max(0, -Math.cos(p * 2)) * 0.022 * airborne;
     J.hips.position.y = HIPS_Y + bob + idleBreath + flight;
 
     // Standing idle needs its own life or the bot reads as a statue between
@@ -1160,10 +1240,11 @@ export class Bot {
     J.hips.position.x = cosP * 0.022 * amp + shift * 0.018;
     J.hips.rotation.z = -cosP * 0.055 * amp + shift * 0.035;
     J.hips.rotation.y = sinP * 0.10 * amp + settle * 0.025;
-    // Lean into the run. Quadratic in speed so a walk stays near-upright while
-    // a sprint commits — a runner's mass has to be ahead of their feet or the
-    // stride reads as marching rather than driving forward.
-    J.hips.rotation.x = 0.03 + w * w * 0.30;
+    // Lean into the run. A walking trunk is within 2-4 degrees of vertical and
+    // even a hard run is under 10; earlier values hit 12 walking and 19
+    // running, which is caricature and also pitched the legs out of reach of
+    // their own foot targets.
+    J.hips.rotation.x = 0.02 + w * w * 0.10;
 
     // --- Torso. Aim offset is the yaw difference between where the feet point
     // and where the gun points; the spine absorbs it so the bot can strafe
@@ -1212,47 +1293,28 @@ export class Bot {
    */
   animateLegs(p, amp, dt) {
     const J = this.joints;
+    // Stance fraction: a walk keeps a foot down ~60% of the cycle; a run drops
+    // below half, which is what creates the flight phase. Gating on an explicit
+    // fraction rather than the sign of a cosine is the only way to get a split
+    // that is not 50/50 by construction.
+    const stanceFrac = lerp(0.62, 0.38, clamp(this.speedNorm, 0, 1));
+
+    // The pelvis bobs, lifts and leans, so a hip-relative foot target drifts
+    // with it. Measure how far the hip has actually moved from its rest height
+    // and subtract it, so the target stays fixed to the GROUND.
+    const hipRise = J.hips.position.y - HIPS_Y;
+    const lean = J.hips.rotation.x;
+
     for (const side of ['L', 'R']) {
-      const ph = side === 'L' ? p : p + Math.PI;
-      // Real gait is ~60% stance / 40% swing, not the 50/50 a plain sine gives.
-      // Warping the phase so the swing half passes faster is what produces the
-      // whip through the air and the slow, weighted drive back underneath.
-      const warped = ph - 0.22 * Math.sin(ph * 2);
-      const s = Math.sin(warped), c = Math.cos(warped);
-
-      // All three angles are offsets from the STANDING pose (P.restHip etc), so
-      // at amp=0 the leg settles into a soft-knee stand rather than snapping
-      // straight and driving the sole through the floor.
-      // Hip swings fore/aft. Slight forward bias so the bot leans into its stride.
-      const hipAngle = P.restHip + s * 0.62 * amp + 0.06 * amp;
-
-      // Knee: only flexes on the swing half. max(0, -cos) gates it to the half
-      // of the cycle where the foot is airborne. Knees never hyperextend.
-      const swing = Math.max(0, -c);
-      // ADDS to restKnee: more positive = more folded. Subtracting drove the
-      // joint toward (and past) straight, hyperextending it backwards.
-      const kneeAngle = P.restKnee + (swing * swing * 1.15 + 0.10) * amp;
-
-      // Ankle. Now that there is an actual foot forward of this pivot, the
-      // ankle drives the visible part of the gait: positive rotation.x pitches
-      // the toe DOWN (plantarflex), negative lifts it (dorsiflex).
-      //   stance, late  (c ~ -1..0 rising)  -> toe-off, toe pushes down
-      //   swing, early  (swing high)        -> dorsiflex to clear the ground
-      //   swing, late   (s ~ +1)            -> level out for heel-strike
-      const heelStrike = Math.max(0, s) * (1 - swing);
-      const restAnkle = -(P.restHip + P.restKnee);   // keeps the sole flat at rest
-      const ankleAngle = restAnkle +
-        (c * 0.40 - swing * 0.34 - heelStrike * 0.14) * amp;
-
-      const hip = J[`hip${side}`], knee = J[`knee${side}`], ankle = J[`ankle${side}`];
-      // Damping rates DESCEND down the chain so each joint lags its parent
-      // slightly. Equal rates move the whole leg in lockstep, which is the
-      // marionette look; the lag is what reads as follow-through.
-      hip.rotation.x = damp(hip.rotation.x, hipAngle, 34, dt);
-      // Splay slightly outward so the legs don't scissor through each other.
-      hip.rotation.z = damp(hip.rotation.z, (side === 'L' ? 1 : -1) * 0.045, 12, dt);
-      knee.rotation.x = damp(knee.rotation.x, kneeAngle, 26, dt);
-      ankle.rotation.x = damp(ankle.rotation.x, ankleAngle, 20, dt);
+      // Normalised cycle time in [0,1), offset half a cycle between legs.
+      const u = (((side === 'L' ? p : p + Math.PI) / (Math.PI * 2)) % 1 + 1) % 1;
+      const target = footTarget(u, stanceFrac, this.strideLength * amp, amp);
+      // Ground-relative: the foot must hold its height as the body rises.
+      target.y -= hipRise;
+      // Lean rotates the hip joint, carrying the leg with it; counter it so the
+      // foot lands where the trajectory says rather than swinging forward.
+      target.z += lean * (P.hipY - P.ankleH);
+      solveLegIK(J, side, target, amp, dt, lean);
     }
   }
 
@@ -1630,6 +1692,33 @@ export function _testBot() {
     assert(tones.size >= 8, `expected varied per-part colour, got ${tones.size} tones`);
   });
 
+  check('the foot trajectory plants on the ground and sweeps back at stride rate', () => {
+    // The invariant the whole gait rests on: while planted the foot holds y=0
+    // and travels backward at a CONSTANT rate. Open-loop sinusoid posing had
+    // the sole never touching zero at any point in the cycle, and sliding
+    // forward through the world while nominally planted.
+    const stanceFrac = 0.62;
+    const stride = 1.5;
+    let planted = 0;
+    let prevZ = null;
+    const steps = [];
+    for (let i = 0; i < 64; i++) {
+      const t = footTarget(i / 64, stanceFrac, stride, 1);
+      if (!t.plant) { prevZ = null; continue; }
+      planted++;
+      assert(Math.abs(t.y) < 1e-9, `planted foot must hold y=0, got ${t.y}`);
+      if (prevZ !== null) steps.push(prevZ - t.z);
+      prevZ = t.z;
+    }
+    assert(planted / 64 > 0.55,
+      `foot should be planted ~62% of the cycle, got ${(100 * planted / 64).toFixed(0)}%`);
+    // Constant backward rate: any variance here is the foot skating.
+    const min = Math.min(...steps), max = Math.max(...steps);
+    assert(min > 0, `planted foot must move BACKWARD, saw a step of ${min.toFixed(4)}`);
+    assert(max - min < 1e-6,
+      `planted foot must sweep at a constant rate; spread ${(max - min).toExponential(2)}`);
+  });
+
   check('stride length matches the foot travel, so feet do not skate', () => {
     // The gait is distance-driven: one cycle advances the phase by 2*PI over
     // `strideLength` metres. If the foot's own fore/aft travel per cycle does
@@ -1639,26 +1728,24 @@ export function _testBot() {
     const STRIDE = 1.5;   // must track animateGait's strideLength
     let minZ = Infinity, maxZ = -Infinity;
     const foot = new THREE.Vector3();
+    // Drives the REAL solver, so this cannot pass against a formula the game
+    // no longer runs.
     for (let i = 0; i <= 48; i++) {
-      const ph = (i / 48) * Math.PI * 2;
-      const warped = ph - 0.22 * Math.sin(ph * 2);
-      const s = Math.sin(warped), c = Math.cos(warped);
-      const swing = Math.max(0, -c);
-      model.joints.hipL.rotation.x = P.restHip + s * 0.62 + 0.06;
-      model.joints.kneeL.rotation.x = P.restKnee + (swing * swing * 1.15 + 0.10);
-      model.joints.ankleL.rotation.x = -(P.restHip + P.restKnee) +
-        (c * 0.40 - swing * 0.34);
+      const t = footTarget(i / 48, 0.62, STRIDE, 1);
+      solveLegIK(model.joints, 'L', t, 1, 1 / 60);
       model.root.updateMatrixWorld(true);
       model.joints.ankleL.getWorldPosition(foot);
       minZ = Math.min(minZ, foot.z);
       maxZ = Math.max(maxZ, foot.z);
     }
+    // The foot sweeps from +stride/2 to -stride/2 in stance and returns during
+    // swing, so its fore/aft extent over a full cycle is one STRIDE. If the
+    // extent were smaller than the ground the body covers, the planted foot
+    // would have to slide to make up the difference.
     const travel = maxZ - minZ;
-    // The ankle travels one STEP (half a cycle), so compare against STRIDE/2.
-    const expected = STRIDE / 2;
-    assert(Math.abs(travel - expected) < expected * 0.35,
-      `foot travels ${travel.toFixed(2)}m per step but the gait advances ` +
-      `${expected.toFixed(2)}m — feet will skate`);
+    assert(Math.abs(travel - STRIDE) < STRIDE * 0.30,
+      `foot spans ${travel.toFixed(2)}m per cycle but the gait advances ` +
+      `${STRIDE.toFixed(2)}m — the difference is skate`);
 
     model.joints.hipL.rotation.x = P.restHip;
     model.joints.kneeL.rotation.x = P.restKnee;
