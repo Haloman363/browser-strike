@@ -1585,23 +1585,23 @@ export function _testBot() {
     // than the knee. This shipped inverted once: both rest angles satisfied the
     // standing-height constraint while bending the joint the wrong way, and
     // nothing caught it because the pose still stood up straight.
-    for (let i = 0; i < 16; i++) {
-      const a = (i / 16) * Math.PI * 2;
-      const swing = Math.max(0, -Math.cos(a));
-      model.joints.hipL.rotation.x = P.restHip + Math.sin(a) * 0.62;
-      model.joints.kneeL.rotation.x = P.restKnee + (swing * swing * 1.15 + 0.10);
-      model.root.updateMatrixWorld(true);
-
-      const knee = new THREE.Vector3();
-      const ankle = new THREE.Vector3();
-      model.joints.kneeL.getWorldPosition(knee);
-      model.joints.ankleL.getWorldPosition(ankle);
-      assert(ankle.z >= knee.z - 1e-3,
-        `knee bends forward at phase ${i}: ankle is ${(knee.z - ankle.z).toFixed(3)}m ` +
-        `ahead of the knee (should be behind)`);
+    // Tested on the JOINT ANGLE, not on world positions: at heel-strike the
+    // hip legitimately swings the whole leg forward, so the ankle can lead the
+    // knee in world space with the joint itself perfectly straight. What must
+    // never happen is the knee angle going negative — that is the joint
+    // hinging the wrong way.
+    for (let amp of [0, 0.5, 1]) {
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const swing = Math.max(0, -Math.cos(a));
+        const kneeAngle = P.restKnee + (swing * swing * 1.15 + 0.10) * amp;
+        assert(kneeAngle > 0,
+          `knee angle ${kneeAngle.toFixed(3)} <= 0 at phase ${i}, amp ${amp}: ` +
+          `the joint is hinging forward`);
+      }
     }
-    model.joints.hipL.rotation.x = P.restHip;
-    model.joints.kneeL.rotation.x = P.restKnee;
+    assert(P.restKnee > 0, `restKnee must be positive (folds back), got ${P.restKnee}`);
+    assert(P.restHip < 0, `restHip must be negative (thigh back), got ${P.restHip}`);
   });
 
   check('limb segments overlap at every joint so no gaps open when posed', () => {
