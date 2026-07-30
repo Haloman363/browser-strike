@@ -140,6 +140,25 @@ const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 const lerp = (a, b, t) => a + (b - a) * t;
 
 /**
+ * How far a planted foot can sweep fore-to-aft while staying on the ground.
+ *
+ * This is a hard geometric limit and it drives the whole gait: the leg is
+ * 0.855m and the hip sits 0.84m above the sole, so the horizontal reach with
+ * the foot down is small. The pelvis dips at the stride extremes (see `bob`)
+ * and THAT is what buys the reach — a real walk does the same thing. Ask for
+ * more sweep than this and the IK bottoms out with the "planted" foot hanging
+ * in the air, which is exactly the defect the IK rewrite was meant to kill.
+ */
+function contactSweep() {
+  // Solved at the RESTING hip height, not a dipped one. Budgeting for a dip
+  // that has not happened yet makes the sweep unreachable whenever the pelvis
+  // is high, and the clamp then drags the sole down through the floor.
+  const reach = (P.upperLeg + P.lowerLeg) * 0.96;
+  const hipH = P.hipY - P.ankleH;
+  return 2 * Math.sqrt(Math.max(0.0001, reach * reach - hipH * hipH));
+}
+
+/**
  * Where the foot should BE, in hip-local space, at cycle time `u` in [0,1).
  *
  * This is the inversion the whole gait rests on. Posing hip/knee/ankle with
@@ -151,8 +170,26 @@ const lerp = (a, b, t) => a + (b - a) * t;
  *
  * @returns {{z:number, y:number, plant:number}} plant is 1 while grounded.
  */
+/**
+ * Vertical lift the ankle needs so a rolled foot pivots about its contact edge
+ * instead of about the ankle itself. Rotating the ankle alone swings the toe
+ * (or heel) straight down through the floor — at a 0.42rad push-off that is
+ * ~57mm of the boot buried in the paving.
+ */
+function rollLift(roll) {
+  // Distance from the ankle pivot to whichever end of the sole is bearing.
+  const arm = roll > 0 ? P.footL - 0.085 : 0.075;   // toe ahead / heel behind
+  return Math.abs(Math.sin(roll)) * arm;
+}
+
 function footTarget(u, stanceFrac, stride, amp, gait = 0) {
-  const half = stride / 2;
+  // CONTACT half-sweep, not stride half. The foot cannot stay flat on the
+  // ground across a whole stride: with a 0.855m leg and the hip at 0.84m, the
+  // reach at +-0.7m is 1.09m, which is geometrically impossible, so the IK
+  // bottoms out and the "planted" foot hangs in the air. A real foot contacts
+  // near the body and the rest of the stride is covered by the body travelling
+  // over it. Cap the contact sweep at what the leg can actually reach.
+  const half = Math.min(stride / 2, contactSweep() / 2);
   // `gait` blends walk (0) to run (1). It changes the KIND of step, not just
   // its size: a walk strikes heel-first and rolls through a long flat phase, a
   // run strikes nearer the midfoot, spends almost no time flat, and lifts the
@@ -172,20 +209,26 @@ function footTarget(u, stanceFrac, stride, amp, gait = 0) {
       : k < flatEnd
         ? 0                                          // foot flat, bearing load
         : lerp(0, pushOff, (k - flatEnd) / (1 - flatEnd));
-    return { z: lerp(half, -half, k), y: 0, plant: 1, roll };
+    // The ankle rises as the foot rolls, so the pivot stays on the sole's
+    // contact edge rather than driving the boot through the ground.
+    return { z: lerp(half, -half, k), y: rollLift(roll), plant: 1, roll };
   }
   // SWING: lift and reach back to the front. Sine arc peaks mid-swing, and the
   // horizontal uses a smoothstep so the foot decelerates into heel-strike
   // rather than slamming forward at constant speed.
   const k = (u - stanceFrac) / (1 - stanceFrac);
   const ease = k * k * (3 - 2 * k);
+  const roll = lerp(pushOff, strike, ease);
   return {
     z: lerp(-half, half, ease),
-    // Runners pick the foot up much higher — heel toward the backside.
-    y: Math.sin(k * Math.PI) * lerp(0.09, 0.22, gait) * (0.6 + 0.4 * amp),
+    // Runners pick the foot up much higher — heel toward the backside. The
+    // roll lift is still needed at the start of swing: the foot leaves the
+    // ground mid-toe-off, and without it the toe clips back through.
+    y: Math.sin(k * Math.PI) * lerp(0.09, 0.22, gait) * (0.6 + 0.4 * amp)
+      + rollLift(roll) * (1 - ease),
     plant: 0,
     // Carry the toe-off through, then level out for the next strike.
-    roll: lerp(pushOff, strike, ease),
+    roll,
   };
 }
 
@@ -291,15 +334,24 @@ const P = {
   // the shin backward, the way a human knee works. An earlier solve satisfied
   // the position constraint with both angles pushing forward, which put the
   // ankle ahead of the knee all cycle and read as backwards knees.
-  restHip: -0.18,
-  restKnee: 0.371,
+  // Soft-knee stand. With the legs now longer than the hip height, a small
+  // matched hip/knee pair puts the sole on the floor with the ankle under the
+  // hip. These only set the static rest pose — at runtime solveLegIK owns the
+  // leg, so they no longer have to encode the whole gait.
+  restHip: -0.155,
+  restKnee: 0.31,
   upperArm: 0.29,
   lowerArm: 0.25,
   armR: 0.052,
-  upperLeg: 0.44,
-  lowerLeg: 0.415,
+  // Leg segments must sum to MORE than the hip-to-sole distance (0.84), or the
+  // leg is fully extended just standing and has zero horizontal reach — every
+  // planted foot target is then unreachable, the IK clamp silently lifts the
+  // ankle, and the character walks on air. At 0.44+0.415=0.855 against a 0.838
+  // usable reach that is exactly what happened. A 1.8m human has a ~0.94m leg.
+  upperLeg: 0.484,
+  lowerLeg: 0.456,
   legR: 0.082,
-  ankleH: 0.06,           // ankle pivot above the sole
+  ankleH: 0.067,          // ankle pivot above the sole (measured off the boot)
   footL: 0.27,
   footW: 0.115,
 };
@@ -567,9 +619,12 @@ export function buildBotModel() {
     // Neutral standing flex. animate() overwrites these every frame, but the
     // un-animated model (editor previews, the headless proportion check) must
     // still stand on its soles rather than sinking through the floor.
-    hip.rotation.x = P.restHip;
-    knee.rotation.x = P.restKnee;
-    ankle.rotation.x = -(P.restHip + P.restKnee);
+    // Rest pose comes from the SAME IK the gait uses, with the foot directly
+    // under the hip. Hand-solving these three angles separately is how the rig
+    // ended up standing on a leg that was shorter than the distance it had to
+    // span; deriving them guarantees the stand and the gait always agree.
+    solveLegIK({ [`hip${side}`]: hip, [`knee${side}`]: knee, [`ankle${side}`]: ankle },
+      side, { z: 0, y: 0, plant: 1, roll: 0 }, 0, 1);
 
     // BOOT. Built as ankle collar -> foot mass -> sole -> toe cap, all forward
     // of the ankle pivot, so heel-strike and toe-off actually read in the gait.
@@ -1343,7 +1398,13 @@ export class Bot {
     // rather than treating speed as a single amplitude dial.
     const speedNow = Math.hypot(this.velocity.x, this.velocity.z);
     const gait = clamp((speedNow - 1.9) / (3.2 - 1.9), 0, 1);
-    const stanceFrac = lerp(0.62, 0.38, gait);
+    // Stance fraction is NOT free — it is set by geometry. A planted foot
+    // sweeps backward at exactly body speed, so the time it can stay down is
+    // (how far the leg can reach) / (how far the body travels per cycle).
+    // Asking for more stance than that forces the foot to slide, and asking
+    // for less throws away contact the leg could have held.
+    const stanceFrac = clamp(
+      contactSweep() / Math.max(0.01, this.strideLength), 0.3, 0.68);
 
     // The pelvis bobs, lifts and leans, so a hip-relative foot target drifts
     // with it. Measure how far the hip has actually moved from its rest height
@@ -1800,6 +1861,57 @@ export function _testBot() {
     model.root.updateMatrixWorld(true);
   });
 
+  check('the rendered boot sole actually reaches the ground through the cycle', () => {
+    // THIS is the assertion that matters, and its absence is how a broken gait
+    // got declared fixed: the sibling check below asserts on footTarget's
+    // authored intent, which stayed perfect while the rig delivered a foot
+    // hanging 14cm in the air. Measure the BOOT MESH in world space, driven
+    // through the real solver.
+    // maxFloat: a WALK must never have both feet up, so its lowest foot stays
+    // near the ground all cycle. A run legitimately flies, so only its stance
+    // quality is checked.
+    for (const [label, stride, gait, floatCap, minGrounded] of [
+      ['walk', 1.4, 0, 0.05, 0.5],
+      ['run', 2.1, 1, 0.30, 0.28],
+    ]) {
+      const stanceFrac = clamp(contactSweep() / stride, 0.3, 0.68);
+      let grounded = 0, maxFloat = -Infinity, worstSink = Infinity;
+      const N = 48;
+      for (let i = 0; i < N; i++) {
+        let lowest = Infinity;
+        for (const side of ['L', 'R']) {
+          const u = ((i / N) + (side === 'R' ? 0.5 : 0)) % 1;
+          const t = footTarget(u, stanceFrac, stride, 1, gait);
+          solveLegIK(model.joints, side, t, 1, 1 / 60);
+        }
+        model.root.updateMatrixWorld(true);
+        for (const side of ['L', 'R']) {
+          const box = new THREE.Box3();
+          model.joints[`ankle${side}`].traverse((o) => {
+            if (o.isMesh) box.expandByObject(o);
+          });
+          if (!box.isEmpty()) lowest = Math.min(lowest, box.min.y);
+        }
+        if (Math.abs(lowest) < 0.02) grounded++;
+        maxFloat = Math.max(maxFloat, lowest);
+        worstSink = Math.min(worstSink, lowest);
+      }
+      const pct = grounded / N;
+      assert(pct > minGrounded,
+        `${label}: some foot is on the ground only ${(pct * 100).toFixed(0)}% of the ` +
+        `cycle (need >${(minGrounded * 100).toFixed(0)}%) — the leg cannot reach ` +
+        `its own foot targets`);
+      assert(maxFloat < floatCap,
+        `${label}: lowest foot floats ${(maxFloat * 1000).toFixed(0)}mm above the ground`);
+      assert(worstSink > -0.04,
+        `${label}: foot punches ${(-worstSink * 1000).toFixed(0)}mm through the ground`);
+    }
+    model.joints.hipL.rotation.x = P.restHip;
+    model.joints.kneeL.rotation.x = P.restKnee;
+    model.joints.hipR.rotation.x = P.restHip;
+    model.joints.kneeR.rotation.x = P.restKnee;
+  });
+
   check('the foot trajectory plants on the ground and sweeps back at stride rate', () => {
     // The invariant the whole gait rests on: while planted the foot holds y=0
     // and travels backward at a CONSTANT rate. Open-loop sinusoid posing had
@@ -1814,7 +1926,12 @@ export function _testBot() {
       const t = footTarget(i / 64, stanceFrac, stride, 1);
       if (!t.plant) { prevZ = null; continue; }
       planted++;
-      assert(Math.abs(t.y) < 1e-9, `planted foot must hold y=0, got ${t.y}`);
+      // The ANKLE rises as the foot rolls onto heel or toe; what must hold is
+      // that the bearing edge of the sole stays on the ground, i.e. the lift
+      // exactly matches the roll. Asserting y===0 would forbid the roll.
+      assert(Math.abs(t.y - rollLift(t.roll)) < 1e-9,
+        `planted ankle height must equal the roll lift; y=${t.y.toFixed(4)} ` +
+        `vs lift ${rollLift(t.roll).toFixed(4)}`);
       if (prevZ !== null) steps.push(prevZ - t.z);
       prevZ = t.z;
     }
@@ -1846,14 +1963,19 @@ export function _testBot() {
       minZ = Math.min(minZ, foot.z);
       maxZ = Math.max(maxZ, foot.z);
     }
-    // The foot sweeps from +stride/2 to -stride/2 in stance and returns during
-    // swing, so its fore/aft extent over a full cycle is one STRIDE. If the
-    // extent were smaller than the ground the body covers, the planted foot
-    // would have to slide to make up the difference.
+    // The foot's fore/aft extent is the CONTACT SWEEP, which the leg's reach
+    // caps below the full stride. What must hold is that the stance window is
+    // sized to that sweep — the body may travel further per cycle, but only
+    // while the foot is in the air.
     const travel = maxZ - minZ;
-    assert(Math.abs(travel - STRIDE) < STRIDE * 0.30,
-      `foot spans ${travel.toFixed(2)}m per cycle but the gait advances ` +
-      `${STRIDE.toFixed(2)}m — the difference is skate`);
+    const sweep = contactSweep();
+    assert(Math.abs(travel - sweep) < sweep * 0.25,
+      `foot spans ${travel.toFixed(2)}m but the leg's contact sweep is ` +
+      `${sweep.toFixed(2)}m — the planted foot is being dragged past its reach`);
+    // And the stance window must match: stanceFrac * stride == sweep.
+    const impliedStance = sweep / STRIDE;
+    assert(impliedStance > 0.25 && impliedStance < 0.7,
+      `implied stance fraction ${impliedStance.toFixed(2)} is not a plausible gait`);
 
     model.joints.hipL.rotation.x = P.restHip;
     model.joints.kneeL.rotation.x = P.restKnee;
