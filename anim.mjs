@@ -35,6 +35,12 @@ page.on('pageerror', (e) => console.log('PAGEERROR:', e.message.slice(0, 200)));
 await page.goto('http://localhost:5173/?lowspec=1', { waitUntil: 'domcontentloaded' });
 await page.waitForFunction('window.__ready === true');
 
+// Prime capture mode once. The first __shot call also hides the HUD and stops
+// the frame loop, so without this frame 0 of every strip is captured mid-
+// transition and does not match the rest.
+await page.evaluate(() => window.__shot([0, 2, 5], [0, 1, 0], 45));
+await page.waitForTimeout(500);
+
 for (const [name, cam, look, fov, poser] of STRIPS) {
   if (!want(name)) continue;
   const shots = [];

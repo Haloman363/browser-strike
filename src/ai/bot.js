@@ -1106,7 +1106,11 @@ export class Bot {
     // that stops the legs sliding: stride length is fixed, so at half speed the
     // cycle runs at half rate and the feet stay planted relative to the ground.
     const speed = Math.hypot(this.velocity.x, this.velocity.z);
-    const strideLength = 0.82;
+    // One full cycle = TWO steps, so this is the distance covered by a left
+    // and a right step together. For a 1.80m human that is ~1.5m; 0.82 made
+    // the cycle run at nearly double rate, which is what made the legs look
+    // like they were shuffling and skating rather than striding.
+    const strideLength = 1.5;
     this.phase += (speed * dt / strideLength) * Math.PI * 2;
     if (this.phase > Math.PI * 4) this.phase -= Math.PI * 4;
 
@@ -1125,7 +1129,11 @@ export class Bot {
 
     // --- Hips: vertical bob at 2x gait (one dip per footfall), lateral sway at
     // 1x (weight shifts onto the planted leg), plus breathing at rest.
-    const bob = -Math.abs(sinP) * 0.055 * amp;
+    // Pelvis rises at midstance (support leg straight under the body) and dips
+    // at double-support. cos(2p) gives both halves of that travel; -|sin| only
+    // ever went DOWN, so the body read as a constant slight crouch with no
+    // rise-and-fall at all — the main reason the walk looked floaty.
+    const bob = Math.cos(p * 2) * 0.032 * amp;
     const idleBreath = Math.sin(this.breathe) * 0.008 * (1 - w);
     J.hips.position.y = HIPS_Y + bob + idleBreath;
     J.hips.position.x = cosP * 0.022 * amp;
@@ -1174,7 +1182,11 @@ export class Bot {
     const J = this.joints;
     for (const side of ['L', 'R']) {
       const ph = side === 'L' ? p : p + Math.PI;
-      const s = Math.sin(ph), c = Math.cos(ph);
+      // Real gait is ~60% stance / 40% swing, not the 50/50 a plain sine gives.
+      // Warping the phase so the swing half passes faster is what produces the
+      // whip through the air and the slow, weighted drive back underneath.
+      const warped = ph - 0.22 * Math.sin(ph * 2);
+      const s = Math.sin(warped), c = Math.cos(warped);
 
       // All three angles are offsets from the STANDING pose (P.restHip etc), so
       // at amp=0 the leg settles into a soft-knee stand rather than snapping
@@ -1201,11 +1213,14 @@ export class Bot {
         (c * 0.40 - swing * 0.34 - heelStrike * 0.14) * amp;
 
       const hip = J[`hip${side}`], knee = J[`knee${side}`], ankle = J[`ankle${side}`];
-      hip.rotation.x = damp(hip.rotation.x, hipAngle, 20, dt);
+      // Damping rates DESCEND down the chain so each joint lags its parent
+      // slightly. Equal rates move the whole leg in lockstep, which is the
+      // marionette look; the lag is what reads as follow-through.
+      hip.rotation.x = damp(hip.rotation.x, hipAngle, 34, dt);
       // Splay slightly outward so the legs don't scissor through each other.
       hip.rotation.z = damp(hip.rotation.z, (side === 'L' ? 1 : -1) * 0.045, 12, dt);
-      knee.rotation.x = damp(knee.rotation.x, kneeAngle, 20, dt);
-      ankle.rotation.x = damp(ankle.rotation.x, ankleAngle, 18, dt);
+      knee.rotation.x = damp(knee.rotation.x, kneeAngle, 26, dt);
+      ankle.rotation.x = damp(ankle.rotation.x, ankleAngle, 20, dt);
     }
   }
 

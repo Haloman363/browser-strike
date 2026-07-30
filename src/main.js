@@ -206,7 +206,8 @@ window.__shot = (pos, lookAt, fov = 90) => {
 // Park a bot at a fixed spot in a chosen pose, for visual inspection. The
 // model is slaved to the physics body, so move the body and tick once.
 window.__poseBot = (bot, { at = [0, 0, 0], yaw = 0, walk = 0 } = {}) => {
-  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  const centreY = at[1] + bot.half.y;
+  bot.position.set(at[0], centreY, at[2]);
   bot.velocity.set(0, 0, 0);
   bot.yaw = bot.aimYaw = yaw;
   bot.state = 'PATROL';
@@ -214,11 +215,11 @@ window.__poseBot = (bot, { at = [0, 0, 0], yaw = 0, walk = 0 } = {}) => {
     // Advance the gait far enough to reach a clear mid-stride pose.
     for (let i = 0; i < 24; i++) {
       bot.velocity.set(Math.sin(yaw) * walk, 0, Math.cos(yaw) * walk);
-      bot.position.set(at[0], at[1] + 0.93, at[2]);
+      bot.position.set(at[0], centreY, at[2]);
       bot.update(1 / 60, new THREE.Vector3(0, 1.6, 40), new THREE.Vector3(0, 0, 40));
     }
   }
-  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  bot.position.set(at[0], centreY, at[2]);
   bot.update(1 / 60, new THREE.Vector3(0, 1.6, 40), new THREE.Vector3(0, 0, 40));
   return {
     modelPos: bot.model.position.toArray().map((v) => +v.toFixed(2)),
@@ -235,22 +236,25 @@ window.__animPose = ({ at = [0, 0, 0], yaw = 0, speed = 3.2, t = 0 } = {}) => {
   const eye = new THREE.Vector3(at[0], 1.6, at[2] + 40);
   const feet = new THREE.Vector3(at[0], 0, at[2] + 40);
   const vel = new THREE.Vector3(Math.sin(yaw) * speed, 0, Math.cos(yaw) * speed);
+  // Body CENTRE, derived from the capsule's own half-height. Hardcoding 0.93
+  // parked the feet plane 24.5cm above the paving and the bot looked airborne.
+  const centreY = at[1] + bot.half.y;
 
   // Settle first so damped joints are at their steady-state for this speed,
   // otherwise every strip frame shows the rig still easing in from rest.
   for (let i = 0; i < 60; i++) {
-    bot.position.set(at[0], at[1] + 0.93, at[2]);
+    bot.position.set(at[0], centreY, at[2]);
     bot.velocity.copy(vel);
     bot.yaw = bot.aimYaw = yaw;
     bot.update(1 / 60, eye, feet);
   }
   // Then walk the phase to exactly t.
   bot.phase = t * Math.PI * 2;
-  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  bot.position.set(at[0], centreY, at[2]);
   bot.velocity.copy(vel);
   bot.yaw = bot.aimYaw = yaw;
   bot.update(1 / 600, eye, feet);
-  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  bot.position.set(at[0], centreY, at[2]);
   bot.model.position.set(at[0], bot.model.position.y, at[2]);
   return { phase: +bot.phase.toFixed(3) };
 };
