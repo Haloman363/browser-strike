@@ -188,8 +188,13 @@ const P = {
   hipY: 0.90,
   // Neutral standing flex, solved so the ankle lands directly under the hip
   // with the sole flat on y=0: 0.44cos(h) + 0.415cos(h+k) = 0.90 - ankleH.
-  restHip: 0.182,
-  restKnee: -0.375,
+  // SIGNS MATTER: the model faces -Z, so a negative rotation.x swings a
+  // segment's far end forward. The knee must therefore be POSITIVE — it folds
+  // the shin backward, the way a human knee works. An earlier solve satisfied
+  // the position constraint with both angles pushing forward, which put the
+  // ankle ahead of the knee all cycle and read as backwards knees.
+  restHip: -0.18,
+  restKnee: 0.371,
   upperArm: 0.29,
   lowerArm: 0.25,
   armR: 0.052,
@@ -1180,7 +1185,9 @@ export class Bot {
       // Knee: only flexes on the swing half. max(0, -cos) gates it to the half
       // of the cycle where the foot is airborne. Knees never hyperextend.
       const swing = Math.max(0, -c);
-      const kneeAngle = P.restKnee - (swing * swing * 1.15 + 0.10) * amp;
+      // ADDS to restKnee: more positive = more folded. Subtracting drove the
+      // joint toward (and past) straight, hyperextending it backwards.
+      const kneeAngle = P.restKnee + (swing * swing * 1.15 + 0.10) * amp;
 
       // Ankle. Now that there is an actual foot forward of this pivot, the
       // ankle drives the visible part of the gait: positive rotation.x pitches
@@ -1330,8 +1337,8 @@ export class Bot {
     J.elbowR.rotation.x = -0.9 + e * 0.55;
     J.hipL.rotation.set(e * 0.45, 0, 0.22);
     J.hipR.rotation.set(e * 0.20, 0, -0.15);
-    J.kneeL.rotation.x = -e * 0.85;
-    J.kneeR.rotation.x = -e * 0.45;
+    J.kneeL.rotation.x = P.restKnee + e * 0.85;
+    J.kneeR.rotation.x = P.restKnee + e * 0.45;
 
     if (this.muzzleFlash) this.muzzleFlash.intensity = 0;
 
@@ -1573,6 +1580,30 @@ export function _testBot() {
     assert(tones.size >= 8, `expected varied per-part colour, got ${tones.size} tones`);
   });
 
+  check('knees fold backward, never forward, across the whole gait cycle', () => {
+    // The model faces -Z, so a correctly bent knee puts the ankle at MORE +z
+    // than the knee. This shipped inverted once: both rest angles satisfied the
+    // standing-height constraint while bending the joint the wrong way, and
+    // nothing caught it because the pose still stood up straight.
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      const swing = Math.max(0, -Math.cos(a));
+      model.joints.hipL.rotation.x = P.restHip + Math.sin(a) * 0.62;
+      model.joints.kneeL.rotation.x = P.restKnee + (swing * swing * 1.15 + 0.10);
+      model.root.updateMatrixWorld(true);
+
+      const knee = new THREE.Vector3();
+      const ankle = new THREE.Vector3();
+      model.joints.kneeL.getWorldPosition(knee);
+      model.joints.ankleL.getWorldPosition(ankle);
+      assert(ankle.z >= knee.z - 1e-3,
+        `knee bends forward at phase ${i}: ankle is ${(knee.z - ankle.z).toFixed(3)}m ` +
+        `ahead of the knee (should be behind)`);
+    }
+    model.joints.hipL.rotation.x = P.restHip;
+    model.joints.kneeL.rotation.x = P.restKnee;
+  });
+
   check('limb segments overlap at every joint so no gaps open when posed', () => {
     // Drive the rig through a full gait cycle and assert the child limb's
     // geometry always reaches back over its parent pivot.
@@ -1580,7 +1611,7 @@ export function _testBot() {
     for (let i = 0; i < 12; i++) {
       const a = (i / 12) * Math.PI * 2;
       model.joints.hipL.rotation.x = Math.sin(a) * 0.62 + P.restHip;
-      model.joints.kneeL.rotation.x = P.restKnee - Math.max(0, -Math.cos(a)) * 1.15;
+      model.joints.kneeL.rotation.x = P.restKnee + Math.max(0, -Math.cos(a)) * 1.15;
       model.joints.shoulderL.rotation.x = -1.2 + Math.sin(a) * 0.3;
       model.root.updateMatrixWorld(true);
       for (const [, childName] of pairs) {
