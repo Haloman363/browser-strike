@@ -51,7 +51,17 @@ const SCENARIOS = [
   ['gun-in-world', () => {
     const { rifle, renderer } = window.__dbg;
     if (!rifle) return { skip: 'no rifle' };
-    window.__shot([8, 1.7, 12], [-2, 1.6, -4], 90);
+    window.__shot([0, 1.7, 18], [0, 1.6, 0], 90);
+    rifle.renderViewmodel(renderer.renderer);
+    return {};
+  }],
+  // The actual gameplay frame: weapon up, enemy downrange, map behind. This
+  // is the only view that shows whether the parts work together.
+  ['gameplay', () => {
+    const { rifle, renderer, bots } = window.__dbg;
+    if (!rifle || !bots.length) return { skip: 'need rifle + bot' };
+    window.__poseBot(bots[0], { at: [1.5, 0, 4], yaw: 0.4, walk: 3.0 });
+    window.__shot([0, 1.7, 14], [1.2, 1.4, 3], 90);
     rifle.renderViewmodel(renderer.renderer);
     return {};
   }],

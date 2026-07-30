@@ -512,8 +512,11 @@ function palm(ctx, x, z, baseY, height = 4.2, seed = 7) {
   crown.position.set(topX, topY, topZ);
   ctx.scene.add(crown);
 
+  // Deeper than a leaf looks in isolation: these are DoubleSide, so fronds
+  // lit from behind render at full face brightness and wash out against the
+  // sky. Date palms are a dusty grey-green, not a fresh green.
   const frondMat = new THREE.MeshStandardMaterial({
-    color: 0x7c8f4a, roughness: 0.88, side: THREE.DoubleSide, metalness: 0,
+    color: 0x5a6b34, roughness: 0.92, side: THREE.DoubleSide, metalness: 0,
   });
 
   for (let i = 0; i < FRONDS; i++) {
