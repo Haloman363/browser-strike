@@ -227,6 +227,34 @@ window.__poseBot = (bot, { at = [0, 0, 0], yaw = 0, walk = 0 } = {}) => {
   };
 };
 
+// Drive a bot to an exact fraction `t` of its gait cycle, for frame-strip
+// capture. Steps the real update() so what is captured is what plays.
+window.__animPose = ({ at = [0, 0, 0], yaw = 0, speed = 3.2, t = 0 } = {}) => {
+  const bot = bots[0];
+  if (!bot) return null;
+  const eye = new THREE.Vector3(at[0], 1.6, at[2] + 40);
+  const feet = new THREE.Vector3(at[0], 0, at[2] + 40);
+  const vel = new THREE.Vector3(Math.sin(yaw) * speed, 0, Math.cos(yaw) * speed);
+
+  // Settle first so damped joints are at their steady-state for this speed,
+  // otherwise every strip frame shows the rig still easing in from rest.
+  for (let i = 0; i < 60; i++) {
+    bot.position.set(at[0], at[1] + 0.93, at[2]);
+    bot.velocity.copy(vel);
+    bot.yaw = bot.aimYaw = yaw;
+    bot.update(1 / 60, eye, feet);
+  }
+  // Then walk the phase to exactly t.
+  bot.phase = t * Math.PI * 2;
+  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  bot.velocity.copy(vel);
+  bot.yaw = bot.aimYaw = yaw;
+  bot.update(1 / 600, eye, feet);
+  bot.position.set(at[0], at[1] + 0.93, at[2]);
+  bot.model.position.set(at[0], bot.model.position.y, at[2]);
+  return { phase: +bot.phase.toFixed(3) };
+};
+
 window.__dbg = { renderer, world, materials, mapData, movement, rifle, bots, THREE };
 // Set last: the capture script waits on this, so everything above must exist.
 stage('ready');
