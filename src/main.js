@@ -248,6 +248,21 @@ window.__animPose = ({ at = [0, 0, 0], yaw = 0, speed = 3.2, t = 0 } = {}) => {
     bot.yaw = bot.aimYaw = yaw;
     bot.update(1 / 60, eye, feet);
   }
+  // Standing still, the gait phase does not advance, so sampling by phase
+  // would show eight identical frames. Advance the idle clocks over time
+  // instead so breathing and weight-shift are actually visible in the strip.
+  if (speed < 0.15) {
+    const period = 6.0;
+    for (let i = 0; i < Math.round(t * period * 60); i++) {
+      bot.position.set(at[0], centreY, at[2]);
+      bot.velocity.set(0, 0, 0);
+      bot.update(1 / 60, eye, feet);
+    }
+    bot.position.set(at[0], centreY, at[2]);
+    bot.model.position.set(at[0], bot.model.position.y, at[2]);
+    return { idleT: +t.toFixed(2) };
+  }
+
   // Then walk the phase to exactly t.
   bot.phase = t * Math.PI * 2;
   bot.position.set(at[0], centreY, at[2]);

@@ -1111,8 +1111,16 @@ export class Bot {
     // the cycle run at nearly double rate, which is what made the legs look
     // like they were shuffling and skating rather than striding.
     const strideLength = 1.5;
-    this.phase += (speed * dt / strideLength) * Math.PI * 2;
-    if (this.phase > Math.PI * 4) this.phase -= Math.PI * 4;
+    if (speed > 0.15) {
+      this.phase += (speed * dt / strideLength) * Math.PI * 2;
+      if (this.phase > Math.PI * 4) this.phase -= Math.PI * 4;
+    } else {
+      // Coming to a halt, walk the phase to the nearest multiple of PI — the
+      // points where the legs are together. Freezing wherever the cycle
+      // stopped left the bot standing mid-stride with its legs apart.
+      const nearest = Math.round(this.phase / Math.PI) * Math.PI;
+      this.phase = damp(this.phase, nearest, 6, dt);
+    }
 
     // Blend weight ramps in over the walk range, so a bot creeping at 0.3 m/s
     // gets a small shuffle rather than a full march.
@@ -1141,9 +1149,17 @@ export class Bot {
     const airborne = Math.max(0, w - 0.5) * 2;
     const flight = Math.max(0, -Math.cos(p * 2)) * 0.045 * airborne;
     J.hips.position.y = HIPS_Y + bob + idleBreath + flight;
-    J.hips.position.x = cosP * 0.022 * amp;
-    J.hips.rotation.z = -cosP * 0.055 * amp;   // pelvis tilt toward the swing leg
-    J.hips.rotation.y = sinP * 0.10 * amp;     // pelvis counter-rotation
+
+    // Standing idle needs its own life or the bot reads as a statue between
+    // patrol legs. Two slow incommensurate periods so the shift never loops
+    // visibly: weight rocks hip to hip, with a small settle in the pelvis.
+    const still = 1 - w;
+    const shift = Math.sin(this.breathe * 0.42) * still;
+    const settle = Math.sin(this.breathe * 0.29 + 2.1) * still;
+
+    J.hips.position.x = cosP * 0.022 * amp + shift * 0.018;
+    J.hips.rotation.z = -cosP * 0.055 * amp + shift * 0.035;
+    J.hips.rotation.y = sinP * 0.10 * amp + settle * 0.025;
     // Lean into the run. Quadratic in speed so a walk stays near-upright while
     // a sprint commits — a runner's mass has to be ahead of their feet or the
     // stride reads as marching rather than driving forward.
