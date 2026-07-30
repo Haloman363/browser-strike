@@ -7,12 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4173",
-    "test": "node src/world/collision.test.js && node src/player/movement.test.js"
+    "test": "node src/world/collision.test.js && node src/player/movement.test.js && node src/net/transport.test.js && node src/net/prediction.test.js && node src/net/combat.test.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "peerjs": "^1.5.5",
     "three": "^0.185.1"
   },
   "devDependencies": {

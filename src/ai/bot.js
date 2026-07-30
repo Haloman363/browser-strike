@@ -374,6 +374,10 @@ const P = {
 // collapse both write hips.position.y, so this must be one shared number.
 const HIPS_Y = P.hipY + P.hipH / 2;
 
+// Scratch AABB for the death-collapse ground fit. Module-level so a corpse
+// settling does not allocate every frame.
+const _deathBox = new THREE.Box3();
+
 function mat(color, rough = 0.85, metal = 0) {
   return new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
 }
@@ -713,7 +717,10 @@ function buildRifle(g, M) {
 // under a pixel; swap for OBBs if the bots ever get prone/lean poses.
 // Landmarks from the rebuilt model (measured, see _testBot): crown 1.80,
 // head centre 1.68, shoulder 1.46, hip pivot 0.90, knee 0.46, ankle 0.06.
-const HITBOXES = [
+// Exported so the networked hit registration (src/net/combat.js) tests the SAME
+// boxes the bot does. A second copy of these numbers is a second thing to get
+// wrong: rewound lag-compensated hits would silently disagree with local ones.
+export const HITBOXES = [
   { part: 'head', y: 1.68, r: 0.125 },
   { part: 'chest', y: 1.36, r: 0.235 },
   { part: 'stomach', y: 1.07, r: 0.215 },
@@ -911,6 +918,10 @@ export class Bot {
     this.deathTime = 0;
     this.respawnTimer = BOT.respawnDelay;
     this.velocity.set(0, 0, 0);
+
+    // Ground level to topple about, captured while still standing so the
+    // collapse can lift the root without accumulating drift across deaths.
+    this.deathBaseY = this.model ? this.model.position.y : 0;
 
     // Fall away from the shot. Not physics, just a direction to topple in.
     if (hitPoint) {
@@ -1616,6 +1627,23 @@ export class Bot {
     this.model.rotation.y = this.yaw;
     this.model.rotation.x = Math.cos(this.deathTumble) * e * (Math.PI / 2) * 0.95;
     this.model.rotation.z = Math.sin(this.deathTumble) * e * (Math.PI / 2) * 0.95;
+
+    // The root's origin is at the FEET, so toppling about that point swings the
+    // torso below the floor -- measured, the corpse settled 34cm under it.
+    // Closed-form guesses at the lever arm all left it buried or hovering
+    // (sin(tilt) scaled by hip height floats; sin(2*tilt) decays to 0 and
+    // re-sinks a flat body), because the offset depends on how the limbs
+    // happen to splay, not on the tilt alone. So measure instead of predict:
+    // find the lowest vertex after posing and lift by exactly that much.
+    // Costs one bounding-box pass per dead body per frame, which is nothing
+    // next to being wrong. Verified against the world AABB, not by eye -- the
+    // death camera is wall-occluded and reads as fine while the body is buried.
+    const baseY = this.deathBaseY ?? this.model.position.y;
+    this.model.position.y = baseY;
+    this.model.updateMatrixWorld(true);
+    _deathBox.setFromObject(this.model);
+    const sink = baseY - _deathBox.min.y;
+    if (sink > 0) this.model.position.y = baseY + sink;
 
     J.hips.rotation.set(e * 0.35, 0, 0);
     J.spine.rotation.set(e * 0.30, e * 0.12, 0);
