@@ -151,19 +151,27 @@ const lerp = (a, b, t) => a + (b - a) * t;
  *
  * @returns {{z:number, y:number, plant:number}} plant is 1 while grounded.
  */
-function footTarget(u, stanceFrac, stride, amp) {
+function footTarget(u, stanceFrac, stride, amp, gait = 0) {
   const half = stride / 2;
+  // `gait` blends walk (0) to run (1). It changes the KIND of step, not just
+  // its size: a walk strikes heel-first and rolls through a long flat phase, a
+  // run strikes nearer the midfoot, spends almost no time flat, and lifts the
+  // foot far higher behind. Scaling one cycle by amplitude cannot produce that
+  // difference, which is why walk and run otherwise read as the same clip.
+  const strike = lerp(-0.30, -0.06, gait);   // toe-up at contact; runs land flatter
+  const pushOff = lerp(0.42, 0.62, gait);    // runs drive harder off the toe
+  const flatEnd = lerp(0.62, 0.30, gait);    // and spend far less time flat
+
   if (u < stanceFrac) {
     // STANCE: sweep from in-front to behind at a constant rate. Constant is
     // what matters — any easing here is skate.
     const k = u / stanceFrac;
-    // Foot roll: toe up at heel-strike, flat through midstance, heel up at
-    // toe-off. Negative pitches the toe up, positive drives it down.
-    const roll = k < 0.18
-      ? lerp(-0.30, 0, k / 0.18)                    // heel-strike to flat
-      : k < 0.62
+    const strikeEnd = lerp(0.18, 0.08, gait);
+    const roll = k < strikeEnd
+      ? lerp(strike, 0, k / strikeEnd)              // contact to flat
+      : k < flatEnd
         ? 0                                          // foot flat, bearing load
-        : lerp(0, 0.42, (k - 0.62) / 0.38);          // rolling onto the toe
+        : lerp(0, pushOff, (k - flatEnd) / (1 - flatEnd));
     return { z: lerp(half, -half, k), y: 0, plant: 1, roll };
   }
   // SWING: lift and reach back to the front. Sine arc peaks mid-swing, and the
@@ -173,10 +181,11 @@ function footTarget(u, stanceFrac, stride, amp) {
   const ease = k * k * (3 - 2 * k);
   return {
     z: lerp(-half, half, ease),
-    y: Math.sin(k * Math.PI) * (0.10 + 0.06 * amp),
+    // Runners pick the foot up much higher — heel toward the backside.
+    y: Math.sin(k * Math.PI) * lerp(0.09, 0.22, gait) * (0.6 + 0.4 * amp),
     plant: 0,
-    // Carry the toe-off through, then level out for the next heel-strike.
-    roll: lerp(0.42, -0.30, ease),
+    // Carry the toe-off through, then level out for the next strike.
+    roll: lerp(pushOff, strike, ease),
   };
 }
 
@@ -1202,7 +1211,10 @@ export class Bot {
     // and a right step together. For a 1.80m human that is ~1.5m; 0.82 made
     // the cycle run at nearly double rate, which is what made the legs look
     // like they were shuffling and skating rather than striding.
-    const strideLength = 1.5;
+    // Runners lengthen their stride as well as quickening it — holding stride
+    // fixed and only raising cadence is what makes a run read as a fast walk.
+    const strideLength = lerp(1.4, 2.1,
+      clamp((Math.hypot(this.velocity.x, this.velocity.z) - 1.9) / 2.2, 0, 1));
     this.strideLength = strideLength;
     if (speed > 0.15) {
       this.phase += (speed * dt / strideLength) * Math.PI * 2;
@@ -1325,7 +1337,13 @@ export class Bot {
     // below half, which is what creates the flight phase. Gating on an explicit
     // fraction rather than the sign of a cosine is the only way to get a split
     // that is not 50/50 by construction.
-    const stanceFrac = lerp(0.62, 0.38, clamp(this.speedNorm, 0, 1));
+    // Gait KIND, not gait amount. Humans transition from walking to running at
+    // ~2.1 m/s, and it is a change of kind — strike pattern, flat time, foot
+    // lift and flight all switch over. Blend across a narrow band around it
+    // rather than treating speed as a single amplitude dial.
+    const speedNow = Math.hypot(this.velocity.x, this.velocity.z);
+    const gait = clamp((speedNow - 1.9) / (3.2 - 1.9), 0, 1);
+    const stanceFrac = lerp(0.62, 0.38, gait);
 
     // The pelvis bobs, lifts and leans, so a hip-relative foot target drifts
     // with it. Measure how far the hip has actually moved from its rest height
@@ -1336,7 +1354,7 @@ export class Bot {
     for (const side of ['L', 'R']) {
       // Normalised cycle time in [0,1), offset half a cycle between legs.
       const u = (((side === 'L' ? p : p + Math.PI) / (Math.PI * 2)) % 1 + 1) % 1;
-      const target = footTarget(u, stanceFrac, this.strideLength * amp, amp);
+      const target = footTarget(u, stanceFrac, this.strideLength * amp, amp, gait);
       // Ground-relative: the foot must hold its height as the body rises.
       target.y -= hipRise;
       // Lean rotates the hip joint, carrying the leg with it; counter it so the
