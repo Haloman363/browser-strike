@@ -999,7 +999,9 @@ const RECIPES = {
   metal:     { gen: genMetal,     size: 512,  seed: 83, repeat: 1, bump: 2.4, normalScale: 1.0, roughness: 1.0, metalness: 0.85, color: 0xffffff },
   // Sand stays lower: the ground is viewed at a grazing angle where strong
   // normals turn into shimmer, and it tiles ~35x so any harshness multiplies.
-  sand:      { gen: genSand,      size: 1024, seed: 97, repeat: 8, bump: 2.6, normalScale: 0.95, roughness: 1.0, metalness: 0.0, color: 0xffffff },
+  // Sand carries its read almost entirely in the normal map — the albedo is
+  // nearly flat by nature, so weak normals leave it looking like paper.
+  sand:      { gen: genSand,      size: 1024, seed: 97, repeat: 8, bump: 3.4, normalScale: 1.5, roughness: 1.0, metalness: 0.0, color: 0xffffff },
   crate:     { gen: genCrate,     size: 512,  seed: 113, repeat: 1, bump: 4.0, normalScale: 1.4, roughness: 1.0, metalness: 0.0, color: 0xffffff },
 };
 

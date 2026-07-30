@@ -264,12 +264,15 @@ function stall(ctx, x, z, w = 3.4, d = 2.2, rotY = 0, seed = 5, color = 0xb8503c
   // Awning: two panels sagging between the ridge pole and the eaves, rather
   // than the rigid slabs of pass 1. Above head height, no collision.
   for (const s of [-1, 1]) {
-    const pw = w + 0.6, pd = d / 2 + 0.5;
+    const pw = w + 0.35, pd = d / 2 + 0.2;
     const sd = seed + (s + 2) * 17;
-    const geo = tintCloth(clothGeometry(pw, pd, pd * 0.30, sd, 10, 6), sd);
+    const geo = tintCloth(clothGeometry(pw, pd, pd * 0.22, sd, 10, 6), sd);
     const panel = new THREE.Mesh(geo, clothMaterial(color, sd));
-    panel.position.set(x, postH + 0.28, z + s * (d / 4 + 0.1));
-    panel.rotation.set(Math.PI / 2 + s * 0.32, 0, 0);
+    panel.position.set(x, postH + 0.22, z + s * (d / 4 + 0.05));
+    // A cloth panel lies near-flat and pitches gently down from the ridge.
+    // Rotating by a full PI/2 stood the panels on edge, so they read as brown
+    // walls hanging in the air rather than as an awning.
+    panel.rotation.set(s * 0.34, 0, 0);
     panel.castShadow = true;
     panel.receiveShadow = true;
     ctx.scene.add(panel);
@@ -340,8 +343,15 @@ function clothGeometry(w, h, sagAmt, seed, segX = 10, segY = 8) {
  * into the folds, so even in flat ambient the panel is not one solid chip.
  */
 function clothMaterial(color, seed) {
+  // Desaturate toward the sand tone. Fabric that has hung in desert sun for
+  // years is never a clean dye colour, and saturated panels read as cartoon
+  // props next to the muted stone around them.
+  const c = new THREE.Color(color);
+  const hsl = {};
+  c.getHSL(hsl);
+  c.setHSL(hsl.h, hsl.s * 0.55, Math.min(0.72, hsl.l * 0.92 + 0.06));
   return new THREE.MeshStandardMaterial({
-    color, roughness: 0.95, side: THREE.DoubleSide,
+    color: c, roughness: 0.95, side: THREE.DoubleSide,
     vertexColors: true, metalness: 0.0,
   });
 }
@@ -903,7 +913,9 @@ function props(ctx) {
   // lots so the row does not read as three copies of one stall.
   stall(ctx, -7.5, 12.8, 3.4, 2.2, 0, 5, 0xb8503c);
   stall(ctx, 6.0, 13.4, 3.0, 2.0, 0, 31, 0xc98a3e);
-  stall(ctx, 15.5, 6.5, 3.2, 2.2, 0, 57, 0x8d6f9a);
+  // ponytail: dye lots stay inside the arid palette — a lavender awning was
+  // the one colour in the map with no warm neighbour, and it read as a bug.
+  stall(ctx, 15.5, 6.5, 3.2, 2.2, 0, 57, 0xa8763e);
 
   // A broken cart: tilted bed, one wheel on, one wheel fallen flat.
   box(ctx, ctx.mat.wood, 9.5, 0.75, -4.5, 2.6, 0.16, 1.5, { rotY: 0.22 });
