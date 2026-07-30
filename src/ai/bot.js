@@ -1630,6 +1630,41 @@ export function _testBot() {
     assert(tones.size >= 8, `expected varied per-part colour, got ${tones.size} tones`);
   });
 
+  check('stride length matches the foot travel, so feet do not skate', () => {
+    // The gait is distance-driven: one cycle advances the phase by 2*PI over
+    // `strideLength` metres. If the foot's own fore/aft travel per cycle does
+    // not match that distance, the planted foot slides along the ground. This
+    // shipped at 0.82m against a ~1.5m foot travel and the walk looked like
+    // shuffling on ice.
+    const STRIDE = 1.5;   // must track animateGait's strideLength
+    let minZ = Infinity, maxZ = -Infinity;
+    const foot = new THREE.Vector3();
+    for (let i = 0; i <= 48; i++) {
+      const ph = (i / 48) * Math.PI * 2;
+      const warped = ph - 0.22 * Math.sin(ph * 2);
+      const s = Math.sin(warped), c = Math.cos(warped);
+      const swing = Math.max(0, -c);
+      model.joints.hipL.rotation.x = P.restHip + s * 0.62 + 0.06;
+      model.joints.kneeL.rotation.x = P.restKnee + (swing * swing * 1.15 + 0.10);
+      model.joints.ankleL.rotation.x = -(P.restHip + P.restKnee) +
+        (c * 0.40 - swing * 0.34);
+      model.root.updateMatrixWorld(true);
+      model.joints.ankleL.getWorldPosition(foot);
+      minZ = Math.min(minZ, foot.z);
+      maxZ = Math.max(maxZ, foot.z);
+    }
+    const travel = maxZ - minZ;
+    // The ankle travels one STEP (half a cycle), so compare against STRIDE/2.
+    const expected = STRIDE / 2;
+    assert(Math.abs(travel - expected) < expected * 0.35,
+      `foot travels ${travel.toFixed(2)}m per step but the gait advances ` +
+      `${expected.toFixed(2)}m — feet will skate`);
+
+    model.joints.hipL.rotation.x = P.restHip;
+    model.joints.kneeL.rotation.x = P.restKnee;
+    model.joints.ankleL.rotation.x = -(P.restHip + P.restKnee);
+  });
+
   check('knees fold backward, never forward, across the whole gait cycle', () => {
     // The model faces -Z, so a correctly bent knee puts the ankle at MORE +z
     // than the knee. This shipped inverted once: both rest angles satisfied the
