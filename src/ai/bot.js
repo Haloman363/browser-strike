@@ -1135,12 +1135,19 @@ export class Bot {
     // rise-and-fall at all — the main reason the walk looked floaty.
     const bob = Math.cos(p * 2) * 0.032 * amp;
     const idleBreath = Math.sin(this.breathe) * 0.008 * (1 - w);
-    J.hips.position.y = HIPS_Y + bob + idleBreath;
+    // Flight phase: past a jog the body is briefly airborne between steps, so
+    // the whole rig lifts around the double-support moments. Ramped in from
+    // half speed, because a walk always keeps one foot down.
+    const airborne = Math.max(0, w - 0.5) * 2;
+    const flight = Math.max(0, -Math.cos(p * 2)) * 0.045 * airborne;
+    J.hips.position.y = HIPS_Y + bob + idleBreath + flight;
     J.hips.position.x = cosP * 0.022 * amp;
     J.hips.rotation.z = -cosP * 0.055 * amp;   // pelvis tilt toward the swing leg
     J.hips.rotation.y = sinP * 0.10 * amp;     // pelvis counter-rotation
-    // Lean into acceleration: forward when running, upright at rest.
-    J.hips.rotation.x = 0.04 + w * 0.10;
+    // Lean into the run. Quadratic in speed so a walk stays near-upright while
+    // a sprint commits — a runner's mass has to be ahead of their feet or the
+    // stride reads as marching rather than driving forward.
+    J.hips.rotation.x = 0.03 + w * w * 0.30;
 
     // --- Torso. Aim offset is the yaw difference between where the feet point
     // and where the gun points; the spine absorbs it so the bot can strafe
@@ -1161,7 +1168,10 @@ export class Bot {
     this.headPitch = damp(this.headPitch,
       clamp(-this.aimPitch * 0.5, -0.5, 0.5), 9, dt);
     J.head.rotation.y = this.headYaw;
-    J.head.rotation.x = this.headPitch + Math.abs(sinP) * 0.02 * amp;
+    // Counter the body's forward lean so the head stays level and eyes stay on
+    // the target. Without this the bot sprints staring at the ground.
+    J.head.rotation.x = this.headPitch + Math.abs(sinP) * 0.02 * amp
+      - J.hips.rotation.x * 0.75;
     J.head.rotation.z = -cosP * 0.03 * amp;
 
     this.animateLegs(p, amp, dt);
