@@ -88,6 +88,16 @@ const hud = {
 let health = 100;
 let markerTimer = 0;
 
+// --- Multiplayer -------------------------------------------------------
+// Null until the player hosts or joins. While it is null main.js runs the
+// exact singleplayer path it always did, so a broker outage or a blocked
+// WebRTC connection costs the offline game nothing.
+let match = null;
+// Reused each tick; the net layer copies out of it rather than retaining it.
+const localState = {
+  position: movement.position, yaw: 0, pitch: 0, crouching: false, alive: true,
+};
+
 function setCrosshairGap(px) {
   const g = Math.round(px);
   hud.ct.style.transform = `translateY(${-g - 7}px)`;
@@ -96,6 +106,51 @@ function setCrosshairGap(px) {
   hud.cr.style.transform = `translateX(${g}px)`;
 }
 setCrosshairGap(4);
+
+// --- Lobby -------------------------------------------------------------
+const mp = {
+  panel: document.getElementById('mp'),
+  hostBtn: document.getElementById('mp-host'),
+  joinBtn: document.getElementById('mp-join'),
+  code: document.getElementById('mp-code'),
+  status: document.getElementById('mp-status'),
+};
+
+function mpStatus(text) { if (mp.status) mp.status.textContent = text; }
+
+async function startMatch(kind) {
+  if (match) return;
+  mp.hostBtn.disabled = mp.joinBtn.disabled = true;
+  mpStatus(kind === 'host' ? 'creating room...' : 'connecting...');
+  try {
+    const m = new (await import('./net/match.js')).Match({
+      scene: renderer.scene, world, spawns: mapData.spawns ?? [],
+    });
+    if (kind === 'host') {
+      const code = await m.host();
+      mpStatus(`room ${code} — waiting for players, click to play`);
+    } else {
+      await m.join(mp.code.value.trim().toUpperCase());
+      mpStatus('connected — click to play');
+    }
+    m.onEvent = () => {};
+    match = m;
+    // The AI bots are singleplayer filler; a real opponent replaces them.
+    for (const bot of bots) bot.dispose?.();
+    bots.length = 0;
+  } catch (e) {
+    // A dead broker or a bad code must not take the offline game down with it.
+    console.error('[match]', e);
+    mpStatus(`failed: ${e.message}`);
+    mp.hostBtn.disabled = mp.joinBtn.disabled = false;
+  }
+}
+
+mp.hostBtn?.addEventListener('click', (e) => { e.stopPropagation(); startMatch('host'); });
+mp.joinBtn?.addEventListener('click', (e) => { e.stopPropagation(); startMatch('join'); });
+// The overlay itself grabs pointer lock; without this, typing a room code
+// would start the game on the first keystroke's click.
+mp.panel?.addEventListener('click', (e) => e.stopPropagation());
 
 document.getElementById('start').addEventListener('click', () => canvas.requestPointerLock());
 document.addEventListener('pointerlockchange', () => {
@@ -123,14 +178,30 @@ function frame(now) {
   let steps = 0;
   while (accumulator >= TICK && steps < 8) {
     if (input.locked) movement.update(state, playerCam.yaw, TICK);
+    if (match?.active) {
+      localState.position = movement.position;
+      localState.yaw = playerCam.yaw;
+      localState.pitch = playerCam.pitch;
+      localState.crouching = movement.crouching;
+      match.fixedStep(localState);
+      match.sendLocalState(localState);
+    }
     accumulator -= TICK;
     steps++;
   }
 
   playerCam.update(movement, dt);
+  if (match?.active) match.update(dt, localState);
 
   if (rifle) {
+    const ammoBefore = rifle.ammo;
     rifle.update(dt, state, movement, playerCam);
+    // Firing happens inside rifle.update(), so detect it by the round leaving
+    // the magazine rather than restructuring the weapon around a callback.
+    // A reload raises ammo, so only a decrease counts as a shot.
+    if (match?.active && rifle.ammo < ammoBefore && rifle.lastShot) {
+      match.reportShot(rifle.lastShot.origin, rifle.lastShot.direction);
+    }
     hud.mag.textContent = rifle.ammo;
     hud.reserve.textContent = `/ ${rifle.reserve}`;
     if (rifle.spread !== undefined) setCrosshairGap(4 + rifle.spread * 900);
@@ -143,7 +214,9 @@ function frame(now) {
     hud.marker.style.opacity = Math.max(0, markerTimer / 0.12);
   }
 
-  hud.hp.textContent = Math.max(0, Math.round(health));
+  // In a match the host owns health; locally-tracked damage would let a client
+  // simply decline to believe it had been shot.
+  hud.hp.textContent = Math.max(0, Math.round(match?.active ? match.localHealth : health));
   renderer.render();
   // Viewmodel renders last, in its own scene with the depth buffer cleared,
   // so the gun can never clip into walls.
@@ -280,6 +353,9 @@ window.__animPose = ({ at = [0, 0, 0], yaw = 0, speed = 3.2, t = 0 } = {}) => {
 };
 
 window.__dbg = { renderer, world, materials, mapData, movement, rifle, bots, THREE };
+// Live match, for the two-browser harness. A getter, not a snapshot: match is
+// null until someone hosts or joins.
+Object.defineProperty(window, '__match', { get: () => match });
 // Set last: the capture script waits on this, so everything above must exist.
 stage('ready');
 window.__ready = true;

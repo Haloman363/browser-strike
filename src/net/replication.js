@@ -84,6 +84,17 @@ export const MAX_CATCHUP_STEP = 0.55;
  */
 export const STALE_TIMEOUT = 2.0;
 
+// How far past the newest snapshot the render clock may be pulled back to keep
+// the interpolation cursor bracketed. Sized to absorb ordinary slow rendering
+// (a 12fps client overran by ~210ms) while staying well under STALE_TIMEOUT, so
+// a peer that has genuinely gone silent still goes stale on schedule instead of
+// freezing the clock and hiding its own disconnection.
+export const CLOCK_CLAMP_LIMIT = 0.5;
+
+// Headroom kept between the render cursor and the newest snapshot, so there is
+// always a segment AHEAD of the cursor to interpolate along. One 20Hz interval.
+export const CURSOR_HEADROOM = 0.05;
+
 // --- Structs -----------------------------------------------------------
 // Plain objects, defined here rather than imported: transport.js and
 // protocol.js are being written concurrently. These are the shapes this module
@@ -525,6 +536,39 @@ export class RemoteReplication {
    */
   update(dt) {
     if (finite(dt) && dt > 0) this.hostClock += dt;
+
+    // The clock free-runs on local dt between arrivals, so on a client whose
+    // frame time exceeds the snapshot interval it drifts AHEAD of the newest
+    // data it has: measured at ~12fps the cursor sat 210ms past the newest
+    // snapshot, permanently unbracketed. sample() then falls back to the last
+    // known pose with ZERO velocity, so remote players slide with their legs
+    // frozen -- the exact foot-skating this rig was built to avoid.
+    //
+    // Clamp the clock so the cursor cannot outrun the newest snapshot by more
+    // than the interpolation delay. Trades a little latency on a slow client
+    // for a gait that animates, and is a no-op when frames beat snapshots.
+    //
+    // Bounded by CLOCK_CLAMP_LIMIT: the clamp must only cover ordinary slow
+    // rendering, never a peer that has actually stopped sending. Without the
+    // bound a silent player pins the clock forever, and nothing can ever go
+    // stale or extrapolate -- the cursor would stop advancing past the data
+    // that those two features exist to handle.
+    let newest = -Infinity;
+    for (const p of this.players.values()) {
+      if (p.newestTime > newest) newest = p.newestTime;
+    }
+    // The ceiling puts renderTime strictly BEHIND the newest snapshot, not on
+    // it: sample() picks the bracketing pair with `time <= renderTime`, so a
+    // cursor landing exactly on the newest entry selects it as the LEFT edge,
+    // finds nothing to its right and takes the starved branch -- bracketed on
+    // paper, zero velocity in practice. One interval of headroom keeps a real
+    // segment ahead of the cursor to interpolate along.
+    const ceiling = newest + this.interpDelay - CURSOR_HEADROOM;
+    if (newest > -Infinity && this.hostClock > ceiling
+        && this.hostClock - ceiling < CLOCK_CLAMP_LIMIT) {
+      this.hostClock = ceiling;
+    }
+
     this.renderTime = this.hostClock - this.interpDelay;
     for (const p of this.players.values()) p.prune(this.renderTime);
     return this.renderTime;
@@ -587,10 +631,18 @@ export class RemoteReplication {
   static toModelState(s) {
     if (!s) return null;
     return {
+      // Carry the id through: the model layer keys its avatars by it, and
+      // without it callers are forced to rely on array position instead.
+      id: s.id,
       position: { x: s.position.x, y: s.position.y - s.height / 2, z: s.position.z },
       yaw: wrapAngle(s.yaw + Math.PI),
       pitch: s.pitch,
-      velocity: { x: s.velocity.x, y: s.velocity.y, z: s.velocity.z },
+      // Omitted rather than zeroed when the caller has none: RemotePlayer
+      // prefers a supplied velocity over differencing positions, so a zero
+      // vector would win that branch and freeze the gait at standstill.
+      velocity: s.velocity
+        ? { x: s.velocity.x, y: s.velocity.y, z: s.velocity.z }
+        : undefined,
       crouching: s.crouching,
       firing: s.firing,
       health: s.health,

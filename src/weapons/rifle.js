@@ -743,6 +743,12 @@ export class Rifle {
 
     const hit = this.world.raycast(origin, dir, RIFLE.maxRange);
 
+    // The spread-adjusted ray, kept for the net layer: a shot that hits nobody
+    // locally still has to be adjudicated by the host against rewound hitboxes,
+    // and fire() returns null on a world miss. Recorded rather than returned so
+    // singleplayer callers are unaffected.
+    this.lastShot = { origin: origin.clone(), direction: dir.clone() };
+
     // Recoil and cosmetics happen regardless of whether we hit anything.
     this.recoil.kick();
     this.triggerKick();

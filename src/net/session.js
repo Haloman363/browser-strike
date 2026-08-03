@@ -175,6 +175,11 @@ export class Session {
           mapSeed: this.mapSeed,
           name: this.localName,
         }), { reliable: true });
+        // The host has nobody to be told "the match started" by, so it has to
+        // decide for itself: the first peer to join IS the start. Without this
+        // the host sits in LOBBY forever, never runs its authoritative step and
+        // never sends a snapshot, so both sides connect and then nothing moves.
+        if (this.state === SESSION_STATE.LOBBY) this._setState(SESSION_STATE.PLAYING);
         break;
       }
 

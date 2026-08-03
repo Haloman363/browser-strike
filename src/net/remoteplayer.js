@@ -349,10 +349,18 @@ export class RemotePlayerSet {
   }
 
   /** @param {Record<string, RemoteState>} states keyed by peer id */
+  /**
+   * @param {Iterable<object>} states each carrying its own `id`
+   */
   applyStates(states, dt) {
-    for (const id in states) {
-      const p = this.players.get(id) || this.spawn(id);
-      p.applyState(states[id], dt);
+    // Key on the state's own id, NOT the loop variable. `for...in` over an
+    // array yields string INDICES ("0", "1"), so the previous form spawned a
+    // phantom player called "0" holding the first player's state, and every
+    // real player was left un-applied.
+    for (const s of states) {
+      if (!s || s.id === undefined || s.id === null) continue;
+      const p = this.players.get(s.id) || this.spawn(s.id);
+      p.applyState(s, dt);
     }
   }
 

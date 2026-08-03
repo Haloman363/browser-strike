@@ -70,6 +70,25 @@
       font-size: 12px;
     }
     #start.hidden { display: none; }
+    #mp {
+      margin-top: 22px; display: flex; gap: 8px; justify-content: center;
+      align-items: center; flex-wrap: wrap;
+    }
+    #mp button, #mp input {
+      font: 12px ui-monospace, Menlo, monospace; color: #e8dcc8;
+      background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16);
+      border-radius: 4px; padding: 7px 12px; cursor: pointer;
+    }
+    #mp input {
+      width: 82px; text-align: center; letter-spacing: 3px; text-transform: uppercase;
+      cursor: text;
+    }
+    #mp button:hover { background: rgba(255,255,255,.14); }
+    #mp button:disabled { opacity: .4; cursor: default; }
+    #mp-status {
+      flex-basis: 100%; font-size: 12px; opacity: .75; min-height: 16px;
+      letter-spacing: .5px;
+    }
     #err {
       position: fixed; left: 0; right: 0; bottom: 0; max-height: 45vh; overflow: auto;
       background: #2a0d0d; color: #ffb4b4; padding: 14px 18px; white-space: pre-wrap;
@@ -98,6 +117,13 @@
       <kbd>Mouse</kbd> aim &nbsp; <kbd>Click</kbd> fire &nbsp; <kbd>R</kbd> reload<br><br>
       click to play
     </p>
+    <div id="mp">
+      <button id="mp-host" type="button">Host match</button>
+      <input id="mp-code" type="text" maxlength="5" placeholder="CODE"
+             autocomplete="off" spellcheck="false">
+      <button id="mp-join" type="button">Join</button>
+      <span id="mp-status"></span>
+    </div>
   </div>
 
   <pre id="err"></pre>
