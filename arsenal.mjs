@@ -7,12 +7,24 @@
 //
 //   node arsenal.mjs           every weapon, one grid page per archetype
 //   node arsenal.mjs smg       only that archetype
+//   node arsenal.mjs pair m4a4 m4a1s
+//                              those ids ONLY, one row, filling the frame --
+//                              the archetype grids put seven rifles in a
+//                              1600x900 frame and each one lands about 150px
+//                              wide, which is enough to tell a rifle from a
+//                              pistol and nowhere near enough to judge whether
+//                              two M4 variants read as the same gun. That
+//                              judgement is exactly what the DISTINCT length
+//                              assertions are a proxy for, so it needs its own
+//                              view.
 import { chromium } from 'playwright';
 import { mkdirSync } from 'fs';
 
 const OUT = 'shots/arsenal';
 mkdirSync(OUT, { recursive: true });
-const only = process.argv.slice(2);
+let only = process.argv.slice(2);
+const pairMode = only[0] === 'pair';
+if (pairMode) only = only.slice(1);
 
 const browser = await chromium.launch({
   args: ['--use-gl=angle', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
@@ -40,7 +52,7 @@ await page.evaluate(() => {
 // Group by archetype so like is compared with like -- the distinctness problem is
 // always "do the four SMGs look the same", never "does a knife look like a
 // rifle". Laying them out mixed hides exactly the problem worth seeing.
-const groups = await page.evaluate(async () => {
+const groups = pairMode ? { [only.join('-')]: only } : await page.evaluate(async () => {
   const s = await import('/src/weapons/specs.js');
   const byKind = {};
   for (const id of s.WEAPON_IDS) {
@@ -51,9 +63,9 @@ const groups = await page.evaluate(async () => {
 });
 
 for (const [kind, ids] of Object.entries(groups)) {
-  if (only.length && !only.includes(kind)) continue;
+  if (!pairMode && only.length && !only.includes(kind)) continue;
 
-  const diag = await page.evaluate(async ([kind, ids]) => {
+  const diag = await page.evaluate(async ([kind, ids, pairMode]) => {
     const THREE = window.__dbg.THREE;
     const { renderer } = window.__dbg;
     const models = await import('/src/weapons/models.js');
@@ -86,16 +98,24 @@ for (const [kind, ids] of Object.entries(groups)) {
       // muzzle AT the camera and the whole gun collapses to a nose-on stub.
       // Yaw ~90deg to lay the length across the frame, minus a little so the
       // near side still catches light and the shape reads in three dimensions.
-      g.rotation.y = Math.PI / 2 - 0.30;
+      // Pair mode uses a much flatter yaw: the 0.30 rad three-quarter turn
+      // foreshortens the length by ~4%, which is the same order as the
+      // difference being judged. Nearly side-on so the two lengths are
+      // directly comparable pixel for pixel.
+      g.rotation.y = Math.PI / 2 - (pairMode ? 0.06 : 0.30);
       const bb = new THREE.Box3().setFromObject(g);
       return { id, g, size: bb.getSize(new THREE.Vector3()) };
     });
     const maxLen = Math.max(...built.map((b) => Math.max(b.size.x, b.size.z)));
     const maxH = Math.max(...built.map((b) => b.size.y));
-    const cols = ids.length <= 4 ? Math.min(2, ids.length) : 3;
+    // Pair mode stacks the subjects VERTICALLY in one column. Side by side,
+    // two rifles each get half the frame width; stacked, each gets the full
+    // width, which is the only way the suppressor-vs-birdcage difference is
+    // bigger than a few pixels.
+    const cols = pairMode ? 1 : (ids.length <= 4 ? Math.min(2, ids.length) : 3);
     const rows = Math.ceil(ids.length / cols);
     const SPACING = maxLen * 1.25;
-    const VSPACING = maxH * 2.2;
+    const VSPACING = pairMode ? maxH * 1.5 : maxH * 2.2;
 
     const out = [];
     built.forEach(({ id, g }, i) => {
@@ -133,7 +153,7 @@ for (const [kind, ids] of Object.entries(groups)) {
     window.__captureMode = true;
     renderer.renderer.render(scene, cam);
     return out;
-  }, [kind, ids]);
+  }, [kind, ids, pairMode]);
 
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/${kind}.jpeg`, type: 'jpeg', quality: 94 });

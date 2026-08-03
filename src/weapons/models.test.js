@@ -191,14 +191,33 @@ for (const id of WEAPON_IDS) {
 // guns that SHOULD differ do not. These are the pairs a reviewer would call
 // out as re-skins if they matched.
 
+// LENGTH is only a valid proxy where the pair differs BY length -- a rifle
+// against a pistol, a full shotgun against its cut-down. Two entries that
+// compared same-class weapons by length alone have been removed, each after
+// looking at `node arsenal.mjs pair <a> <b>`:
+//
+//   m4a4/m4a1s (was 0.06, actual 0.019). The suppressor is 18.5cm of fat tube
+//     but it REPLACES a 16.5cm barrel and birdcage, so overall length barely
+//     moves -- which is also true of the real pair, whose short-barrelled
+//     suppressed variant exists precisely so the can does not add length. The
+//     sheet shows a pencil barrel with a front sight tower against a can four
+//     times the barrel's diameter with no tower. Unmistakable, and their
+//     shapeDistance is 0.172, nearly 3x the clash threshold below.
+//   mp9/p90 (was 0.08, actual 0.021). A hunched black machine pistol with a
+//     wire stock against a tan horizontal bullpup slab with a brass-loaded
+//     magazine lying along its top. shapeDistance 0.511, over 8x threshold.
+//
+// This is the same mistake this file already records making once with
+// mac10/p90 and fixed by switching to the full-box shapeDistance check below.
+// Those two pairs are still covered -- by that check, which is the one that
+// tests the property actually wanted. Deleting them narrows the suite's claim
+// to something true; it does not stop anything from being asserted.
 const DISTINCT = [
   ['ak47', 'awp', 0.12],       // rifle vs sniper: the sniper must be longer
   ['ak47', 'usp', 0.30],       // rifle vs pistol
-  ['m4a4', 'm4a1s', 0.06],     // suppressor must change the length
   ['usp', 'deagle', 0.02],     // suppressed compact vs hand cannon
   ['nova', 'sawedoff', 0.15],  // full shotgun vs cut-down
-  ['mp9', 'p90', 0.08],        // smallest SMG vs the big one
-  ['mp9', 'bizon', 0.06],
+  ['mp9', 'bizon', 0.06],      // stubby SMG vs one with a 29cm tube slung under
   ['m249', 'mp9', 0.30],       // LMG vs the smallest SMG
 ];
 for (const [a, b, minDelta] of DISTINCT) {
@@ -230,6 +249,30 @@ function shapeDistance(a, b) {
     d += Math.abs(A[i] - B[i]) / scale;
   }
   return d;
+}
+
+// The pairs a reviewer would specifically call out as re-skins, asserted BY
+// NAME rather than left to the group sweep below. Same-class weapons whose
+// difference is shape, not length: the two entries removed from DISTINCT live
+// here now, so the pairs stay named and stay covered. Threshold is 2x the
+// clash threshold -- these are not borderline, and if one ever drops to
+// merely "not identical" that is worth a failure.
+const DISTINCT_SHAPE = [
+  ['m4a4', 'm4a1s'],  // birdcage + front sight tower vs a fat suppressor
+  ['mp9', 'p90'],     // upright machine pistol vs horizontal bullpup slab
+  ['mac10', 'mp9'],   // both stubby, both black -- the easiest pair to conflate
+];
+// galil/sg553 is deliberately NOT listed. It sits at 0.119, just under the
+// threshold, and the sheet says the models are fine -- open skeleton stock and
+// carry handle against a solid stock and a scope. A scope and a carry handle
+// simply occupy similar volume, so the bounding box understates a difference
+// that is obvious to look at. Adding the pair at a threshold chosen to let it
+// pass would be writing an assertion that asserts nothing; the group sweep
+// below still covers it.
+for (const [a, b] of DISTINCT_SHAPE) {
+  const d = shapeDistance(a, b);
+  check(`${a} and ${b} have visibly different silhouettes`, d >= 0.12,
+    `shapeDistance ${d.toFixed(3)} < 0.12`);
 }
 
 for (const kind of [KIND.SMG, KIND.RIFLE, KIND.PISTOL, KIND.SNIPER]) {

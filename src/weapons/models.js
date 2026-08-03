@@ -761,8 +761,15 @@ const BUILDERS = {
     box(g, 0.036, 0.056, 0.190, m.dark, 0, 0.008, -0.030);           // slab receiver
     // Ported shroud: the Tec-9's face. A vented tube ahead of the receiver.
     handguard(g, m, { z0: -0.125, len: 0.110, r: 0.017, y: 0.008, slots: 4 });
-    magazine(g, m, { y: -0.070, z: -0.060, w: 0.026, d: 0.038, segs: 4,
-      seg: 0.042, curve: 0.0, lean: 0.06 });                         // ahead of grip
+    // Magazine, ahead of the grip. `y` here is the CENTRE of the topmost
+    // segment, not its top: at y=-0.070 with seg=0.042 the mag started 27mm
+    // BELOW the receiver's -0.020 floor and hung in mid-air, which the arsenal
+    // sheet showed plainly and which is what pushed the model to 0.262m tall.
+    // Seated at -0.044 the first segment's top meets the receiver, and three
+    // segments is the ~13cm stick a 32-round Tec-9 actually carries -- four was
+    // a drum's worth of magazine on a pistol.
+    magazine(g, m, { y: -0.044, z: -0.060, w: 0.026, d: 0.038, segs: 3,
+      seg: 0.042, curve: 0.0, lean: 0.06 });
     grip(g, m, { y: -0.062, z: 0.052, h: 0.084, tilt: 0.24, w: 0.032, d: 0.046 });
     triggerGuard(g, m, { y: -0.036, z: 0.014, len: 0.044 });
     cyl(g, 0.008, 0.008, 0.026, m.worn, -0.024, 0.030, -0.010, 8, 'x'); // cocking knob
