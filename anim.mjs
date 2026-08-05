@@ -187,9 +187,9 @@ for (const [name, id, total, action] of VM_STRIPS) {
     }
     window.__vmWeapon = w;
     window.__vmT = 0;
-    // Warm-up render, discarded. renderViewmodel() fixes vmCamera.aspect on its
-    // FIRST call, so without this the t=0 frame is projected with the 16/9
-    // fallback the camera was constructed with and comes out empty.
+    // Warm-up render, discarded. renderViewmodel() corrects vmCamera.aspect on
+    // its FIRST call, so the t=0 frame would otherwise be projected with the
+    // 16/9 fallback the camera was constructed with rather than this viewport.
     const { renderer } = window.__dbg;
     renderer.renderer.clear();
     w.renderViewmodel(renderer.renderer);
@@ -218,14 +218,8 @@ for (const [name, id, total, action] of VM_STRIPS) {
         w.update(dt, { fire: w.triggerDown }, null);
         window.__vmT += dt;
       }
-      // Rendered TWICE. The first render after a page.evaluate boundary is
-      // regularly not composited by the time the screenshot is taken on
-      // SwiftShader, which showed up as a solid black frame 0 on every strip.
-      // A second identical render costs ~30ms here and makes the frame real.
-      for (let k = 0; k < 2; k++) {
-        renderer.renderer.clear();
-        w.renderViewmodel(renderer.renderer);
-      }
+      renderer.renderer.clear();
+      w.renderViewmodel(renderer.renderer);
       // The numbers behind the pixels: if a strip looks static this says
       // whether the animation state is actually changing or the render is.
       return {
@@ -238,11 +232,8 @@ for (const [name, id, total, action] of VM_STRIPS) {
         rx: +w.gun.rotation.x.toFixed(3),
       };
     }, [target]));
-    // Let the compositor pick the freshly-rendered buffer up. Without this the
-    // FIRST frame of every strip screenshots before the WebGL canvas has been
-    // composited even once and comes out solid black -- on SwiftShader the gap
-    // between the GL call returning and the pixels existing is real.
-    await page.waitForTimeout(120);
+    // Let the compositor pick the freshly-rendered buffer up before grabbing it.
+    await page.waitForTimeout(80);
     shots.push((await page.screenshot({ type: 'jpeg', quality: 92 })).toString('base64'));
   }
 
@@ -251,11 +242,16 @@ for (const [name, id, total, action] of VM_STRIPS) {
   // Stitch, labelling each frame with its TIME rather than its index -- an
   // index tells you nothing about whether a 0.4s slash is too fast.
   await page.evaluate(async ([imgs, times]) => {
-    const loaded = await Promise.all(imgs.map((d) => new Promise((res) => {
+    // decode() rather than an onload handler. With a data: URL the image can
+    // finish decoding before the handler is attached, and that onload then
+    // never fires -- which silently dropped frame 0 of every strip and drew it
+    // as an empty cell. decode() resolves whether or not it already happened.
+    const loaded = await Promise.all(imgs.map(async (d) => {
       const im = new Image();
-      im.onload = () => res(im);
       im.src = 'data:image/jpeg;base64,' + d;
-    })));
+      await im.decode();
+      return im;
+    }));
     const w = loaded[0].width, h = loaded[0].height;
     const cols = 4, rows = Math.ceil(loaded.length / cols);
     const c = document.createElement('canvas');

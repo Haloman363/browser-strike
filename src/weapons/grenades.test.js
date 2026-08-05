@@ -22,6 +22,8 @@ import {
 import {
   ARMOR_ABSORB_RATE, Armor, HELMET_PARTS, MAX_ARMOR, VEST_PARTS, applyArmor,
 } from './armor.js';
+import { fireFlameField, hash01, smokePuffField } from './grenadefx.js';
+import { GRENADE_SLOTS, strengthForCook } from './loadout.js';
 
 let passed = 0, failed = 0;
 function test(name, fn) {
@@ -1150,6 +1152,209 @@ test('armoured targets take less C4 damage, using BOMB.armorPierce', () => {
   near(vested.damage, bare.damage * BOMB.armorPierce, 1e-6,
     'C4 through a vest should be raw * BOMB.armorPierce');
   assert(vested.armor < MAX_ARMOR, 'the vest should degrade');
+});
+
+// ---------------------------------------------------------------------------
+// The VIEW layer (grenadefx.js).
+//
+// These are the claims the renderer makes about itself, tested without a GPU.
+// The whole reason the puff layout and the flame layout are pure functions that
+// return plain numbers is that the two rendering bugs this file exists to stop
+// -- "the cloud floats above the floor" and "the fire is brightest at the rim"
+// -- are both statements about GEOMETRY, and geometry can be asserted. A
+// screenshot can catch them but cannot stop them coming back.
+// ---------------------------------------------------------------------------
+
+test('smokePuffField never places a puff centre below the ground', () => {
+  const spec = GRENADE_SPECS[GRENADE.SMOKE];
+  // The failing case exactly: the sim's sphere reaches 2.3m BELOW the floor.
+  const groundY = 0.06;
+  const centreY = groundY + spec.centreLift;
+  assert(centreY - spec.radius < groundY,
+    'precondition: the sim sphere must actually dip below the floor, or this ' +
+    'test proves nothing');
+  const field = smokePuffField(spec.radius, centreY, groundY);
+  assert(field.length > 20, `expected a populated field, got ${field.length}`);
+  for (const p of field) {
+    ok(p.x, 'puff.x'); ok(p.y, 'puff.y'); ok(p.z, 'puff.z');
+    ok(p.scale, 'puff.scale'); ok(p.alpha, 'puff.alpha');
+    // p.y is relative to the cloud centre; absolute floor is groundY.
+    assert(centreY + p.y >= groundY - 1e-9,
+      `puff centre at y=${(centreY + p.y).toFixed(3)} is under the floor ${groundY}`);
+    assert(p.scale > 0, 'a zero-scale puff is an invisible hole in the cloud');
+  }
+});
+
+test('the drawn cloud hugs the ground instead of floating', () => {
+  const spec = GRENADE_SPECS[GRENADE.SMOKE];
+  const groundY = 0;
+  const centreY = groundY + spec.centreLift;
+  const field = smokePuffField(spec.radius, centreY, groundY);
+  const lowest = Math.min(...field.map((p) => centreY + p.y));
+  // "Hugs the ground" means the lowest puffs are IN CONTACT with the floor,
+  // not hovering. Sprites are centred, so a puff centre within ~a quarter of a
+  // radius of the floor covers it.
+  assert(lowest <= groundY + spec.radius * 0.25,
+    `lowest puff centre ${lowest.toFixed(2)}m is too high above ${groundY} -- ` +
+    'the cloud is floating again');
+  // And it must still be tall enough to break a standing sightline, or the
+  // ground-clamp has traded one bug for a worse one.
+  const highest = Math.max(...field.map((p) => centreY + p.y));
+  assert(highest >= groundY + EYE_HEIGHT,
+    `cloud tops out at ${highest.toFixed(2)}m, below eye height ${EYE_HEIGHT}`);
+});
+
+test('drawn puffs stay inside the sim sphere horizontally', () => {
+  // The renderer is allowed to differ from the sim VERTICALLY (documented
+  // ground clamp) but must not invent smoke where the sim says there is none,
+  // or a player is hidden by a cloud that does not block.
+  const spec = GRENADE_SPECS[GRENADE.SMOKE];
+  const field = smokePuffField(spec.radius, 1.36, 0.06);
+  for (const p of field) {
+    const horiz = Math.hypot(p.x, p.z);
+    assert(horiz <= spec.radius + 1e-9,
+      `puff ${horiz.toFixed(2)}m out exceeds the sim radius ${spec.radius}`);
+  }
+});
+
+test('smokePuffField is deterministic and degenerate-safe', () => {
+  const a = smokePuffField(3.6, 1.36, 0.06);
+  const b = smokePuffField(3.6, 1.36, 0.06);
+  eq(a.length, b.length, 'field length');
+  for (let i = 0; i < a.length; i++) {
+    eq(a[i].x, b[i].x, `puff ${i} x drifted between calls`);
+    eq(a[i].alpha, b[i].alpha, `puff ${i} alpha drifted between calls`);
+  }
+  for (const bad of [0, -1, NaN, undefined]) {
+    eq(smokePuffField(bad, 1.3, 0).length, 0, `radius ${bad} should draw nothing`);
+  }
+});
+
+test('the puff field has varied alpha, which is what stops the banding', () => {
+  // The bullseye came from every shell sharing one alpha step. If the spread
+  // of per-puff opacity ever collapses, the rings come back.
+  const field = smokePuffField(3.6, 1.36, 0.06);
+  const alphas = field.map((p) => p.alpha);
+  const spread = Math.max(...alphas) - Math.min(...alphas);
+  assert(spread > 0.2, `alpha spread ${spread.toFixed(3)} is too uniform`);
+  const scales = field.map((p) => p.scale);
+  assert(Math.max(...scales) - Math.min(...scales) > 0.3,
+    'puff scales are near-identical, which reads as a regular pattern');
+});
+
+test('fire flames are densest at the CORE, not the rim', () => {
+  // The documented bug: `r * sqrt(rand)` is uniform-by-area, so most flames
+  // landed near the rim and the fire read as a ring of spikes. This asserts the
+  // distribution is biased inward instead.
+  const spec = GRENADE_SPECS[GRENADE.MOLOTOV];
+  const field = fireFlameField(spec.radius, spec.height, 1);
+  assert(field.length > 20, `expected flames, got ${field.length}`);
+  const radii = field.map((f) => Math.hypot(f.x, f.z));
+  const mean = radii.reduce((s, v) => s + v, 0) / radii.length;
+  // Uniform-by-area gives a mean radius of (2/3)R; anything at or above that
+  // is rim-biased. A core-biased field must be comfortably under half.
+  assert(mean < spec.radius * 0.5,
+    `mean flame radius ${mean.toFixed(2)} of ${spec.radius} is rim-biased`);
+  const inner = radii.filter((r) => r < spec.radius * 0.5).length;
+  assert(inner > field.length * 0.5,
+    `only ${inner}/${field.length} flames are in the inner half`);
+});
+
+test('flames are a mass, not spikes, and are tallest at the centre', () => {
+  const spec = GRENADE_SPECS[GRENADE.MOLOTOV];
+  const field = fireFlameField(spec.radius, spec.height, 1);
+  for (const f of field) {
+    ok(f.h, 'flame.h'); ok(f.w, 'flame.w');
+    assert(f.h > 0 && f.h <= spec.height + 1e-9, `flame height ${f.h} out of range`);
+    // A spike is very tall and very thin. The old cones were 0.16 wide by up
+    // to 1.8 tall -- an aspect of ~11. Anything above 3 reads as a spike.
+    assert(f.h / f.w < 3, `flame aspect ${(f.h / f.w).toFixed(1)} is a spike`);
+  }
+  const core = field.filter((f) => Math.hypot(f.x, f.z) < spec.radius * 0.35);
+  const rim = field.filter((f) => Math.hypot(f.x, f.z) > spec.radius * 0.7);
+  if (core.length && rim.length) {
+    const avg = (a) => a.reduce((s, f) => s + f.h, 0) / a.length;
+    assert(avg(core) > avg(rim),
+      `core flames (${avg(core).toFixed(2)}m) should be taller than rim ` +
+      `flames (${avg(rim).toFixed(2)}m)`);
+  }
+});
+
+test('fire flames scale with the sim intensity and vanish with it', () => {
+  const spec = GRENADE_SPECS[GRENADE.MOLOTOV];
+  const full = fireFlameField(spec.radius, spec.height, 1);
+  const half = fireFlameField(spec.radius, spec.height, 0.5);
+  const hMax = (a) => Math.max(...a.map((f) => f.h));
+  assert(hMax(half) < hMax(full), 'a guttering fire should be shorter');
+  eq(fireFlameField(spec.radius, spec.height, 0).length, 0,
+    'a dead fire must draw nothing');
+  eq(fireFlameField(0, spec.height, 1).length, 0,
+    'a zero-radius fire must draw nothing');
+});
+
+test('hash01 is a stable unit-range hash', () => {
+  for (let i = 0; i < 200; i++) {
+    const v = hash01(i, i * 7);
+    ok(v, 'hash');
+    assert(v >= 0 && v < 1, `hash01 returned ${v}, outside [0,1)`);
+  }
+  eq(hash01(3, 4), hash01(3, 4), 'hash01 is not deterministic');
+  assert(hash01(3, 4) !== hash01(4, 3), 'hash01 collides on swapped args');
+});
+
+// ---------------------------------------------------------------------------
+// Equipment loadout: what main.js binds its number keys to.
+// ---------------------------------------------------------------------------
+
+test('the loadout maps a key per grenade with a finite count', () => {
+  const seenKeys = new Set(), seenTypes = new Set();
+  for (const slot of GRENADE_SLOTS) {
+    assert(typeof slot.key === 'string' && slot.key.length > 0, 'slot.key');
+    assert(!seenKeys.has(slot.key), `two grenades bound to ${slot.key}`);
+    seenKeys.add(slot.key);
+    assert(!seenTypes.has(slot.type), `${slot.type} bound twice`);
+    seenTypes.add(slot.type);
+    // Every slot must name a REAL grenade, or a keypress throws mid-round.
+    assert(GRENADE_SPECS[slot.type], `slot ${slot.key} names unknown ${slot.type}`);
+    ok(slot.count, `slot ${slot.key} count`);
+    assert(slot.count > 0, 'a slot you can never throw is not a slot');
+  }
+  eq(seenTypes.size, Object.keys(GRENADE).length,
+    'every grenade type should be reachable from a key');
+});
+
+test('cook time maps to the three real throw strengths', () => {
+  // Held briefly -> underhand, held longer -> medium, held longest -> full.
+  const short = strengthForCook(0.05);
+  const mid = strengthForCook(0.35);
+  const long = strengthForCook(1.5);
+  eq(short.id, THROW.UNDERHAND.id, 'a tap should be an underhand lob');
+  eq(mid.id, THROW.MEDIUM.id, 'a short hold should be a medium throw');
+  eq(long.id, THROW.FULL.id, 'a long hold should be a full throw');
+  assert(short.speed < mid.speed && mid.speed < long.speed,
+    'the three strengths must be ordered by speed');
+  // Garbage in must still produce a throwable strength rather than undefined.
+  for (const bad of [NaN, -1, undefined, Infinity]) {
+    const s = strengthForCook(bad);
+    assert(s && ok(s.speed, 'strength.speed') > 0, `strengthForCook(${bad})`);
+  }
+});
+
+test('a cooked HE detonates early by exactly the time it was held', () => {
+  // Cooking is the reason hold-to-throw exists; if the fuse is not consumed,
+  // holding the key is a purely cosmetic delay.
+  const world = floorWorld();
+  const spec = getGrenadeSpec(GRENADE.HE);
+  const cooked = 0.6;
+  const t = throwVector(V(0, EYE_HEIGHT, 0), V(0, 0.2, -1), THROW.FULL);
+  const g = new Grenade({ type: GRENADE.HE, position: t.position, velocity: t.velocity });
+  g.fuse -= cooked;
+  near(g.fuse, spec.fuse - cooked, 1e-9, 'cooking should eat the fuse');
+  let elapsed = 0, det = null;
+  for (let i = 0; i < 600 && !det; i++) { det = g.update(1 / 128, world); elapsed += 1 / 128; }
+  assert(det, 'a cooked grenade never went off');
+  near(elapsed, spec.fuse - cooked, 0.02,
+    'a cooked HE should detonate early by the cook time');
 });
 
 // ---------------------------------------------------------------------------
