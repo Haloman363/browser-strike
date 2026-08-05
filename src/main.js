@@ -5,7 +5,15 @@ import { PlayerMovement } from './player/movement.js';
 import { PlayerCamera } from './player/camera.js';
 import { Input } from './player/input.js';
 
-const stage = (s) => { window.__stage = s; };
+// Progress, for the capture harnesses AND for the human staring at the overlay.
+// A cold load on software GL takes seconds (PMREM alone is most of it), and the
+// start screen says "click to play" the whole time, so without this the game
+// looks broken and unresponsive rather than busy.
+const stage = (s) => {
+  window.__stage = s;
+  const el = document.getElementById('stage');
+  if (el) el.textContent = s;
+};
 
 stage('renderer');
 const canvas = document.getElementById('game');
@@ -39,7 +47,11 @@ const maxAniso = renderer.renderer.capabilities.getMaxAnisotropy();
 stage('materials');
 const materials = await tryLoad(() => import('./render/materials.js'), async (m) => {
   const mats = new m.Materials();
-  return await mats.build(maxAniso);
+  // Materials is the long pole on software GL (~17s of a ~20s cold load), so it
+  // reports per-material progress rather than sitting on one static label.
+  return await mats.build(maxAniso, (done, total, name) => {
+    stage(name ? `materials ${done + 1}/${total} · ${name}` : 'materials');
+  });
 }, 'materials') ?? fallbackMaterials();
 
 stage('map');
@@ -358,6 +370,9 @@ window.__dbg = { renderer, world, materials, mapData, movement, rifle, bots, THR
 Object.defineProperty(window, '__match', { get: () => match });
 // Set last: the capture script waits on this, so everything above must exist.
 stage('ready');
+// Swap the overlay from progress to controls. Only now is clicking meaningful:
+// pointer lock and the multiplayer buttons are both live from here.
+document.getElementById('start')?.classList.remove('loading');
 window.__ready = true;
 
 export { renderer, world, movement, playerCam, mapData };

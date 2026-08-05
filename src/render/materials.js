@@ -1024,18 +1024,33 @@ export class Materials {
   }
 
   /**
-   * Build every material. Synchronous — canvas painting is CPU work with no
-   * I/O to await, and at these sizes it costs well under a second total.
-   * Idempotent: a second call returns the same instances.
+   * Build every material. Idempotent: a second call returns the same instances.
+   *
+   * The per-material work is synchronous CPU canvas painting, but on software GL
+   * the whole loop measured ~17s, and because it never yields the browser cannot
+   * repaint for its duration -- the loading overlay froze mid-animation and read
+   * as a hang. Awaiting between materials hands the main thread back so the
+   * progress label and spinner actually tick. The yields add a frame each and do
+   * not change what gets built.
    *
    * @param {number} maxAnisotropy renderer.capabilities.getMaxAnisotropy()
+   * @param {(done:number,total:number,name:string)=>void} [onProgress]
    * @returns {Record<string, THREE.MeshStandardMaterial>}
    */
-  build(maxAnisotropy = 8) {
+  async build(maxAnisotropy = 8, onProgress = null) {
     this.maxAnisotropy = maxAnisotropy;
     const t0 = performance.now();
     const out = {};
-    for (const name of MATERIAL_NAMES) out[name] = this.get(name);
+    let done = 0;
+    for (const name of MATERIAL_NAMES) {
+      onProgress?.(done, MATERIAL_NAMES.length, name);
+      // Yield BEFORE the work, so the label naming this material is painted
+      // while it is being built rather than after it finishes.
+      await new Promise((r) => requestAnimationFrame(() => r()));
+      out[name] = this.get(name);
+      done++;
+    }
+    onProgress?.(done, MATERIAL_NAMES.length, '');
     this.buildMs = performance.now() - t0;
     console.log(`materials: built ${MATERIAL_NAMES.length} in ${this.buildMs.toFixed(0)}ms`);
     return out;
